@@ -24,7 +24,7 @@
 
 **CubyCloud** adalah aplikasi _self-hosted modular cloud storage_ modern yang dirancang sebagai alternatif berkinerja tinggi untuk **Nextcloud** dan **Google Drive**. CubyCloud hadir untuk menyelesaikan masalah kompleksitas instalasi dan konsumsi sumber daya (_resource hogging_) yang sering dialami oleh pengguna platform _self-hosted_ tradisional.
 
-Dengan pendekatan **Single-Container Architecture** (Go backend dengan embedded SvelteKit frontend), CubyCloud memberikan pengalaman menggunakan Google Drive pribadi tanpa memerlukan konfigurasi CLI (_Command Line Interface_) yang rumit. Mulai dari proses instalasi awal (_onboarding_), pengalokasian penyimpanan disk lokal, hingga integrasi cloud pihak ketiga (S3/R2) dapat dilakukan seluruhnya melalui antarmuka Web GUI berbasis **Neo-Notion**.
+Dengan pendekatan **Single-Container Architecture** (Go backend dengan embedded SvelteKit frontend), CubyCloud memberikan pengalaman menggunakan Google Drive pribadi tanpa memerlukan konfigurasi CLI (_Command Line Interface_) yang rumit. Mulai dari proses instalasi awal (_onboarding_), pengalokasian penyimpanan disk lokal, hingga integrasi cloud pihak ketiga (S3/R2) dapat dilakukan seluruhnya melalui antarmuka Web GUI berbasis **Flat Earthy Design System** (lihat [`apps/frontend/DESIGN.md`](../apps/frontend/DESIGN.md)).
 
 **Visi jangka panjang** (di luar scope v1.0): CubyCloud akan dilengkapi **AI Workspace & MCP RAG Engine** (bergaya _NotebookLM_) agar folder tertentu dapat dijadikan basis pengetahuan (_knowledge base_) privat via LLM lokal (Ollama) maupun cloud provider. Fitur ini dijadwalkan pada **Fase 2/3 Roadmap**, bukan rilis awal 1 Oktober 2026.
 
@@ -149,7 +149,7 @@ CubyCloud ditujukan untuk ekosistem pengguna _self-hosted_ dan tim skala kecil/m
 - Tautan berbagi (_share link_) yang rumit tanpa fitur keamanan dasar.
 
 - **Solusi CubyCloud:**
-- Antarmuka **Neo-Notion** yang bersih, responsif, dan familiar.
+- Antarmuka **flat & earthy** yang bersih, responsif, dan nyaman untuk sesi penggunaan panjang — mengikuti token di [`apps/frontend/DESIGN.md`](../apps/frontend/DESIGN.md).
 - Fitur berbagi file dengan kata sandi (_Password Protection_) dan masa berlaku (_Expiration Date_) yang instan.
 
 ---
@@ -181,14 +181,14 @@ CubyCloud ditujukan untuk ekosistem pengguna _self-hosted_ dan tim skala kecil/m
 - Memilih strategi alokasi penyimpanan (_Fill-First / Round-Robin / Most-Free-Space_).
 - (Opsional) Memasukkan API Key Cloudflare R2 / AWS S3.
 
-4. Sistem menyimpan konfigurasi dan langsung mengarahkan Admin ke dashboard `/drive/my-storage`.
+4. Sistem menyimpan konfigurasi dan langsung mengarahkan Admin ke Beranda `/drive/home`.
 
 #### 2. Workflow Manajemen & Transfer Direct File
 
 1. Pengguna melakukan _drag-and-drop_ berkas video/dokumen berukuran besar ke area browser.
 2. Jika destinasi fisik berkas adalah Cloudflare R2, backend Go menerbitkan _Presigned Upload URL_.
 3. Browser mengunggah berkas **langsung ke R2** tanpa melewati CPU/RAM server CubyCloud lokal.
-4. Tampilan UI memperbarui daftar berkas secara real-time dengan label _Storage Node Badge_ (`[R2]`).
+4. Tampilan UI memperbarui daftar berkas secara real-time. Label _Storage Node Badge_ (`[R2]`, `[SSD-1]`) **hanya terlihat oleh Super Admin**; Regular User tidak melihat lokasi fisik node.
 
 ---
 
@@ -210,6 +210,8 @@ CubyCloud ditujukan untuk ekosistem pengguna _self-hosted_ dan tim skala kecil/m
 │ • Native Preview (Pic/Vid/Aud/Text)  │ • SaaS Billing & Payment Gateway │
 │ • Bundled Add-ons (ZIP, WebP, PDF)   │                                  │
 │ • User-to-User & Share Link Engine   │                                  │
+│ • Drive Home / Org / Starred / Stats │                                  │
+│ • Per-User Storage Quota (My Storage)│                                  │
 │ • In-App Toasts & Notification Bar   │                                  │
 └──────────────────────────────────────┴──────────────────────────────────┘
 
@@ -236,9 +238,20 @@ Seluruh fitur di bawah ini **wajib ada, teruji, dan berfungsi penuh** pada rilis
 - **Resumable Upload & Download Engine:** Pengunggahan dan pengunduhan berkas mendukung mekanisme _pause & resume_ (misal via protokol TUS / _chunked transfer_) agar file besar tidak gagal saat koneksi jaringan terputus atau tidak stabil.
 - **Unlimited File Size Support:** Tidak ada batasan buatan (_hard-limit_) untuk ukuran berkas; batas upload murni mengikuti sisa kapasitas fisik storage node.
 
-#### 3. File Operations & Conflict Handling (`/drive/my-storage`)
+#### 3. Drive Workspace Surfaces
 
-- **Neo-Notion UI Aesthetics:** Tampilan bersih dengan _hard border_ (`2px solid #000`), _sharp shadow_, dan kontras tinggi.
+- **Beranda (`/drive/home`):** Landing default setelah login/setup — quick access, recent activity, ringkasan kuota.
+- **My Storage (`/drive/my-storage`):** File manager pribadi (CRUD, filter, preview, share drawer).
+- **Organization (`/drive/organization`):** Drive bersama organisasi — Full Access, **tidak** dihitung ke user quota.
+- **Shared (`/drive/shared`):** Berkas yang dibagikan ke akun aktif (Viewer / Editor).
+- **Starred (`/drive/starred`):** Shortcut berkas/folder yang di-_star_ dari route mana pun.
+- **Trash (`/drive/trash`):** Soft-delete + restore + purge (30 hari).
+- **Storage Stats (`/drive/storage-stats`):** Chart usage, largest files, widget kuota user.
+
+#### 4. File Operations & Conflict Handling (`/drive/my-storage`)
+
+- **Flat Earthy UI Design System:** Tampilan 100% flat (_no hard shadows_ kecuali modal/toast), _earthy tones_ (Parchment Cream, Olive Moss), tipografi **Montserrat**, dan _list view_ storage-first — spesifikasi lengkap di [`apps/frontend/DESIGN.md`](../apps/frontend/DESIGN.md).
+- **Storage Node Badge Visibility:** Badge `[R2]` / `[SSD-n]` **hanya untuk Super Admin**. Regular User tidak melihat lokasi fisik node.
 - **Conflict Resolution Dialog:** Jika pengguna mengunggah berkas dengan nama yang sama di direktori yang sama, sistem menampilkan modal konfirmasi:
 - **Replace (Overwrite):** Menimpa berkas lama.
 - **Keep Both (Rename):** Otomatis menambahkan akhiran angka/tanggal (_suffix_, contoh: `Laporan_v1 (1).pdf`).
@@ -248,15 +261,26 @@ Seluruh fitur di bawah ini **wajib ada, teruji, dan berfungsi penuh** pada rilis
 - 🖼️ **Gambar:** PNG, JPEG, WebP, GIF, SVG.
 - 🎥 **Video:** MP4, WebM (HTML5 player bawaan browser).
 - 🎵 **Audio:** MP3, WAV, OGG.
-- **Catatan:** Preview **PDF** bukan bagian core previewer; tersedia sebagai add-on opsional (lihat §3.1.6).
+- **Catatan:** Preview **PDF** bukan bagian core previewer; tersedia sebagai add-on opsional (lihat §3.1.7).
 
-#### 4. Trash Bin & Lifecycle Management (`/drive/trash`)
+#### 5. Per-User Storage Quota (My Storage Only)
+
+- **Default User Quota:** Super Admin menetapkan kuota default (satuan **GB**) atau **Unlimited** di `/admin/settings`. Berlaku untuk **user baru saja**.
+- **Per-User Override:** Di `/admin/users`, Admin dapat mengubah limit satu user (mis. 50 GB) atau menandai **Unlimited**.
+- **Scope:** Hanya file dengan `owner_id = user` di luar **Organization Folder**. File Organization **tidak** dihitung ke quota user.
+- **Trash:** Ukuran file di Trash **tetap dihitung** sampai purge permanen.
+- **Zero-Byte Copy:** Owner sama → tidak menambah usage; copy ke owner berbeda → menambah usage **owner baru**.
+- **Super Admin:** Selalu **Unlimited** (tidak kena user quota).
+- **Enforcement:** Toast warning pada **≥ 80%**; **block upload** My Storage pada **100%**. Pesan error terpisah dari kegagalan pool fisik.
+- **UI User:** Widget kuota di **sidebar** + detail di `/drive/storage-stats`. Jika Unlimited: tampilkan hanya `Used: X GB`.
+
+#### 6. Trash Bin & Lifecycle Management (`/drive/trash`)
 
 - **Soft Delete:** File yang dihapus dipindahkan ke Trash Bin sementara.
 - **Automated 30-Day Purge Engine:** Latar belakang sistem (_worker_) akan menghapus file fisik secara permanen jika sudah berada di Trash Bin lebih dari 30 hari.
 - **Manual Purge & Restore:** Pengguna memiliki opsi untuk mengembalikan file (_restore_) ke folder asal atau mengosongkan sampah (_Purge Trash_) secara manual kapan saja.
 
-#### 5. Sharing & Access Control (`/drive/shared` & `/s/:token`)
+#### 7. Sharing & Access Control (`/drive/shared` & `/s/:token`)
 
 - **User-to-User Internal Sharing:** Pengguna dapat membagikan file/folder ke pengguna lain yang terdaftar dalam sistem (mirip Google Drive share permission).
 - **Share Link Engine:** Menerbitkan tautan berbagi dengan mode **Public** atau **Restricted**.
@@ -264,8 +288,9 @@ Seluruh fitur di bawah ini **wajib ada, teruji, dan berfungsi penuh** pada rilis
 - **Access Scope Settings:** Opsi pembatasan tautan:
 - _Restricted:_ Hanya bisa dibuka oleh pengguna yang memiliki akun & sudah login.
 - _Public:_ Dapat dibuka/diunduh oleh siapa saja di internet yang memiliki link/password.
+- **Quota on Share (Owner Pays):** Ukuran file tetap dihitung ke quota **owner** asli; berbagi ke user lain tidak menduplikasi pemakaian quota.
 
-#### 6. Bundled Phase-1 Add-ons (`/admin/addons`)
+#### 8. Bundled Phase-1 Add-ons (`/admin/addons`)
 
 Fase 1 mencakup 4 modul add-on dasar yang sudah terintegrasi dan siap diaktifkan:
 
@@ -274,9 +299,9 @@ Fase 1 mencakup 4 modul add-on dasar yang sudah terintegrasi dan siap diaktifkan
 - 📥 **Download as ZIP:** Mengunduh beberapa file atau folder sekaligus yang dipaketkan secara langsung sebagai satu berkas `.zip`.
 - 📄 **PDF Previewer (Optional Add-on):** Pratinjau PDF di browser (lightbox). Nonaktif secara default agar core tetap ringan; Admin dapat mengaktifkannya di `/admin/addons`.
 
-#### 7. Notifications & Feedback
+#### 9. Notifications & Feedback
 
-- **In-App Toast & Notification Center:** Notifikasi aktivitas (seperti upload selesai, proses kompresi selesai, atau peringatan kuota) ditampilkan via _Toast popup_ melayang dan panel notifikasi bawaan aplikasi.
+- **In-App Toast & Notification Center:** Notifikasi aktivitas (seperti upload selesai, proses kompresi selesai, atau peringatan kuota user / node hampir penuh) ditampilkan via _Toast popup_ melayang dan panel notifikasi bawaan aplikasi.
 
 ---
 
@@ -305,15 +330,14 @@ Fitur-fitur berikut **secara eksplisit TIDAK dimasukkan** ke dalam rilis v1.0 un
 
 2. **Framework & Architecture Constraints:**
 
-- **Frontend:** SvelteKit (SPA Static Mode via `@sveltejs/adapter-static`).
+- **Frontend:** SvelteKit (SPA Static Mode via `@sveltejs/adapter-static`), Tailwind CSS v4, shadcn-svelte.
+- **UI/UX:** Wajib mengikuti [`apps/frontend/DESIGN.md`](../apps/frontend/DESIGN.md) — token warna via CSS variables, **dilarang** _arbitrary Tailwind values_.
 - **Backend:** Go (Golang) Single Executable Binary dengan asset frontend di-embed via `go:embed`.
 - **Database & Queue:** SQLite (WAL Mode) sebagai database utama sekaligus _Job Queue_ asinkron tanpa Redis/RabbitMQ.
 
 3. **Network Constraints:**
 
 - Pengunggahan berkas lokal menggunakan _chunked HTTP/TUS protocol_ untuk menjamin ketahanan terhadap koneksi yang terputus-putus (_network resiliency_).
-
----
 
 ---
 
@@ -338,7 +362,7 @@ Modul ini bertanggung jawab menginsialisasi sistem saat pertama kali dijalankan 
 1. **Setup State Detection:**
 
 - Backend Go memeriksa status `is_setup_completed` pada SQLite.
-- Jika `false`, seluruh _route_ aplikasi selain `/setup` dan `/auth` akan di-redirect secara otomatis ke `/setup`.
+- Jika `false`, seluruh _route_ aplikasi selain `/setup` dan permukaan auth (`/login`, `/recovery`) akan di-redirect secara otomatis ke `/setup`.
 
 2. **Step 1 — Super Admin Creation:**
 
@@ -350,7 +374,7 @@ Modul ini bertanggung jawab menginsialisasi sistem saat pertama kali dijalankan 
 - **Default (volume path):** Sistem memindai direktori `/app/data/storage/` untuk menemukan mount/volume yang terhubung (model Docker volume yang direkomendasikan).
 - **Opsional (device discovery):** GUI dapat menampilkan device Linux terdeteksi (mis. `/dev/sdb`, `/dev/sdc`) agar Admin dapat mendaftarkan/mengaitkannya sebagai storage node.
 - GUI menampilkan daftar node lokal beserta kapasitas total dan _free space_.
-- Admin mencentang node mana saja yang ingin diaktifkan dan menetapkan batas kuota penyimpanan.
+- Admin mencentang node mana saja yang ingin diaktifkan dan menetapkan **batas kapasitas node** (_node capacity cap_ — beda dari per-user My Storage quota).
 
 4. **Step 3 — Placement Strategy Configuration:**
 
@@ -367,7 +391,7 @@ Modul ini bertanggung jawab menginsialisasi sistem saat pertama kali dijalankan 
 
 - Sistem menggenerasi **64-character Hexadecimal Recovery Key** acak secara kriptografis.
 - GUI menyediakan tombol _"Copy Key"_ dan _"Download Key (.txt)"_. Kunci ini digunakan untuk memulihkan akses Super Admin jika lupa password.
-- Setelah selesai, `is_setup_completed` diubah menjadi `true` dan sistem mengarahkan ke dashboard utama `/drive/my-storage`.
+- Setelah selesai, `is_setup_completed` diubah menjadi `true` dan sistem mengarahkan ke Beranda `/drive/home`.
 
 ---
 
@@ -380,7 +404,8 @@ Modul backend yang mengabstraksi lokasi penyimpanan fisik menjadi satu direktori
 1. **User-Side Abstraction (Transparent Storage):**
 
 - Pengguna _end-user_ **tidak akan melihat dan tidak perlu tahu** lokasi fisik disk mana yang menyimpan file mereka.
-- Seluruh file ditampilkan di satu pohon direktori utuh (`/drive/my-storage`).
+- Badge node (`[R2]`, `[SSD-n]`) **hanya ditampilkan kepada Super Admin**.
+- File pribadi ditampilkan di `/drive/my-storage`; Organization Drive di `/drive/organization`.
 
 2. **System Health & 5% Safety Margin Rule:**
 
@@ -388,22 +413,42 @@ Modul backend yang mengabstraksi lokasi penyimpanan fisik menjadi satu direktori
 - **Rule Disk Kritis:** Jika sisa kapasitas fisik sebuah disk **< 5%**, disk tersebut otomatis ditandai `READ_ONLY`.
 - **Auto-Failover Upload:** Jika pengguna mengunggah file baru saat disk utama dalam kondisi `READ_ONLY`, sistem secara transparan (tanpa _error_ ke pengguna) mengalihkan proses pengunggahan ke disk lokal/cloud lain yang masih memiliki kapasitas aman.
 - **Admin Warning Notification:** Peringatan _"Storage Node [Nama Node] Hampir Habis (< 5%)"_ dikirimkan secara internal dan hanya ditampilkan kepada Admin melalui In-App Notification Center & Toast.
+- **All Nodes Full:** Jika tidak ada node aman tersisa, upload gagal dengan pesan **"Penyimpanan server penuh"** (bukan pesan user-quota).
 
-3. **Rescan Disk Feature (Tanpa Entry Setup Wizard):**
+3. **Default User Quota Policy:**
+
+- Di `/admin/settings`, Admin mengatur **Default User Quota** (GB) atau toggle **Unlimited for new users**.
+- Perubahan default **hanya berlaku untuk user yang dibuat setelahnya** (bukan retroaktif ke user lama).
+- Override per user dikelola di `/admin/users` (lihat §4.9).
+
+4. **Rescan Disk Feature (Tanpa Entry Setup Wizard):**
 
 - Di halaman `/admin/settings`, terdapat tombol **"Rescan Storage Nodes"**.
 - Ketika diklik, backend Go memindai ulang `/app/data/storage/` (default) dan secara opsional menampilkan device Linux baru yang terdeteksi, tanpa perlu masuk kembali ke Setup Wizard.
 
-4. **Graceful Detach Engine:**
+5. **Graceful Detach Engine:**
 
 - Admin dapat menekan tombol **"Detach Node"** pada disk tertentu.
 - Sistem mengunci disk menjadi `READ_ONLY` dan memindahkan (_auto-migrate_) seluruh file fisik di dalamnya ke disk lain secara bertahap di latar belakang via SQLite Job Queue.
 
 ---
 
-### 4.3 Module 3: File Manager & Explorer (`/drive/my-storage`)
+### 4.3 Module 3: Drive Home (`/drive/home`)
 
-Antarmuka utama pengguna berbasis **SvelteKit SPA** bergaya **Neo-Notion**.
+Landing default untuk pengguna terautentikasi setelah login atau selesai setup.
+
+#### Functional Specifications:
+
+1. **Quick Access Cards:** 4–6 berkas yang paling sering / terakhir dibuka.
+2. **Recent Activities List:** Riwayat singkat (upload, edit, share).
+3. **Storage Summary Widget:** Ringkasan kuota My Storage (used / limit GB, atau `Used: X GB` jika Unlimited).
+4. **Quick Upload Drawer:** Unggah instan ke My Storage (tetap enforce user quota + node capacity).
+
+---
+
+### 4.4 Module 4: File Manager & Explorer (`/drive/my-storage`)
+
+Antarmuka file pribadi berbasis **SvelteKit SPA** dengan **Flat Earthy Design System** (Montserrat, `bg-app` / `bg-surface`).
 
 ```text
 +-------------------------------------------------------------------------------+
@@ -411,7 +456,7 @@ Antarmuka utama pengguna berbasis **SvelteKit SPA** bergaya **Neo-Notion**.
 +-------------------------------------------------------------------------------+
 | Breadcrumb: My Storage > Work Projects > Documents                            |
 +-------------------------------------------------------------------------------+
-| [📁 Organization Folder]  [📁 Personal Folder A]  [📁 Personal Folder B]      |
+| [📁 Personal Folder A]  [📁 Personal Folder B]                                |
 |                                                                               |
 | [📄 Document (1).pdf]     [🖼️ Photo.jpg]           [🎥 Video.mp4]             |
 +-------------------------------------------------------------------------------+
@@ -422,7 +467,8 @@ Antarmuka utama pengguna berbasis **SvelteKit SPA** bergaya **Neo-Notion**.
 
 1. **File Operations:**
 
-- Upload (Drag-and-Drop / File Picker), Direct Download, Rename, Move, Copy (_Zero-Byte Reference Copy_), Delete to Trash.
+- Upload (Drag-and-Drop / File Picker), Direct Download, Rename, Move, Copy (_Zero-Byte Reference Copy_), Star/Unstar, Delete to Trash.
+- Upload / copy ke My Storage **dicek user quota** sebelum diterima (lihat §4.10).
 
 2. **Conflict Resolution Handling (Nama File Sama):**
 
@@ -451,7 +497,7 @@ Antarmuka utama pengguna berbasis **SvelteKit SPA** bergaya **Neo-Notion**.
 
 ---
 
-### 4.4 Module 4: Trash Bin & Lifecycle Engine (`/drive/trash`)
+### 4.5 Module 5: Trash Bin & Lifecycle Engine (`/drive/trash`)
 
 Tempat penampungan sementara berkas yang dihapus pengguna.
 
@@ -460,11 +506,12 @@ Tempat penampungan sementara berkas yang dihapus pengguna.
 1. **Soft Delete Action:**
 
 - Menghapus file/folder memindahkan status rekaman ke Trash Bin (`is_trashed = true`). File fisik di disk belum dihapus.
+- Ukuran file di Trash **tetap dihitung** ke user quota sampai purge permanen.
 
 2. **Automated 30-Day Purge Worker:**
 
 - _Worker process_ di latar belakang Go memeriksa `trashed_at_timestamp` setiap hari pukul 00:00.
-- File yang berada di Trash Bin **> 30 hari** akan dihapus secara permanen dari database dan disk fisik secara otomatis.
+- File yang berada di Trash Bin **> 30 hari** akan dihapus secara permanen dari database dan disk fisik secara otomatis (usage quota berkurang).
 
 3. **Restore Logic with Missing Parent Folder Handling:**
 
@@ -477,27 +524,101 @@ Tempat penampungan sementara berkas yang dihapus pengguna.
 
 ---
 
-### 4.5 Module 5: Access Control, Sharing, & Organization Drive (`/drive/shared`)
+### 4.6 Module 6: Starred Items (`/drive/starred`)
 
-Modul untuk mengelola hak akses antar-pengguna internal serta direktori bersama seluruh organisasi.
+Shortcut berkas/folder yang ditandai bintang dari My Storage, Organization, atau Shared.
 
 #### Functional Specifications:
 
-1. **User-to-User Internal Sharing:**
+1. **Star / Unstar:** Aksi tersedia di explorer; status disimpan per user.
+2. **Starred Table:** Daftar agregat dari semua sumber; CTA cepat **"Hapus Bintang"**.
+3. **Preview & Share:** Mendukung `?preview=file_id` dan Share Link Drawer sesuai izin asli berkas.
+
+---
+
+### 4.7 Module 7: Storage Stats (`/drive/storage-stats`)
+
+Halaman statistik penyimpanan untuk pengguna terautentikasi.
+
+#### Functional Specifications:
+
+1. **Quota Widget:** `Used / Limit GB` (atau hanya `Used: X GB` jika Unlimited) — sinkron dengan widget sidebar.
+2. **Usage Chart:** Breakdown per kategori (Video, Gambar, Dokumen, Arsip, Trash).
+3. **Largest Files List:** 10 berkas terbesar milik user (My Storage + Trash; exclude Organization).
+4. **Cleanup Advisor Modal:** Saran file besar jarang dibuka untuk dipindah ke Trash.
+5. **Shortcut:** `Kelola Sampah` → `/drive/trash`.
+
+---
+
+### 4.8 Module 8: Access Control, Sharing, & Organization Drive
+
+Modul untuk mengelola hak akses antar-pengguna internal serta direktori bersama organisasi.
+
+#### Functional Specifications:
+
+1. **User-to-User Internal Sharing (`/drive/shared`):**
 
 - Pengguna dapat membagikan file/folder ke pengguna terdaftar lain dengan menetapkan tingkat hak akses:
 - **`Viewer`:** Hanya memiliki izin melihat dan mengunduh (_Read Only_).
 - **`Editor`:** Memiliki izin melihat, mengunduh, menambahkan file baru, mengedit, dan menghapus file di dalam folder tersebut (_Read, Write, Delete_).
+- **Quota:** Owner pays — pemakaian tetap dihitung ke owner asli.
 
-2. **Organization Drive / Shared Folder (Fitur Khusus Tim/Organisasi):**
+2. **Organization Drive (`/drive/organization`):**
 
-- Admin memiliki wewenang untuk mengubah folder biasa menjadi **"Organization Folder"**.
-- **Global Visibility:** Folder ini secara otomatis muncul di halaman utama `/drive/my-storage` **seluruh pengguna terdaftar** dengan badge khusus 🏢 _Organization_.
-- **Universal Full Access:** Seluruh pengguna terdaftar memiliki akses penuh: membaca, mengunggah, mengunduh, mengedit/mengganti nama, **dan menghapus** file/folder di dalam Organization Folder tanpa perlu diatur hak aksesnya satu per satu.
+- Admin dapat menetapkan folder sebagai **"Organization Folder"**; seluruh anggota mengaksesnya lewat sidebar **Organization** (`/drive/organization`) dengan badge 🏢.
+- **Universal Full Access:** Read, Write, Download, Rename, **Delete** tanpa pengaturan per-user.
+- **Quota:** File Organization **tidak** dihitung ke user quota mana pun; tetap memakai kapasitas fisik pool (node 5% / failover tetap berlaku).
+- Pindah file Organization → My Storage: cek user quota sebelum move; jika tidak muat → tolak.
 
 ---
 
-### 4.6 Module 6: Share Link Engine (`/s/:token`)
+### 4.9 Module 9: User Management & Quota Overrides (`/admin/users`)
+
+Halaman Super Admin untuk mengelola akun dan override kuota My Storage.
+
+#### Functional Specifications:
+
+1. **User Table:** Username, email, role, quota efektif (Default / Override GB / Unlimited), used GB, status.
+2. **Create User:** Membuat Regular User baru; kuota awal mengikuti **Default User Quota** di settings (kecuali di-_override_ saat create).
+3. **Edit Quota Modal:** Set angka GB atau toggle **Unlimited**; opsi **Reset to Default**.
+4. **Super Admin rows:** Selalu menampilkan Unlimited (tidak dapat dipaksa limit user-quota).
+
+---
+
+### 4.10 Module 10: User Storage Quota Engine
+
+Enforcement kuota logis per user untuk My Storage (lapisan terpisah dari node capacity).
+
+#### Functional Specifications:
+
+1. **What Counts Toward Usage:**
+
+- Semua file dengan `owner_id = user` yang **bukan** bagian Organization tree (termasuk file di Trash sampai purge).
+- **Zero-byte copy:** owner sama → usage tidak bertambah; copy ke owner berbeda → usage bertambah pada **owner baru** sebesar ukuran logical file.
+
+2. **Effective Limit Resolution:**
+
+```text
+if user.role == SuperAdmin → Unlimited
+else if user.storage_quota_override is set → override (GB | Unlimited)
+else → system.default_user_quota (GB | Unlimited)
+```
+
+3. **Enforcement on My Storage Writes:**
+
+- Upload / import / move-into-personal / copy-to-other-owner:
+  - Jika usage ≥ 80% limit → Toast warning (masih boleh lanjut selama di bawah 100%).
+  - Jika usage + ukuran baru melebihi limit → **reject** dengan kode `USER_QUOTA_EXCEEDED` dan pesan _"Kuota My Storage penuh. Hubungi admin."_
+- Organization writes: **skip** user-quota check (tetap cek node capacity).
+
+4. **Physical Pool Fallback (Existing):**
+
+- Node di bawah 5% → `READ_ONLY` + auto-failover; semua node penuh → `"Penyimpanan server penuh"`.
+- Pesan error **wajib berbeda** dari `USER_QUOTA_EXCEEDED`.
+
+---
+
+### 4.11 Module 11: Share Link Engine (`/s/:token`)
 
 Modul untuk membagikan file/folder melalui tautan, dengan mode **Public** atau **Restricted**.
 
@@ -521,7 +642,7 @@ Modul untuk membagikan file/folder melalui tautan, dengan mode **Public** atau *
 
 ---
 
-### 4.7 Module 7: Add-ons System & Worker Queue (`/admin/addons`)
+### 4.12 Module 12: Add-ons System & Worker Queue (`/admin/addons`)
 
 Modul untuk mengelola ekstensi tambahan tanpa membebani performa _core system_.
 
@@ -551,15 +672,19 @@ Modul untuk mengelola ekstensi tambahan tanpa membebani performa _core system_.
 
 ### Summary of Data Entity & Access Rules Matrix
 
-| Fitur / Modul                        | Role Pengguna                     | Hak Akses Utama                                   |
-| ------------------------------------ | --------------------------------- | ------------------------------------------------- |
-| **Setup Wizard (`/setup`)**          | Unauthenticated (First-Boot Only) | Membuat Admin, Pindai Disk, Ekspor Recovery Key   |
-| **My Storage (`/drive/my-storage`)** | Regular User & Admin              | CRUD File Pribadi (Storage Node disembunyikan)    |
-| **Organization Folder**              | All Registered Users              | Full Access: Read, Write, Download, **Delete**            |
-| **User-to-User Share**               | Target User                       | `Viewer` (Read) atau `Editor` (Read/Write/Delete) |
-| **Share Link (`/s/:token`)**         | Public / Restricted Guest         | Viewer + Password & Expiration Enforcement        |
-| **Node Manager (`/admin/settings`)** | Super Admin Only                  | Rescan Disk, Graceful Detach, Worker Limit        |
-| **Add-ons Store (`/admin/addons`)**  | Super Admin Only                  | Enable/Disable Module, Worker Queue Monitor       |
+| Fitur / Modul | Role Pengguna | Hak Akses Utama |
+| ------------- | ------------- | --------------- |
+| **Setup Wizard (`/setup`)** | Unauthenticated (First-Boot Only) | Membuat Admin, Pindai Disk, Ekspor Recovery Key |
+| **Auth (`/login`, `/recovery`)** | Unauthenticated | Login JWT; reset Super Admin via Recovery Key |
+| **Beranda (`/drive/home`)** | Regular User & Super Admin | Quick access, activity, quota summary |
+| **My Storage (`/drive/my-storage`)** | Regular User & Super Admin | CRUD pribadi; node badge **hidden** untuk Regular User |
+| **Organization (`/drive/organization`)** | All Registered Users | Full Access; **no user quota** |
+| **Starred / Shared / Trash / Stats** | Authenticated | Sesuai izin sumber; stats = own usage |
+| **User-to-User Share** | Target User | `Viewer` atau `Editor` (owner pays quota) |
+| **Share Link (`/s/:token`)** | Public / Restricted Guest | Viewer + Password & Expiration |
+| **Admin Settings (`/admin/settings`)** | Super Admin Only | Nodes, workers, **default user quota**, DB backup |
+| **Admin Users (`/admin/users`)** | Super Admin Only | Create users, **per-user quota override** |
+| **Add-ons (`/admin/addons`)** | Super Admin Only | Enable/Disable module, queue monitor |
 
 ---
 
@@ -706,8 +831,9 @@ Frontend dikembangkan sebagai **Single Page Application (SPA)** yang di-build me
 | ---------------------- | ----------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
 | **Frontend Framework** | **SvelteKit**                       | `v2.0+`      | Framework reaktif, _bundle size_ JS sangat kecil, dan manajemen _state_ Svelte Stores yang intuitif.                               |
 | **Build Adapter**      | **`@sveltejs/adapter-static`**      | `v3.0+`      | Mengompilasi aplikasi SvelteKit menjadi SPA statis murni tanpa membutuhkan Node.js runtime di server produksi.                     |
-| **Styling Engine**     | **Tailwind CSS**                    | `v3.4+`      | Utility-first CSS framework untuk membangun tema **Neo-Notion** (`2px solid #000`, _hard shadow_ `3px 3px 0px #000`).              |
-| **UI Components**      | **shadcn-svelte**                   | `latest`     | Komponen UI _headless & accessible_ berbasis `bits-ui` primitives yang dapat dikustomisasi penuh sesuai gaya Brutalism/Neo-Notion. |
+| **Styling Engine**     | **Tailwind CSS**                    | `v4.x`       | Utility-first CSS v4 dengan token `@theme inline` di `layout.css`; tema **Flat Earthy** sesuai [`DESIGN.md`](../apps/frontend/DESIGN.md). |
+| **Typography**         | **Montserrat** (Google Fonts)       | —            | Satu-satunya _font family_ UI; skala hierarki didefinisikan di DESIGN.md §3.                                                              |
+| **UI Components**      | **shadcn-svelte**                   | `latest`     | Komponen _headless & accessible_ berbasis `bits-ui`; di-_theme_ dengan token CubyCloud (primary moss, danger rose).                        |
 | **Icons Library**      | **Lucide Svelte** (`lucide-svelte`) | `v0.400+`    | Set ikon SVG geometris yang ringan dan konsisten.                                                                                  |
 | **Resumable Upload**   | **TUS Client / Fetch Chunking**     | `latest`     | Menangani _chunked upload_ untuk menjamin unggahan file besar dapat di-_resume_ saat koneksi jaringan terputus.                    |
 
@@ -771,7 +897,7 @@ Tooling yang digunakan untuk mempermudah proses alur kerja pengembangan (_develo
 +-----------------------------------------------------------------------+
 |                       CUBYCLOUD RUNTIME STACK                         |
 +-----------------------------------------------------------------------+
-|  [Frontend SPA]   SvelteKit + Tailwind CSS + shadcn-svelte + Bits UI  |
+|  [Frontend SPA]   SvelteKit + Tailwind CSS v4 + Montserrat + shadcn-svelte + Bits UI  |
 |         │                                                             |
 |         ▼ (Embedded via go:embed at compile time)                     |
 |  [Backend App]    Go v1.22+ Engine + Echo Router + ent ORM             |

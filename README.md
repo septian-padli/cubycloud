@@ -24,6 +24,8 @@ CubyCloud is a **single-container** app: Go backend + embedded SvelteKit SPA. v1
 
 - Zero-CLI web setup wizard
 - Multi-node virtual storage (local disks + S3 / Cloudflare R2)
+- Drive workspace (home, my-storage, organization, shared, starred, trash, stats)
+- Per-user My Storage quotas (admin default + per-user override)
 - Resumable uploads, sharing, trash lifecycle, bundled add-ons (ZIP, image convert, optional PDF preview)
 
 AI Workspace & MCP RAG (Ollama) are **roadmap** items, not v1.0.
@@ -91,7 +93,7 @@ Frontend details: [`apps/frontend/README.md`](apps/frontend/README.md)
 
 ## Design
 
-UI design tokens for marketing surfaces live in [`apps/frontend/DESIGN.md`](apps/frontend/DESIGN.md). Product UI direction in the PRD uses **Neo-Notion** aesthetics for the drive app; the current landing page follows the DESIGN.md token set.
+UI design system (Flat Earthy, Montserrat, Tailwind v4 tokens) is defined in [`apps/frontend/DESIGN.md`](apps/frontend/DESIGN.md) and referenced by the PRD. The coming soon page implements this spec.
 
 ---
 

@@ -33,7 +33,7 @@ Config: [`components.json`](./components.json)
 
 ## Design tokens
 
-Marketing pages use tokens from [`DESIGN.md`](./DESIGN.md) via CSS variables (`--cc-*` in `src/routes/layout.css`).
+App tokens from [`DESIGN.md`](./DESIGN.md) are implemented in `src/routes/layout.css` (`bg-app`, `bg-surface`, `text-main`, etc.). shadcn-svelte theme variables are mapped to the same CubyCloud palette for future components.
 
 ## Scaffold command (reference)
 
