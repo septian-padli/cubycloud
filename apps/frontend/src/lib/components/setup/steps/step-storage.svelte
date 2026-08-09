@@ -47,7 +47,7 @@
 		<Button
 			variant="outline"
 			size="sm"
-			class="rounded-lg shrink-0 gap-1.5"
+			class="shrink-0 gap-1.5"
 			disabled={scanning}
 			onclick={rescan}
 		>
@@ -108,7 +108,7 @@
 											type="number"
 											min={1}
 											max={node.totalGb}
-											class="max-w-xs rounded-lg"
+											class="max-w-xs"
 											bind:value={nodes[i].capacityCapGb}
 										/>
 									</div>

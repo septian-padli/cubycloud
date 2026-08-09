@@ -102,7 +102,7 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
   - **Step 1:** Super Admin form (username, email, password; validasi **minimal 8 karakter**)
   - **Step 2:** Scanner disk lokal (`/app/data/storage/*`) + **node capacity cap**; opsional device Linux
   - **Step 3:** Placement strategy (`FILL_FIRST` / `ROUND_ROBIN` / `MOST_FREE_SPACE`)
-  - **Step 4 (optional):** Kredensial AWS S3 / Cloudflare R2
+  - **Step 4 (optional):** Kredensial Cloudflare R2 / AWS S3 / S3 Compatible (endpoint custom)
   - **Step 5:** Export Emergency Recovery Key
   - **CTA:** `Selesaikan Setup & Masuk ke CubyCloud`
 
@@ -313,7 +313,7 @@ Lightbox previewer bersifat **URL-driven** via query parameter agar tautan ke sa
 ### Design notes (DESIGN.md)
 
 - Overlay: `bg-black/60 backdrop-blur-none`
-- Container: `rounded-xl bg-surface border border-subtle shadow-lg`
+- Container: `rounded-xl bg-surface border border-subtle shadow-none`
 
 ---
 

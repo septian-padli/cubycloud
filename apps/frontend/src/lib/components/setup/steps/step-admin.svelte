@@ -33,7 +33,6 @@
 			<Label for="setup-username">Username</Label>
 			<Input
 				id="setup-username"
-				class="rounded-lg"
 				autocomplete="username"
 				bind:value={admin.username}
 				placeholder="admin"
@@ -44,7 +43,6 @@
 			<Input
 				id="setup-email"
 				type="email"
-				class="rounded-lg"
 				autocomplete="email"
 				bind:value={admin.email}
 				placeholder="admin@contoh.local"

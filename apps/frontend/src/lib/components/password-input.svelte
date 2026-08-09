@@ -35,7 +35,7 @@
 		{id}
 		{name}
 		type={visible ? 'text' : 'password'}
-		class={cn('rounded-lg pe-10', className)}
+		class={cn('pe-10', className)}
 		bind:value
 		{disabled}
 		{autocomplete}

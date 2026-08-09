@@ -61,14 +61,14 @@
 			<Label for="recovery-key">Emergency Recovery Key</Label>
 			<Input
 				id="recovery-key"
-				class="rounded-lg font-mono text-xs"
+				class="font-mono text-xs"
 				readonly
 				value={recoveryKey}
 			/>
 		</div>
 
 		<div class="flex flex-wrap gap-2">
-			<Button variant="outline" class="rounded-lg gap-1.5" onclick={copyKey}>
+			<Button variant="outline" class="gap-1.5" onclick={copyKey}>
 				{#if copied}
 					<Check class="size-4 stroke-2" />
 					Disalin
@@ -77,7 +77,7 @@
 					Salin kunci
 				{/if}
 			</Button>
-			<Button variant="outline" class="rounded-lg gap-1.5" onclick={downloadKey}>
+			<Button variant="outline" class="gap-1.5" onclick={downloadKey}>
 				<Download class="size-4 stroke-2" />
 				Unduh .txt
 			</Button>

@@ -6,7 +6,7 @@ CubyCloud mengadopsi bahasa desain **100% Flat Design** dengan ritme tata letak 
 
 ### Core Philosophy
 
-1. **Clean & Flat Surface:** Tanpa bayangan tebal (_no hard shadows_), tanpa efek kaca (_glassmorphism_), dan tanpa garis batas yang agresif. Pemisahan antarelemen mengandalkan kontras latar belakang (_surface layering_) dan garis pemisah super-tipis (_subtle dividers_).
+1. **Clean & Flat Surface:** Tanpa bayangan (_zero shadow_), tanpa efek kaca (_glassmorphism_), dan tanpa garis batas yang agresif. Pemisahan antarelemen mengandalkan kontras latar belakang (_surface layering_) dan garis pemisah super-tipis (_subtle dividers_).
 2. **Low Eye Strain (Earthy Neutrality):** Menggantikan dominasi warna biru-putih steril khas _cloud storage_ konvensional dengan warna krem alami (_Parchment Cream_) dan hijau hutan pekat (_Obsidian Forest_). Sempurna untuk sesi penggunaan berdurasi panjang.
 3. **Storage-First Scanning Efficiency:** Struktur daftar berkas diorientasikan pada model **List View** (satu-satunya tampilan explorer di v1.0) berbaris horizontal dengan _padding_ dan proporsi yang teratur. Antarmuka disesuaikan khusus untuk manajemen penyimpanan berkas—tanpa elemen visual bergaya perpesanan (_chat bubbles_ atau _notification dots_) yang tidak relevan.
 4. **Strict Utility Styling (Tailwind CSS v4):** Seluruh implementasi komponen UI di dalam SvelteKit **wajib** menggunakan token standar Tailwind CSS v4. Penggunaan _arbitrary values_ (seperti `w-[13px]`, `p-[14px]`, `text-[15px]`) **dilarang keras**.
@@ -103,15 +103,15 @@ CubyCloud menggunakan Google Font **Montserrat** sebagai satu-satunya _font fami
 
 ## 4. Layout & Grid Principles (100% Flat Surface)
 
-### 4.1. Visual Depth via Layering (No Hard Shadows)
+### 4.1. Visual Depth via Layering (Zero Shadow)
 
 - Konten utama ditempatkan pada lapisan kontainer putih/gelap (`bg-surface`) di atas latar belakang halaman (`bg-app`).
 - Pemisahan elemen secara horizontal maupun vertikal **hanya** menggunakan garis tipis `border-subtle`.
-- Bayangan (`shadow-sm`, `shadow-md`) diizinkan **hanya** pada elemen melayang secara fisik seperti: Modal Dialog, Toast Notification, dan Menu Contextual (Klik Kanan).
+- **Dilarang** memakai bayangan Tailwind (`shadow-xs`, `shadow-sm`, `shadow-lg`, dll.) — termasuk modal, sheet drawer, toast, dropdown, card, input, button, checkbox, dan switch. Gunakan `shadow-none` + `border border-subtle` bila perlu kontras overlay.
 
 ### 4.2. Rounded Corner Scale
 
-- `rounded-lg` (8px): Input form, tombol (_button_), _filter chips_, ikon berkas.
+- `rounded-full`: Input form, tombol (_button_), _filter chips_, item sidebar navigasi.
 - `rounded-xl` (12px): Kontainer modal, _card_ indikator penyimpanan, dan panel ringkas.
 - `rounded-full`: Avatar pengguna dan _pill badge storage node_ (`[R2]`, `[SSD]`, `[S3]`).
 
@@ -237,7 +237,9 @@ Tidak menampilkan angka limit, persen, atau progress bar dengan cap.
 1. **Hover & Active States:**
 
 - Dilarang menggunakan animasi pergerakan posisi (_translate_) atau perubahan bayangan (_shadow jump_) pada daftar berkas.
-- Efek interaktif **hanya** menggunakan transisi warna latar: `hover:bg-black/5` (Light) dan `hover:bg-white/5` (Dark).
+- Efek interaktif **hanya** transisi warna latar (`transition-colors`), tanpa shadow.
+- **Drive chrome & beranda** (sidebar nav, card Akses Cepat, baris Aktivitas Terbaru): tint primary — `hover:bg-primary/10` untuk item pill/nav kecil; card Akses Cepat `bg-primary/5` dengan hover `bg-primary/10`; baris Aktivitas Terbaru `hover:bg-primary/5`. Item sidebar **aktif** (`bg-primary` solid) **tanpa** hover tambahan.
+- **File explorer row** (list view berkas): netral `hover:bg-black/5` (Light) / `hover:bg-white/5` (Dark) — lihat §5.1.
 
 2. **Resumable TUS Transfer Progress:**
 
@@ -247,7 +249,7 @@ Tidak menampilkan angka limit, persen, atau progress bar dengan cap.
 3. **Modal Dialogs & Lightbox Previewer:**
 
 - Overlay modal menggunakan `bg-black/60 backdrop-blur-none` untuk menjaga performa rendering tetap ringan pada perangkat bertaraf prosesor Celeron lama.
-- Container modal dihiasi dengan sudut `rounded-xl`, latar `bg-surface`, garis `border border-subtle`, dan elevasi tipis `shadow-lg`.
+- Container modal dihiasi dengan sudut `rounded-xl`, latar `bg-surface`, garis `border border-subtle`, tanpa bayangan (`shadow-none`).
 
 ---
 

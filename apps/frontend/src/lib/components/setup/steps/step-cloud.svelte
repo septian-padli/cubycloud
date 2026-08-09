@@ -118,7 +118,6 @@
 					<Label for="cloud-endpoint">Endpoint</Label>
 					<Input
 						id="cloud-endpoint"
-						class="rounded-lg"
 						placeholder={providerMeta.endpointPlaceholder}
 						bind:value={cloud.endpoint}
 						oninput={() => {
@@ -130,7 +129,6 @@
 					<Label for="cloud-bucket">Bucket name</Label>
 					<Input
 						id="cloud-bucket"
-						class="rounded-lg"
 						placeholder="cubycloud-files"
 						bind:value={cloud.bucket}
 						oninput={() => {
@@ -142,7 +140,6 @@
 					<Label for="cloud-access">Access key</Label>
 					<Input
 						id="cloud-access"
-						class="rounded-lg"
 						bind:value={cloud.accessKey}
 						autocomplete="off"
 						oninput={() => {
@@ -166,7 +163,7 @@
 					<Button
 						type="button"
 						variant="outline"
-						class="rounded-lg gap-1.5"
+						class="gap-1.5"
 						disabled={!formReady || testState === 'loading'}
 						onclick={testConnection}
 					>

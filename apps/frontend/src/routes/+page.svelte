@@ -44,10 +44,13 @@
 						cloud nodes, zero-CLI setup, and ultra-light on legacy hardware. First release targets
 						<strong class="font-medium text-main">October 2026</strong>.
 					</p>
-					<div class="mt-6">
-						<Button href="/setup" size="lg" class="rounded-lg gap-2">
+					<div class="mt-6 flex flex-wrap gap-3">
+						<Button href="/setup" size="lg" class="gap-2">
 							Mulai Setup
 							<ArrowRight class="size-4 stroke-2" />
+						</Button>
+						<Button href="/login" variant="outline" size="lg">
+							Masuk
 						</Button>
 					</div>
 				</div>

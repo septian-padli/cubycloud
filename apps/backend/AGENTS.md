@@ -5,7 +5,7 @@ Patuhi kontrak global di `AGENTS.md` (root) dan blueprint teknis berikut **sebel
 - `docs/prd.md` — aturan bisnis (quota, share, org, trash)
 - `docs/architecture.md` — modul, schema, storage, jobs, security (wajib)
 
-Detail UI/route: `apps/frontend/SITEMAP.md` — jangan duplikasi kontrak UX di backend.
+Detail UI/route: `apps/frontend/SITEMAP.md` + `apps/frontend/DESIGN.md` — jangan duplikasi kontrak UX di backend. Aturan visual (zero shadow, drive shell) ada di `apps/frontend/AGENTS.md`.
 
 ---
 
@@ -61,7 +61,7 @@ Product views (`/drive/home`, org, starred, stats) = **query layer VFS**, bukan 
 - TUS chunks: `/app/data/temp/tus/`; cloud upload via presigned URL + `/api/v1/drive/sync-cloud`
 - **Zero-byte copy:** jangan hapus `physical_blobs` jika `ref_count > 0`
 
-### Write gates (urutan wajut)
+### Write gates (urutan wajib)
 
 1. **User quota pre-check** (My Storage only; Organization di-skip) → `USER_QUOTA_EXCEEDED`
 2. **Node/pool capacity** → error pool penuh (**bukan** kode user-quota)

@@ -35,7 +35,7 @@ Setelah mengubah **file kode**, jalankan `graphify update .` (AST-only, tanpa bi
 CubyCloud adalah Self-Hosted Modular Cloud Storage berbasis **Single-Container** (Go backend + embedded SvelteKit SPA).
 
 - **Target hardware:** Intel Celeron 2-Core, **2 GB RAM** (minimum)
-- **Filosofi produk:** Zero-CLI onboarding, Flat Earthy Design, modular storage (local + S3/R2)
+- **Filosofi produk:** Zero-CLI onboarding, Flat Earthy Design, modular storage (local + S3/R2/S3-compatible)
 - **Target image:** Single Docker image **< 150 MB**
 
 ## 2. Source of Truth (patuhi sebelum menulis kode)
@@ -75,4 +75,6 @@ Detail stack per area ada di `apps/frontend/AGENTS.md` dan `apps/backend/AGENTS.
 
 ### Frontend styling
 
-- **Zero arbitrary values** di Tailwind: patuhi token di `apps/frontend/DESIGN.md` (`bg-app`, `text-main`, `rounded-xl`, dll.)
+- **Zero arbitrary values** di Tailwind: patuhi token di `apps/frontend/DESIGN.md` (`bg-app`, `bg-surface`, `text-main`, `rounded-xl`, dll.)
+- Flat surfaces: **zero shadow** di seluruh UI (`shadow-none`); pemisahan visual via `border-subtle` dan surface layering — bukan elevasi bayangan
+- Theme light/dark: `$lib/theme.svelte.ts` + `ThemeToggle` — detail di `apps/frontend/AGENTS.md`

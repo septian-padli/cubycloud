@@ -52,7 +52,7 @@
 		</ul>
 
 		<Dialog.Footer>
-			<Button class="w-full rounded-lg" onclick={onContinue}>Lanjut ke Beranda</Button>
+			<Button class="w-full" onclick={onContinue}>Lanjut ke Beranda</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
