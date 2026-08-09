@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { Badge } from '$lib/components/ui/badge/index.js';
-	import { Cloud, HardDrive, Shield } from '@lucide/svelte';
+	import { Button } from '$lib/components/ui/button/index.js';
+	import ThemeToggle from '$lib/components/theme-toggle.svelte';
+	import { ArrowRight, Cloud, HardDrive, Shield } from '@lucide/svelte';
 </script>
 
 <svelte:head>
@@ -16,11 +18,14 @@
 		class="mx-auto flex w-full max-w-5xl items-center justify-between border-b border-subtle px-6 py-4 md:px-10"
 	>
 		<p class="text-sm font-semibold">CubyCloud</p>
-		<Badge
-			class="rounded-full bg-primary/15 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/15"
-		>
-			Coming soon
-		</Badge>
+		<div class="flex items-center gap-3">
+			<ThemeToggle />
+			<Badge
+				class="rounded-full bg-primary/15 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/15"
+			>
+				Coming soon
+			</Badge>
+		</div>
 	</header>
 
 	<main class="mx-auto w-full max-w-5xl flex-1 px-6 py-10 md:px-10 md:py-16">
@@ -39,6 +44,12 @@
 						cloud nodes, zero-CLI setup, and ultra-light on legacy hardware. First release targets
 						<strong class="font-medium text-main">October 2026</strong>.
 					</p>
+					<div class="mt-6">
+						<Button href="/setup" size="lg" class="rounded-lg gap-2">
+							Mulai Setup
+							<ArrowRight class="size-4 stroke-2" />
+						</Button>
+					</div>
 				</div>
 			</div>
 

@@ -1,6 +1,6 @@
 # Product Requirement Document (PRD)
 
-## CubyCloud — Self-Hosted Modular Cloud Storage & AI Workspace
+## CubyCloud — Self-Hosted Modular Cloud Storage (v1.0)
 
 ---
 
@@ -310,6 +310,7 @@ Fase 1 mencakup 4 modul add-on dasar yang sudah terintegrasi dan siap diaktifkan
 Fitur-fitur berikut **secara eksplisit TIDAK dimasukkan** ke dalam rilis v1.0 untuk menjaga performa ringan dan menjamin target rilis 1 Oktober 2026:
 
 - 🚫 **AI Workspace & MCP RAG Engine:** Tidak ada pemrosesan vector database, indeksasi dokumen RAG, maupun integrasi Ollama/LLM di v1.0 (ditunda ke Fase 2/3 Roadmap).
+- 🚫 **Grid View (File Explorer):** v1.0 hanya **List View**; toggle tampilan grid ditunda ke fase berikutnya.
 - 🚫 **File Versioning & History:** Tidak ada pencatatan riwayat versi file lama (v1, v2); file yang di-_replace_ akan langsung tertimpa.
 - 🚫 **Progressive Web App (PWA):** Tidak ada dukungan instalasi PWA atau _offline caching asset_ di v1.0.
 - 🚫 **Desktop & Mobile Native Sync Client:** Tidak ada aplikasi _background sync_ (seperti Google Drive for Desktop).
@@ -330,7 +331,7 @@ Fitur-fitur berikut **secara eksplisit TIDAK dimasukkan** ke dalam rilis v1.0 un
 
 2. **Framework & Architecture Constraints:**
 
-- **Frontend:** SvelteKit (SPA Static Mode via `@sveltejs/adapter-static`), Tailwind CSS v4, shadcn-svelte.
+- **Frontend:** SvelteKit (SPA Static Mode via `@sveltejs/adapter-static`), Svelte 5 Runes, Tailwind CSS v4, shadcn-svelte; build tooling **Bun** (`apps/frontend/AGENTS.md`).
 - **UI/UX:** Wajib mengikuti [`apps/frontend/DESIGN.md`](../apps/frontend/DESIGN.md) — token warna via CSS variables, **dilarang** _arbitrary Tailwind values_.
 - **Backend:** Go (Golang) Single Executable Binary dengan asset frontend di-embed via `go:embed`.
 - **Database & Queue:** SQLite (WAL Mode) sebagai database utama sekaligus _Job Queue_ asinkron tanpa Redis/RabbitMQ.
@@ -431,6 +432,12 @@ Modul backend yang mengabstraksi lokasi penyimpanan fisik menjadi satu direktori
 - Admin dapat menekan tombol **"Detach Node"** pada disk tertentu.
 - Sistem mengunci disk menjadi `READ_ONLY` dan memindahkan (_auto-migrate_) seluruh file fisik di dalamnya ke disk lain secara bertahap di latar belakang via SQLite Job Queue.
 
+6. **Audit Log Retention Policy:**
+
+- Di `/admin/settings`, Admin mengatur retensi log audit (`audit_log_retention_days`).
+- **Default:** 90 hari. Opsi UI: **7, 14, 30, 60, 90** hari.
+- Pembersihan otomatis via job `AUDIT_CLEANUP_JOB` (lihat [`docs/architecture.md`](./architecture.md) §6.2).
+
 ---
 
 ### 4.3 Module 3: Drive Home (`/drive/home`)
@@ -448,11 +455,11 @@ Landing default untuk pengguna terautentikasi setelah login atau selesai setup.
 
 ### 4.4 Module 4: File Manager & Explorer (`/drive/my-storage`)
 
-Antarmuka file pribadi berbasis **SvelteKit SPA** dengan **Flat Earthy Design System** (Montserrat, `bg-app` / `bg-surface`).
+Antarmuka file pribadi berbasis **SvelteKit SPA** dengan **Flat Earthy Design System** (Montserrat, `bg-app` / `bg-surface`). **v1.0:** explorer hanya **List View** (tanpa toggle Grid View).
 
 ```text
 +-------------------------------------------------------------------------------+
-| Top Bar: [Search Input... ] [Filter: All v]  [ + New / Upload ]  [View Grid/List] |
+| Top Bar: [Search Input... ] [Filter: All v]  [ + New / Upload ]                    |
 +-------------------------------------------------------------------------------+
 | Breadcrumb: My Storage > Work Projects > Documents                            |
 +-------------------------------------------------------------------------------+
@@ -565,7 +572,7 @@ Modul untuk mengelola hak akses antar-pengguna internal serta direktori bersama 
 
 2. **Organization Drive (`/drive/organization`):**
 
-- Admin dapat menetapkan folder sebagai **"Organization Folder"**; seluruh anggota mengaksesnya lewat sidebar **Organization** (`/drive/organization`) dengan badge 🏢.
+- **Fixed shared tree v1.0:** Organization Drive adalah pohon virtual **tetap** yang diakses semua user terdaftar lewat sidebar **Organization** (`/drive/organization`) dengan badge 🏢. **Tidak ada** UI v1.0 untuk Super Admin "menandai" folder My Storage sebagai Organization Folder.
 - **Universal Full Access:** Read, Write, Download, Rename, **Delete** tanpa pengaturan per-user.
 - **Quota:** File Organization **tidak** dihitung ke user quota mana pun; tetap memakai kapasitas fisik pool (node 5% / failover tetap berlaku).
 - Pindah file Organization → My Storage: cek user quota sebelum move; jika tidak muat → tolak.
@@ -713,7 +720,7 @@ Keamanan difokuskan pada perlindungan data kredensial, kontrol akses API, dan pe
 
 - Autentikasi berbasis **JSON Web Token (JWT)** yang ditandatangani secara kriptografis menggunakan algoritma `HS256`.
 - Token disimpan pada **HTTP-Only Cookie** dengan konfigurasi `SameSite=Lax` dan atribut `Secure` (saat berjalan di HTTPS).
-- _Token Expiration:_ Akses token berlaku selama 24 jam dengan opsi pembaruan (_refresh token_).
+- _Token Expiration:_ Akses token berlaku selama **24 jam**; pengguna login ulang setelah kedaluwarsa. **Tidak ada refresh token terpisah** di v1.0 (menjaga implementasi ringan).
 
 2. **Password Security:**
 
@@ -740,7 +747,7 @@ Menjamin konsistensi database dan file fisik bahkan ketika terjadi kegagalan sis
 
 2. **Orphan File Sweeper (Startup Garbage Collection):**
 
-- Setiap kali aplikasi _booting_ (kontainer dinyalakan), _background process_ **Orphan File Sweeper** akan melakukan audit pencocokan antara berkas fisik di disk dan rekaman di tabel `physical_files`.
+- Setiap kali aplikasi _booting_ (kontainer dinyalakan), _background process_ **Orphan File Sweeper** akan melakukan audit pencocokan antara berkas fisik di disk dan rekaman di tabel `physical_blobs`.
 - Berkas parsial/sampah sisa pengunggahan yang terputus di tengah jalan akibat mati listrik akan otomatis dibersihkan dari disk untuk menghemat kapasitas penyimpanan.
 
 3. **Transactional Job Queue Recovery:**
@@ -829,13 +836,14 @@ Frontend dikembangkan sebagai **Single Page Application (SPA)** yang di-build me
 
 | Komponen / Layer       | Teknologi / Pustaka                 | Versi Target | Alasan Pemilihan & Fungsi                                                                                                          |
 | ---------------------- | ----------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| **Frontend Framework** | **SvelteKit**                       | `v2.0+`      | Framework reaktif, _bundle size_ JS sangat kecil, dan manajemen _state_ Svelte Stores yang intuitif.                               |
+| **Frontend Framework** | **SvelteKit**                       | `v2.0+`      | Framework reaktif, _bundle size_ JS sangat kecil; state lokal via **Svelte 5 Runes** (`$state`, `$derived`, `$effect`).                               |
 | **Build Adapter**      | **`@sveltejs/adapter-static`**      | `v3.0+`      | Mengompilasi aplikasi SvelteKit menjadi SPA statis murni tanpa membutuhkan Node.js runtime di server produksi.                     |
 | **Styling Engine**     | **Tailwind CSS**                    | `v4.x`       | Utility-first CSS v4 dengan token `@theme inline` di `layout.css`; tema **Flat Earthy** sesuai [`DESIGN.md`](../apps/frontend/DESIGN.md). |
 | **Typography**         | **Montserrat** (Google Fonts)       | —            | Satu-satunya _font family_ UI; skala hierarki didefinisikan di DESIGN.md §3.                                                              |
 | **UI Components**      | **shadcn-svelte**                   | `latest`     | Komponen _headless & accessible_ berbasis `bits-ui`; di-_theme_ dengan token CubyCloud (primary moss, danger rose).                        |
 | **Icons Library**      | **Lucide Svelte** (`lucide-svelte`) | `v0.400+`    | Set ikon SVG geometris yang ringan dan konsisten.                                                                                  |
 | **Resumable Upload**   | **TUS Client / Fetch Chunking**     | `latest`     | Menangani _chunked upload_ untuk menjamin unggahan file besar dapat di-_resume_ saat koneksi jaringan terputus.                    |
+| **Package Manager**    | **Bun**                             | `1.x`        | Instalasi dependensi dan skrip dev/build frontend (`bun install`, `bun run build`).                                                |
 
 ---
 
@@ -885,7 +893,7 @@ Tooling yang digunakan untuk mempermudah proses alur kerja pengembangan (_develo
 | **`ent CLI`** (`entgo.io/ent/cmd/ent`) | Tool _code generation_ untuk memperbarui skema database dan membuat kueri Go secara otomatis dari skema `ent/schema`.                                                  |
 | **Docker Multi-Stage Build**           | Pengemasan kontainer produksi:                                                                                                                                         |
 
-- _Stage 1 (Node.js Build):_ Compile SvelteKit SPA.
+- _Stage 1 (Bun Build):_ Compile SvelteKit SPA (`bun run build` di `apps/frontend/`).
 - _Stage 2 (Go Build):_ Compile biner Go + Embed static assets.
 - _Stage 3 (Final Image):_ Base image **Alpine Linux** (`alpine:latest`) menghasilkan final image **< 150 MB**. |
 

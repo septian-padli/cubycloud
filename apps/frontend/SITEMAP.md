@@ -172,6 +172,7 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
 - **Path:** `/drive/organization`
 - **URL params:** `?folder=folder_id&preview=file_id`
 - **Access:** All registered users — Full Access (Read, Write, Download, Delete)
+- **Model v1.0:** Pohon Organization **fixed** (bukan folder My Storage yang di-"mark" admin); semua user CRUD di route ini
 - **Quota:** **Tidak** dihitung ke user quota; tetap cek kapasitas node fisik
 - **Embedded modals / drawers:**
   - _File Preview Lightbox_
@@ -246,6 +247,7 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
 - **Key components & actions:**
   - Storage nodes grid (kapasitas, free space, badge 5% critical) — node badges selalu visible di sini
   - **Default User Quota Policy** — input GB atau toggle Unlimited for new users
+  - **Audit Log Retention** — dropdown 7 / 14 / 30 / 60 / 90 hari (default: **90**)
   - Worker concurrency (default: **2**)
   - Database backup CTA: `Download DB Backup (.db)`
 

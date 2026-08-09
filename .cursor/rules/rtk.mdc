@@ -1,0 +1,46 @@
+---
+description: RTK (Rust Token Killer) — always use token-optimized shell commands in this repo.
+alwaysApply: true
+---
+
+# RTK — Rust Token Killer (wajib)
+
+Use **RTK** for shell commands in this project. Cursor Shell tool calls are rewritten globally via `rtk hook cursor` in `~/.cursor/hooks.json`.
+
+## Shell commands (automatic)
+
+Normal shell invocations are rewritten transparently (`git status` → `rtk git status`). Prefer shell + RTK over dumping huge raw output into context.
+
+## When hooks do not apply
+
+Built-in read/search tools may bypass the hook. Prefer these RTK equivalents when output would be large:
+
+```bash
+rtk read path/to/file.go
+rtk read path/to/file.svelte -l aggressive
+rtk grep "pattern" apps/
+rtk find apps/frontend -name "*.svelte"
+rtk git status
+rtk git diff
+rtk git log -5
+```
+
+## CubyCloud commands (via RTK)
+
+```bash
+cd apps/frontend && rtk bun run check
+cd apps/frontend && rtk bun run build
+cd apps/backend && rtk go test ./...
+cd apps/backend && rtk go build ./cmd/server
+```
+
+## Meta
+
+```bash
+rtk gain              # savings analytics
+rtk proxy <cmd>       # raw output when debugging filter issues
+```
+
+Install (once per machine): `brew install rtk` then `rtk init -g --agent cursor --auto-patch`.
+
+See `RTK.md` at repo root for full reference.

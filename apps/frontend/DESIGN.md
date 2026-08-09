@@ -8,7 +8,7 @@ CubyCloud mengadopsi bahasa desain **100% Flat Design** dengan ritme tata letak 
 
 1. **Clean & Flat Surface:** Tanpa bayangan tebal (_no hard shadows_), tanpa efek kaca (_glassmorphism_), dan tanpa garis batas yang agresif. Pemisahan antarelemen mengandalkan kontras latar belakang (_surface layering_) dan garis pemisah super-tipis (_subtle dividers_).
 2. **Low Eye Strain (Earthy Neutrality):** Menggantikan dominasi warna biru-putih steril khas _cloud storage_ konvensional dengan warna krem alami (_Parchment Cream_) dan hijau hutan pekat (_Obsidian Forest_). Sempurna untuk sesi penggunaan berdurasi panjang.
-3. **Storage-First Scanning Efficiency:** Struktur daftar berkas diorientasikan pada model **List View** berbaris horizontal dengan _padding_ dan proporsi yang teratur. Antarmuka disesuaikan khusus untuk manajemen penyimpanan berkas—tanpa elemen visual bergaya perpesanan (_chat bubbles_ atau _notification dots_) yang tidak relevan.
+3. **Storage-First Scanning Efficiency:** Struktur daftar berkas diorientasikan pada model **List View** (satu-satunya tampilan explorer di v1.0) berbaris horizontal dengan _padding_ dan proporsi yang teratur. Antarmuka disesuaikan khusus untuk manajemen penyimpanan berkas—tanpa elemen visual bergaya perpesanan (_chat bubbles_ atau _notification dots_) yang tidak relevan.
 4. **Strict Utility Styling (Tailwind CSS v4):** Seluruh implementasi komponen UI di dalam SvelteKit **wajib** menggunakan token standar Tailwind CSS v4. Penggunaan _arbitrary values_ (seperti `w-[13px]`, `p-[14px]`, `text-[15px]`) **dilarang keras**.
 
 ---
@@ -112,7 +112,7 @@ CubyCloud menggunakan Google Font **Montserrat** sebagai satu-satunya _font fami
 ### 4.2. Rounded Corner Scale
 
 - `rounded-lg` (8px): Input form, tombol (_button_), _filter chips_, ikon berkas.
-- `rounded-xl` (12px): Kartu berkas (_Grid View_), kontainer modal, _card_ indikator penyimpanan.
+- `rounded-xl` (12px): Kontainer modal, _card_ indikator penyimpanan, dan panel ringkas.
 - `rounded-full`: Avatar pengguna dan _pill badge storage node_ (`[R2]`, `[SSD]`, `[S3]`).
 
 ---
