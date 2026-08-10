@@ -12,7 +12,7 @@
 
 <section class="space-y-3">
 	<h2 class="text-sm font-semibold text-main">Ringkasan Penyimpanan</h2>
-	<Card.Root class="rounded-xl border-subtle bg-surface shadow-none">
+	<Card.Root class="rounded-xl border-subtle bg-surface py-0 shadow-none">
 		<Card.Content class="p-0">
 			<QuotaWidget
 				usedGb={quota.usedGb}

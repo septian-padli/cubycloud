@@ -42,16 +42,16 @@
 			badge: '🏢',
 			href: '/drive/organization'
 		},
-		{ id: 'shared', label: 'Dibagikan pada saya', icon: Users },
-		{ id: 'starred', label: 'Berbintang', icon: Star },
-		{ id: 'trash', label: 'Trash', icon: Trash2 },
-		{ id: 'storage-stats', label: 'Penyimpanan', icon: PieChart }
+		{ id: 'shared', label: 'Dibagikan pada saya', icon: Users, href: '/drive/shared' },
+		{ id: 'starred', label: 'Berbintang', icon: Star, href: '/drive/starred' },
+		{ id: 'trash', label: 'Trash', icon: Trash2, href: '/drive/trash' },
+		{ id: 'storage-stats', label: 'Penyimpanan', icon: PieChart, href: '/drive/storage-stats' }
 	];
 
 	const adminItems: NavItem[] = [
-		{ id: 'admin-settings', label: 'Admin Settings', icon: Settings },
-		{ id: 'admin-users', label: 'Users & Quotas', icon: UserCog },
-		{ id: 'admin-addons', label: 'Add-ons Manager', icon: Blocks }
+		{ id: 'admin-settings', label: 'Admin Settings', icon: Settings, href: '/admin/settings' },
+		{ id: 'admin-users', label: 'Users & Quotas', icon: UserCog, href: '/admin/users' },
+		{ id: 'admin-addons', label: 'Add-ons Manager', icon: Blocks, href: '/admin/addons' }
 	];
 
 	const pillClass = (active: boolean, linked: boolean) =>
@@ -102,15 +102,19 @@
 		<div class="my-2 border-t border-subtle" role="separator"></div>
 		<p class="px-3 pb-1 text-xs font-medium text-muted">Super Admin</p>
 		{#each adminItems as item (item.id)}
+			{@const active = item.id === activeId}
 			{@const ItemIcon = item.icon}
-			<button
-				type="button"
-				disabled
-				class="flex w-full cursor-default items-center gap-2.5 rounded-full px-3 py-2 text-left text-sm font-medium text-muted hover:bg-primary/10"
-			>
-				<ItemIcon class="size-4 shrink-0 stroke-2" aria-hidden="true" />
-				<span class="min-w-0 flex-1 truncate">{item.label}</span>
-			</button>
+			{#if item.href}
+				<a
+					href={item.href}
+					data-sveltekit-preload-data="hover"
+					aria-current={active ? 'page' : undefined}
+					class={pillClass(active, true)}
+				>
+					<ItemIcon class="size-4 shrink-0 stroke-2" aria-hidden="true" />
+					<span class="min-w-0 flex-1 truncate">{item.label}</span>
+				</a>
+			{/if}
 		{/each}
 	{/if}
 </nav>

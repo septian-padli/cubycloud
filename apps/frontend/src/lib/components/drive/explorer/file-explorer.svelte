@@ -18,12 +18,18 @@
 	import FileExplorerToolbar from './file-explorer-toolbar.svelte';
 	import FileExplorerRow from './file-explorer-row.svelte';
 	import FileExplorerDropzone from './file-explorer-dropzone.svelte';
+	import FileExplorerActionsMenu from './file-explorer-actions-menu.svelte';
+	import FileExplorerContextMenu from './file-explorer-context-menu.svelte';
 	import NewFolderDialog from './new-folder-dialog.svelte';
 	import RenameDialog from './rename-dialog.svelte';
 	import MoveDialog from './move-dialog.svelte';
 	import ConflictResolutionDialog from './conflict-resolution-dialog.svelte';
 	import ShareLinkSheet from './share-link-sheet.svelte';
 	import FilePreviewDialog from './file-preview-dialog.svelte';
+	import DriveFileGrid from '$lib/components/drive/drive-file-grid.svelte';
+	import FileGridCard from '$lib/components/drive/file-grid-card.svelte';
+	import StorageNodeBadge from './storage-node-badge.svelte';
+	import { driveView } from '$lib/drive-view.svelte.js';
 
 	let {
 		variant,
@@ -36,6 +42,7 @@
 	} = $props();
 
 	const chrome = getDriveChrome();
+	const showNodeBadge = $derived(chrome.user.role === 'super_admin');
 
 	let tree = $state<FileEntry[]>(untrack(() => cloneTree(initialTree)));
 	let category = $state<FileCategory>('all');
@@ -349,15 +356,57 @@
 		ondragleave={onDragLeave}
 		ondrop={onDrop}
 	>
-		<div class="overflow-hidden rounded-xl" role="list" aria-label="Daftar berkas">
-			{#if visible.length === 0}
-				<div class="px-4 py-12 text-center">
-					<p class="text-sm font-medium text-main">Folder kosong</p>
-					<p class="mt-1 text-xs text-muted">
-						Seret berkas ke sini atau gunakan tombol Unggah.
-					</p>
-				</div>
-			{:else}
+		{#if visible.length === 0}
+			<div class="overflow-hidden rounded-xl border border-subtle bg-surface px-4 py-12 text-center">
+				<p class="text-sm font-medium text-main">Folder kosong</p>
+				<p class="mt-1 text-xs text-muted">Seret berkas ke sini atau gunakan tombol Unggah.</p>
+			</div>
+		{:else if driveView.mode === 'grid'}
+			<DriveFileGrid>
+				{#each visible as entry (entry.id)}
+					{@const menuHandlers = {
+						onOpen: openEntry,
+						onDownload,
+						onRename: (e: FileEntry) => {
+							actionEntry = e;
+							renameOpen = true;
+						},
+						onMove: (e: FileEntry) => {
+							actionEntry = e;
+							moveOpen = true;
+						},
+						onCopy,
+						onStar,
+						onShare: (e: FileEntry) => {
+							actionEntry = e;
+							shareOpen = true;
+						},
+						onDelete
+					}}
+					<FileExplorerContextMenu {entry} {...menuHandlers}>
+						<FileGridCard
+							kind={entry.kind}
+							name={entry.name}
+							subtitle={entry.kind === 'folder'
+								? `Folder · ${entry.modifiedAt}`
+								: `${formatSize(entry.sizeBytes)} · ${entry.modifiedAt}`}
+							selected={selectedId === entry.id}
+							onSelect={() => (selectedId = entry.id)}
+							onOpen={() => openEntry(entry)}
+						>
+							{#snippet menu()}
+								<FileExplorerActionsMenu {entry} {...menuHandlers} />
+							{/snippet}
+						</FileGridCard>
+					</FileExplorerContextMenu>
+				{/each}
+			</DriveFileGrid>
+		{:else}
+			<div
+				class="overflow-hidden rounded-xl border border-subtle bg-surface"
+				role="listbox"
+				aria-label="Daftar berkas"
+			>
 				{#each visible as entry (entry.id)}
 					<FileExplorerRow
 						{entry}
@@ -382,8 +431,8 @@
 						onDelete={onDelete}
 					/>
 				{/each}
-			{/if}
-		</div>
+			</div>
+		{/if}
 	</FileExplorerDropzone>
 </div>
 

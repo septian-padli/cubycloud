@@ -1,5 +1,6 @@
 <script lang="ts">
 	import DrivePageHeader from '$lib/components/drive/drive-page-header.svelte';
+	import DriveViewToggle from '$lib/components/drive/drive-view-toggle.svelte';
 	import HomeQuickAccess from '$lib/components/drive/home-quick-access.svelte';
 	import HomeRecentActivities from '$lib/components/drive/home-recent-activities.svelte';
 	import HomeStorageSummary from '$lib/components/drive/home-storage-summary.svelte';
@@ -14,12 +15,18 @@
 	<meta name="description" content="Beranda CubyCloud: akses cepat, aktivitas, dan ringkasan kuota." />
 </svelte:head>
 
-<DrivePageHeader
-	eyebrow="Selamat datang"
-	title="Beranda"
-	description="Akses cepat berkas, aktivitas terbaru, dan ringkasan My Storage."
-/>
+<div class="flex flex-col gap-6">
+	<DrivePageHeader
+		eyebrow="Selamat datang"
+		title="Beranda"
+		description="Akses cepat berkas, aktivitas terbaru, dan ringkasan My Storage."
+	>
+		{#snippet actions()}
+			<DriveViewToggle />
+		{/snippet}
+	</DrivePageHeader>
 
-<HomeQuickAccess items={MOCK_QUICK_ACCESS} />
-<HomeRecentActivities items={MOCK_ACTIVITIES} />
-<HomeStorageSummary {quota} />
+	<HomeQuickAccess items={MOCK_QUICK_ACCESS} />
+	<HomeRecentActivities items={MOCK_ACTIVITIES} />
+	<HomeStorageSummary {quota} />
+</div>

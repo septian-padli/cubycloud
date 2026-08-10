@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { FileCategory } from '$lib/types/drive.js';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import DriveViewToggle from '$lib/components/drive/drive-view-toggle.svelte';
 	import { FolderPlus } from '@lucide/svelte';
 	import { cn } from '$lib/utils.js';
 
@@ -45,8 +46,11 @@
 		{/each}
 	</div>
 
-	<Button type="button" variant="secondary" size="sm" class="gap-1.5 self-start" onclick={onNewFolder}>
-		<FolderPlus class="size-4 stroke-2" />
-		Folder Baru
-	</Button>
+	<div class="flex flex-wrap items-center gap-2 self-start">
+		<DriveViewToggle />
+		<Button type="button" variant="secondary" size="sm" class="gap-1.5" onclick={onNewFolder}>
+			<FolderPlus class="size-4 stroke-2" />
+			Folder Baru
+		</Button>
+	</div>
 </div>

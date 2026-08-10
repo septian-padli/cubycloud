@@ -23,7 +23,7 @@
 <div
 	role="region"
 	aria-label="Zona unggah berkas"
-	class={cn('relative rounded-xl border border-subtle bg-surface', active && 'border-primary')}
+	class={cn('relative rounded-xl', active && 'border border-primary')}
 	{ondragenter}
 	{ondragover}
 	{ondragleave}

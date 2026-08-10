@@ -53,3 +53,38 @@ export interface BreadcrumbSegment {
 	id: string | null;
 	label: string;
 }
+
+export type SharePermission = 'viewer' | 'editor';
+
+export type FileSource = 'my-storage' | 'organization' | 'shared';
+
+export interface SharedFileItem extends FileEntry {
+	ownerName: string;
+	permission: SharePermission;
+}
+
+export interface StarredFileItem extends FileEntry {
+	source: FileSource;
+	sourceLabel: string;
+}
+
+export interface TrashFileItem extends FileEntry {
+	deletedAt: string;
+	daysRemaining: number;
+	originalParentId: string | null;
+	originalParentMissing?: boolean;
+}
+
+export interface CategoryUsage {
+	id: 'video' | 'image' | 'document' | 'archive' | 'trash';
+	label: string;
+	usedGb: number;
+}
+
+export interface LargestFileItem {
+	id: string;
+	name: string;
+	kind: FileKind;
+	sizeBytes: number;
+	modifiedAt: string;
+}
