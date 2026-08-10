@@ -1,8 +1,14 @@
 export type DriveRole = 'super_admin' | 'regular';
 
-export type FileKind = 'folder' | 'text' | 'image' | 'video' | 'audio' | 'document';
+export type FileKind = 'folder' | 'text' | 'image' | 'video' | 'audio' | 'document' | 'archive';
 
 export type ActivityAction = 'upload' | 'edit' | 'share';
+
+export type StorageNodeKind = 'r2' | 's3' | 'ssd' | 'hdd';
+
+export type FileCategory = 'all' | FileKind;
+
+export type ExplorerVariant = 'my-storage' | 'organization';
 
 export interface DriveUser {
 	username: string;
@@ -30,4 +36,20 @@ export interface ActivityItem {
 	action: ActivityAction;
 	fileName: string;
 	at: string;
+}
+
+export interface FileEntry {
+	id: string;
+	name: string;
+	kind: FileKind;
+	sizeBytes: number;
+	modifiedAt: string;
+	starred?: boolean;
+	storageNode?: StorageNodeKind;
+	parentId: string | null;
+}
+
+export interface BreadcrumbSegment {
+	id: string | null;
+	label: string;
 }

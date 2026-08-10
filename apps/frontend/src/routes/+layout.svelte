@@ -3,6 +3,7 @@
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import { theme } from '$lib/theme.svelte.js';
+	import { Toaster } from '$lib/components/ui/sonner/index.js';
 
 	let { children } = $props();
 
@@ -22,3 +23,4 @@
 </svelte:head>
 
 {@render children()}
+<Toaster richColors closeButton position="bottom-right" />

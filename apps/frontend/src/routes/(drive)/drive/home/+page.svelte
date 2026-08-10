@@ -3,7 +3,7 @@
 	import HomeQuickAccess from '$lib/components/drive/home-quick-access.svelte';
 	import HomeRecentActivities from '$lib/components/drive/home-recent-activities.svelte';
 	import HomeStorageSummary from '$lib/components/drive/home-storage-summary.svelte';
-	import { getDriveChrome } from '$lib/drive-context.js';
+	import { getDriveChrome } from '$lib/drive-context.svelte.js';
 	import { MOCK_ACTIVITIES, MOCK_QUICK_ACCESS } from '$lib/mocks/drive.js';
 
 	const { quota } = getDriveChrome();

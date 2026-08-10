@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import DriveShell from '$lib/components/drive/drive-shell.svelte';
-	import { setDriveChrome } from '$lib/drive-context.js';
+	import { setDriveChrome } from '$lib/drive-context.svelte.js';
 	import { deriveDriveActiveId } from '$lib/drive-nav.js';
 	import { MOCK_DRIVE_USER, MOCK_QUOTA } from '$lib/mocks/drive.js';
 

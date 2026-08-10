@@ -110,7 +110,7 @@ Komponen kunci (`$lib/components/drive/`):
 
 Context & mock:
 
-- `setDriveChrome()` / `getDriveChrome()` — `$lib/drive-context.ts` (user, quota)
+- `setDriveChrome()` / `getDriveChrome()` — `$lib/drive-context.svelte.ts` (user, quota, role toggle, upload handler)
 - `deriveDriveActiveId()` — `$lib/drive-nav.ts` (pathname → sidebar `activeId`)
 - Fixture: `$lib/mocks/drive.ts`, types `$lib/types/drive.ts`
 
@@ -162,7 +162,7 @@ apps/frontend/
 │       └── drive/home/             # /drive/home
 ├── src/lib/
 │   ├── theme.svelte.ts
-│   ├── drive-context.ts
+│   ├── drive-context.svelte.ts
 │   ├── drive-nav.ts
 │   ├── types/                      # drive.ts, setup.ts, …
 │   ├── mocks/
