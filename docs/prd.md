@@ -822,7 +822,7 @@ Backend dikembangkan menggunakan **Go (Golang)** dengan gaya arsitektur _Clean A
 | **Programming Language**   | **Go (Golang)**               | `v1.22+`     | Performa _native_, konkurensi Goroutine matang, alokasi RAM sangat kecil, dan kemampuan `go:embed`.                                     |
 | **Web Framework**          | **Echo** (`labstack/echo/v4`) | `v4.12+`     | Minimalis, alokasi memori sangat hemat, kompatibel dengan standard `net/http`, dan memiliki native `StaticFS` untuk `go:embed`.         |
 | **Database Engine**        | **SQLite** (WAL Mode)         | `v3.45+`     | Embedded RDBMS tanpa _overhead_ service terpisah. Mode WAL (_Write-Ahead Logging_) menjamin performa I/O tinggi & ACID _compliance_.    |
-| **ORM & Data Access**      | **`ent`** (`entgo.io/ent`)    | `v0.13+`     | _Zero-reflection code generation_, 100% _type-safe_, dan mempermudah penggantian ke DB eksternal (PostgreSQL / Supabase / CockroachDB). |
+| **ORM & Data Access**      | **Bun ORM** (`github.com/uptrace/bun`) | `v1.2+` | SQL-first di atas `database/sql` (bukan codegen). Struct Go + tag `bun`; skema kanonik tetap file SQL di `migrations/`. **Bukan** Bun runtime JavaScript (`bun.sh`) yang dipakai frontend. |
 | **SQLite Driver**          | **`glebarez/go-sqlite`**      | `v1.2+`      | Driver SQLite _Pure Go_ (CGO-Free). Memungkinkan _cross-compilation_ tanpa GCC dan menjaga ukuran Docker Image tetap kecil.             |
 | **Object Storage SDK**     | **AWS SDK for Go v2**         | `v1.30+`     | Penerbitan _Presigned Upload/Download URLs_ untuk Cloudflare R2 dan AWS S3 secara aman & hemat memori.                                  |
 | **Authentication & Token** | **`golang-jwt/jwt/v5`**       | `v5.2+`      | Penanganan token JWT (_JSON Web Token_) untuk _stateless session management_.                                                           |
@@ -843,7 +843,7 @@ Frontend dikembangkan sebagai **Single Page Application (SPA)** yang di-build me
 | **UI Components**      | **shadcn-svelte**                   | `latest`     | Komponen _headless & accessible_ berbasis `bits-ui`; di-_theme_ dengan token CubyCloud (primary moss, danger rose).                        |
 | **Icons Library**      | **Lucide Svelte** (`lucide-svelte`) | `v0.400+`    | Set ikon SVG geometris yang ringan dan konsisten.                                                                                  |
 | **Resumable Upload**   | **TUS Client / Fetch Chunking**     | `latest`     | Menangani _chunked upload_ untuk menjamin unggahan file besar dapat di-_resume_ saat koneksi jaringan terputus.                    |
-| **Package Manager**    | **Bun**                             | `1.x`        | Instalasi dependensi dan skrip dev/build frontend (`bun install`, `bun run build`).                                                |
+| **Package Manager**    | **Bun** (`bun.sh`)                  | `1.x`        | Runtime/PM JavaScript untuk frontend (`bun install`, `bun run build`). Bukan Bun ORM Go. |
 
 ---
 
@@ -888,9 +888,8 @@ Tooling yang digunakan untuk mempermudah proses alur kerja pengembangan (_develo
 
 | Tool                                   | Penggunaan & Fungsi                                                                                                                                                    |
 | -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`Makefile`**                         | Alat otomatisasi _build pipeline_: kompilasi frontend SvelteKit, penyalinan asset statis, eksekusi `ent generate`, kompilasi biner Go, hingga pengemasan Docker Image. |
+| **`Makefile`**                         | Alat otomatisasi _build pipeline_: kompilasi frontend SvelteKit, penyalinan asset statis, kompilasi biner Go, hingga pengemasan Docker Image. |
 | **`Air`** (`cosmtrek/air`)             | Tool _live-reload_ untuk Go Backend selama fase pengembangan lokal. Otomatis mengompilasi ulang biner Go saat ada perubahan kode `.go`.                                |
-| **`ent CLI`** (`entgo.io/ent/cmd/ent`) | Tool _code generation_ untuk memperbarui skema database dan membuat kueri Go secara otomatis dari skema `ent/schema`.                                                  |
 | **Docker Multi-Stage Build**           | Pengemasan kontainer produksi:                                                                                                                                         |
 
 - _Stage 1 (Bun Build):_ Compile SvelteKit SPA (`bun run build` di `apps/frontend/`).
@@ -908,7 +907,7 @@ Tooling yang digunakan untuk mempermudah proses alur kerja pengembangan (_develo
 |  [Frontend SPA]   SvelteKit + Tailwind CSS v4 + Montserrat + shadcn-svelte + Bits UI  |
 |         │                                                             |
 |         ▼ (Embedded via go:embed at compile time)                     |
-|  [Backend App]    Go v1.22+ Engine + Echo Router + ent ORM             |
+|  [Backend App]    Go v1.22+ Engine + Echo Router + Bun ORM (uptrace/bun) |
 |         │                                                             |
 |         ├──────────────► Local File System (/app/data/storage/nodes)  |
 |         ├──────────────► Embedded SQLite WAL (glebarez/go-sqlite)     |

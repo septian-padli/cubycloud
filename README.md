@@ -13,8 +13,8 @@ Self-hosted modular cloud storage — lightweight alternative to Nextcloud and G
 | Area | Status |
 |------|--------|
 | Product spec | [`docs/prd.md`](docs/prd.md) — v1.0 scope locked |
-| Frontend | Coming soon landing page at [`apps/frontend`](apps/frontend) |
-| Backend (Go) | Not started |
+| Frontend | SvelteKit SPA (UI mock) at [`apps/frontend`](apps/frontend) |
+| Backend (Go) | Scaffolded — Echo + `GET /health` (no features yet) |
 
 ---
 
@@ -39,10 +39,28 @@ See the full PRD for architecture, NFRs, and stack decisions: [`docs/prd.md`](do
 ```text
 cubycloud/
 ├── apps/
-│   └── frontend/     # SvelteKit SPA (static build → go:embed)
+│   ├── frontend/     # SvelteKit SPA (static build → go:embed)
+│   └── backend/      # Go module (Echo)
 ├── docs/
 │   └── prd.md        # Product requirements
 └── README.md
+```
+
+---
+
+## Quick start (backend)
+
+**Requirements:** [Go](https://go.dev/dl/) 1.25+
+
+```bash
+cp .env.example .env   # optional; defaults are PORT=8080, DATA_DIR_PATH=./data
+make run               # http://localhost:8080/health
+```
+
+Live reload (install [Air](https://github.com/air-verse/air) once): `go install github.com/air-verse/air@latest` then `make dev`.
+
+```bash
+make build             # apps/backend/bin/server
 ```
 
 ---
@@ -73,7 +91,7 @@ Frontend details: [`apps/frontend/README.md`](apps/frontend/README.md)
 
 | Layer | Technology |
 |-------|------------|
-| Backend | Go 1.22+, Echo, ent, SQLite (WAL) |
+| Backend | Go 1.22+, Echo, Bun ORM (`uptrace/bun`), SQLite (WAL) |
 | Frontend | SvelteKit 2, Svelte 5, Tailwind CSS v4, shadcn-svelte |
 | Deploy | Single Docker image (< 150 MB target) |
 | Cloud I/O | AWS SDK v2 presigned URLs (S3 / R2) |

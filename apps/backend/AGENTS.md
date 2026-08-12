@@ -14,7 +14,7 @@ Detail UI/route: `apps/frontend/SITEMAP.md` + `apps/frontend/DESIGN.md` — jang
 - **Language:** Go 1.22+
 - **Lokasi kode:** `apps/backend/` (monorepo)
 - **Web framework:** Echo v4.12+
-- **ORM / DB:** Ent ORM + `glebarez/go-sqlite` (**CGO-free**)
+- **ORM / DB:** Bun ORM (`github.com/uptrace/bun`) + `glebarez/go-sqlite` (**CGO-free**). Bukan Bun JS runtime.
 - **Arsitektur:** Domain/Module-Driven Clean Architecture
 - **Frontend embed:** Build artifact dari `apps/frontend/build/` → embed via `go:embed`
 
@@ -23,11 +23,11 @@ Detail UI/route: `apps/frontend/SITEMAP.md` + `apps/frontend/DESIGN.md` — jang
 ```text
 apps/backend/
 ├── cmd/server/main.go
-├── ent/schema/
 ├── migrations/
 ├── internal/
 │   ├── config/
-│   ├── database/
+│   ├── database/       # *sql.DB + *bun.DB
+│   ├── models/         # Bun structs (mirror migrations/)
 │   ├── middleware/     # JWT cookie guard, rate limit, setup guard
 │   ├── storage/        # StorageDriver interface
 │   ├── sse/

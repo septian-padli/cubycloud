@@ -1,3 +1,14 @@
 # graphify — rebuild locally (`graphify extract .` or auto via post-commit hook)
 graphify-out/
 .env.graphify.local
+
+# app boot env (keep .env.example)
+.env
+
+# backend runtime / build artifacts
+apps/backend/tmp/
+apps/backend/bin/
+apps/backend/data/
+apps/backend/web/dist/*
+!apps/backend/web/dist/.gitkeep
+

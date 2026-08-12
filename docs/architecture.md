@@ -39,7 +39,7 @@ CubyCloud dikembangkan dengan prinsip utama: **High Performance, Zero External R
 |  +-------------------------------------------------------------------------+  |
 |          |                            |                        |              |
 |  +---------------+            +------------------+     +-------------------+  |
-|  | StorageDriver |            |  Ent ORM Engine  |     | Goroutine Workers |  |
+|  | StorageDriver |            |  Bun ORM (uptrace) |    | Goroutine Workers |  |
 |  |  (Interface)  |            +------------------+     +-------------------+  |
 |  +---------------+                     |                        |             |
 |    |           |               +-----------------------------------+          |
@@ -92,9 +92,8 @@ cubycloud/
 │   │   └── build/                  # adapter-static output (sumber artifact embed)
 │   └── backend/                    # Go server — AGENTS.md
 │       ├── cmd/server/main.go
-│       ├── ent/schema/
 │       ├── migrations/
-│       ├── internal/               # config, database, middleware, storage, sse, modules
+│       ├── internal/               # config, database, models, middleware, storage, sse, modules
 │       └── web/                    # go:embed package (dist/ diisi saat build)
 └── README.md
 ```
@@ -108,14 +107,11 @@ apps/backend/
 ├── cmd/
 │   └── server/
 │       └── main.go                 # Entry point, DI, system boot
-├── ent/
-│   └── schema/                     # Ent ORM schema definitions
-│       ├── user.go, virtualnode.go, physicalblob.go, storagenode.go
-│       ├── sharelink.go, job.go, setting.go, auditlog.go
-├── migrations/                     # Versioned SQL migrations
+├── migrations/                     # Versioned SQL migrations (sumber skema kanonik)
 ├── internal/
 │   ├── config/                     # Hybrid config (env + DB settings loader)
-│   ├── database/                   # SQLite WAL connection & PRAGMA setup
+│   ├── database/                   # SQLite WAL + *bun.DB (sqlitedialect, CGO-free)
+│   ├── models/                     # Bun structs: user, virtual_node, physical_blob, storage_node, share_link, job, setting, audit_log
 │   ├── middleware/                 # JWT cookie guard, rate limit, setup guard
 │   ├── storage/                    # StorageDriver (LocalDisk, S3Presigner)
 │   ├── sse/                        # SSE connection manager
@@ -168,6 +164,8 @@ Per-user quota override disimpan di entitas `users` (bukan hanya `settings`) —
 ### 3.2. Versioned Database Migration
 
 Skema database dikelola menggunakan **Versioned SQL Migrations** (Tabel `schema_migrations`). Saat server _booting_, Go membaca folder `migrations/` dan mengeksekusi file `.sql` yang belum dijalankan. Hal ini menjamin integritas data dan kemudahan _rollback_ jika terjadi pembaruan versi CubyCloud (v1.0 → v1.1).
+
+Akses data memakai **Bun ORM** (`github.com/uptrace/bun`) di atas `database/sql` + `glebarez/go-sqlite` (dialek `sqlitedialect`). File `.sql` adalah sumber skema; struct di `internal/models/` memetakan tabel. Tidak ada langkah codegen (`ent generate` dilarang).
 
 ---
 

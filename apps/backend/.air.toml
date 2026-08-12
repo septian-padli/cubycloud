@@ -1,0 +1,12 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "CGO_ENABLED=0 go build -o ./tmp/server ./cmd/server"
+bin = "./tmp/server"
+include_ext = ["go"]
+exclude_dir = ["tmp", "bin", "data", "web"]
+delay = 500
+
+[misc]
+clean_on_exit = true
