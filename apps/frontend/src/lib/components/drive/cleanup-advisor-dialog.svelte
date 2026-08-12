@@ -35,7 +35,7 @@
 					Ada {trashCount} item di Trash yang masih dihitung ke kuota sampai dihapus permanen.
 				</p>
 				{#if onGoTrash}
-					<Button type="button" variant="secondary" size="sm" class="mt-3" onclick={onGoTrash}>
+					<Button type="button" variant="secondary" class="mt-3" onclick={onGoTrash}>
 						Kelola Sampah
 					</Button>
 				{/if}

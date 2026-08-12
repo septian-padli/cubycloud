@@ -111,9 +111,28 @@ CubyCloud menggunakan Google Font **Montserrat** sebagai satu-satunya _font fami
 
 ### 4.2. Rounded Corner Scale
 
-- `rounded-full`: Input form, tombol (_button_), _filter chips_, item sidebar navigasi.
+- `rounded-full`: Input form, tombol (_button_), _filter chips_, item sidebar navigasi, switch track.
 - `rounded-xl` (12px): Kontainer modal, _card_ indikator penyimpanan, dan panel ringkas.
 - `rounded-full`: Avatar pengguna dan _pill badge storage node_ (`[R2]`, `[SSD]`, `[S3]`).
+
+### 4.3. Card Padding (satu token, semua sisi)
+
+Padding luar card **simetris** lewat `--card-spacing` (default `--spacing(4)` = 16px):
+
+| Slot | Padding |
+| ---- | ------- |
+| `Card.Root` | `py-(--card-spacing)` + `gap-(--card-spacing)` antar Header/Content/Footer |
+| `Card.Header` / `Content` / `Footer` | `px-(--card-spacing)` saja (tanpa `last:pb` / `pt` asymetris) |
+
+**Pengecualian:** shell list/tabel edge-to-edge → override Root `py-0` + Content `p-0` (contoh: daftar berkas terbesar, quota detail flat).
+
+**Dilarang:** mencampur override `p-3` / `p-4` pada Content dengan token `--card-spacing` yang berbeda — pilih satu model.
+
+### 4.4. List vs Grid (Drive)
+
+- Mode tampilan global: `$lib/drive-view.svelte.ts` (`localStorage` key `cubycloud-drive-view`) + `DriveViewToggle`.
+- **List:** baris explorer / `DriveListRow` — lihat §5.1.
+- **Grid:** `FileGridCard` — area ikon full-width (`aspect-video`), default `bg-surface`, hover/selected `bg-surface/80` (tanpa tint `bg-primary/5`).
 
 ---
 
@@ -142,12 +161,18 @@ Baris berkas disajikan dengan proporsi dan _spacing_ horizontal yang konsisten u
 		<span class="rounded-full bg-secondary-accent px-2.5 py-1 text-xs font-medium text-white">
 			R2 Cloud
 		</span>
-		<button class="rounded-lg p-1.5 text-muted hover:text-main">
+		<!-- Actions ⋮: Button ghost size=icon; bg-surface, hover bg-primary text-white -->
+		<button
+			class="inline-flex size-9 items-center justify-center rounded-full bg-surface text-muted hover:bg-primary hover:text-white"
+			aria-label="Aksi berkas"
+		>
 			<MoreVerticalIcon class="h-4 w-4 stroke-2" />
 		</button>
 	</div>
 </div>
 ```
+
+Aksi baris/grid: **DropdownMenu** (klik ⋮) dan **ContextMenu** (klik kanan) — mirror item yang sama.
 
 ---
 
@@ -168,29 +193,52 @@ Badge disajikan dalam format _pill_ (`rounded-full`) dengan font mini (`text-xs 
 
 ---
 
-### 5.3. Primary CTA Button & Danger Button
+### 5.3. Buttons (shadcn-svelte + CubyCloud)
 
-#### Primary Button (Upload / Action)
+Implementasi: `$lib/components/ui/button/button.svelte` (`rounded-full`, `shadow-none`).
 
-```svelte
-<button
-	class="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 focus:ring-2 focus:ring-primary/50 focus:outline-none"
->
-	<PlusIcon class="h-4 w-4 stroke-2" />
-	<span>Unggah Berkas</span>
-</button>
+#### Variants
+
+| Variant | Surface | Hover | Border | Contoh |
+| ------- | ------- | ----- | ------ | ------ |
+| `default` | `bg-primary` + teks putih | `bg-primary/80` | — | Unggah, Simpan, CTA utama |
+| `secondary` | `bg-surface` | `bg-app` | `border-subtle` | Kembali, Pindai ulang, Unduh backup, Kelola sampah |
+| `outline` | `bg-app` | `bg-surface` | `border-subtle` | Aksi sekunder di atas `bg-app` |
+| `destructive` | `bg-danger` + `text-white` | `bg-danger/90` | — | Hapus permanen, Kosongkan sampah |
+| `ghost` | transparan | sesuai konteks | — | Icon ⋮ (lihat di bawah) |
+| `link` | — | underline | — | Tautan teks |
+
+#### Size (tinggi = skala shadcn Vega; padding horizontal CubyCloud lebih lebar)
+
+| Size | Tinggi | Catatan |
+| ---- | ------ | ------- |
+| `default` | `h-9` | **Standar** di `/drive` & `/admin` (teks) — `px-3.5` |
+| `sm` / `lg` / `xs` | `h-8` / `h-10` / `h-6` | Hanya jika eksplisit dibutuhkan |
+| `icon` | `size-9` | **Standar** icon-only (⋮, menu) — sejajar tinggi `default` |
+| `icon-sm` / `icon-lg` / `icon-xs` | `size-8` / `size-10` / `size-6` | Opsional |
+
+#### Actions ⋮ (ghost icon)
+
+```text
+variant="ghost" size="icon"
+class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
 ```
 
-#### Danger Button (Delete / Purge Trash)
+#### Primary / Danger (referensi visual)
 
 ```svelte
-<button
-	class="inline-flex items-center justify-center gap-2 rounded-lg bg-danger px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-danger/90 focus:ring-2 focus:ring-danger/50 focus:outline-none"
->
-	<TrashIcon class="h-4 w-4 stroke-2" />
-	<span>Hapus Permanen</span>
-</button>
+<!-- Primary CTA -->
+<button class="… rounded-full bg-primary … text-white hover:bg-primary/80">Unggah Berkas</button>
+
+<!-- Danger -->
+<button class="… rounded-full bg-danger … text-white hover:bg-danger/90">Hapus Permanen</button>
 ```
+
+---
+
+### 5.3.1. Switch
+
+Track: nonaktif `bg-app`, aktif `data-[state=checked]:bg-surface`; border `border-primary`; thumb `bg-primary`. Flat (`shadow-none`). Style state dengan `data-[state=checked]:…` (bits-ui).
 
 ---
 
@@ -211,7 +259,7 @@ Widget kuota tampil di **sidebar** (semua authenticated user) dan detail di `/dr
 </div>
 ```
 
-- **≥ 80% used:** isi bar memakai `bg-secondary` (Warm Ochre); toast warning saat aksi tulis My Storage.
+- **≥ 80% used:** isi bar memakai `bg-secondary-accent` / indikator terracotta; toast warning saat aksi tulis My Storage.
 - **100%:** block upload; toast error dengan salinan _"Kuota My Storage penuh. Hubungi admin."_ (`USER_QUOTA_EXCEEDED`).
 
 #### Unlimited / Super Admin
@@ -232,14 +280,24 @@ Tidak menampilkan angka limit, persen, atau progress bar dengan cap.
 
 ---
 
+### 5.5. Error pages (`+error.svelte`)
+
+- Komponen: `$lib/components/error/error-page.svelte` + copy/mapping `$lib/error-pages.ts`
+- Ilustrasi: `$lib/assets/illustration/` (import via `$lib`; status 401/403/404/500/503 — asset boleh diganti per status nanti)
+- Layout: `bg-app`, ilustrasi ~`md:w-1/2` (desktop), CTA **Kembali ke beranda** → `/` (`Button` default)
+
+---
+
 ## 6. Micro-Interactions & State Guidelines
 
 1. **Hover & Active States:**
 
 - Dilarang menggunakan animasi pergerakan posisi (_translate_) atau perubahan bayangan (_shadow jump_) pada daftar berkas.
 - Efek interaktif **hanya** transisi warna latar (`transition-colors`), tanpa shadow.
-- **Drive chrome & beranda** (sidebar nav, card Akses Cepat, baris Aktivitas Terbaru): tint primary — `hover:bg-primary/10` untuk item pill/nav kecil; card Akses Cepat `bg-primary/5` dengan hover `bg-primary/10`; baris Aktivitas Terbaru `hover:bg-primary/5`. Item sidebar **aktif** (`bg-primary` solid) **tanpa** hover tambahan.
-- **File explorer row** (list view berkas): netral `hover:bg-black/5` (Light) / `hover:bg-white/5` (Dark) — lihat §5.1.
+- **Sidebar nav:** inactive `hover:bg-primary/10`; item **aktif** (`bg-primary` solid) **tanpa** hover tambahan.
+- **File grid card:** default `bg-surface`; hover & selected `bg-surface/80` (bukan tint `bg-primary/5`).
+- **Baris list / aktivitas:** netral `hover:bg-black/5` (Light) / `hover:bg-white/5` (Dark), atau tint ringan beranda jika masih memakai `hover:bg-primary/5` pada list aktivitas — jangan campur dengan selected state grid.
+- **File explorer row** (list view berkas): netral `hover:bg-black/5` / `hover:bg-white/5` — lihat §5.1.
 
 2. **Resumable TUS Transfer Progress:**
 

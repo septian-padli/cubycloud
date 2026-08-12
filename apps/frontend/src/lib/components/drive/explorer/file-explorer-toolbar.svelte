@@ -48,7 +48,7 @@
 
 	<div class="flex flex-wrap items-center gap-2 self-start">
 		<DriveViewToggle />
-		<Button type="button" variant="secondary" size="sm" class="gap-1.5" onclick={onNewFolder}>
+		<Button type="button" variant="secondary" class="gap-1.5" onclick={onNewFolder}>
 			<FolderPlus class="size-4 stroke-2" />
 			Folder Baru
 		</Button>

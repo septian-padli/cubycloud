@@ -44,7 +44,7 @@
 				{...props}
 				type="button"
 				variant="ghost"
-				size="icon-sm"
+				size="icon"
 				class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
 				aria-label="Aksi berkas"
 				onclick={(e: MouseEvent) => e.stopPropagation()}
@@ -87,12 +87,10 @@
 			<Star class="size-4 stroke-2" />
 			{entry.starred ? 'Hapus bintang' : 'Bintang'}
 		</DropdownMenu.Item>
-		{#if entry.kind !== 'folder'}
-			<DropdownMenu.Item class="gap-2" onclick={() => onShare(entry)}>
-				<Share2 class="size-4 stroke-2" />
-				Bagikan
-			</DropdownMenu.Item>
-		{/if}
+		<DropdownMenu.Item class="gap-2" onclick={() => onShare(entry)}>
+			<Share2 class="size-4 stroke-2" />
+			Bagikan
+		</DropdownMenu.Item>
 		<DropdownMenu.Separator />
 		<DropdownMenu.Item variant="destructive" class="gap-2" onclick={() => onDelete(entry)}>
 			<Trash2 class="size-4 stroke-2" />

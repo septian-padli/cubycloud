@@ -60,8 +60,7 @@
 			</div>
 			<Button
 				type="button"
-				variant="outline"
-				size="sm"
+				variant="secondary"
 				class="shrink-0 gap-1.5"
 				onclick={() => (rescanOpen = true)}
 			>

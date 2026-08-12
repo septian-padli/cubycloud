@@ -1,16 +1,18 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import * as Alert from '$lib/components/ui/alert/index.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import PasswordInput from '$lib/components/password-input.svelte';
-	import { Info, KeyRound } from '@lucide/svelte';
+	import { setMockLoggedIn } from '$lib/mocks/auth-session.js';
+	import { KeyRound } from '@lucide/svelte';
 
 	let identifier = $state('');
 	let password = $state('');
 	let submitted = $state(false);
-	let homeNotice = $state(false);
 	let forgotInfo = $state(false);
 
 	const identifierEmpty = $derived(submitted && identifier.trim().length === 0);
@@ -21,7 +23,11 @@
 		e.preventDefault();
 		submitted = true;
 		if (!canSubmit) return;
-		homeNotice = true;
+		setMockLoggedIn(true);
+		const redirect = page.url.searchParams.get('redirect');
+		const safe =
+			redirect && redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/drive/home';
+		void goto(safe);
 	}
 </script>
 
@@ -33,16 +39,6 @@
 		</Card.Description>
 	</Card.Header>
 	<Card.Content class="space-y-4">
-		{#if homeNotice}
-			<Alert.Root class="border-subtle bg-app">
-				<Info class="size-4 stroke-2 text-secondary-accent" />
-				<Alert.Title class="text-main">Beranda belum tersedia</Alert.Title>
-				<Alert.Description>
-					Modul Drive (/drive/home) akan tersedia setelah diimplementasi. Login UI sudah siap.
-				</Alert.Description>
-			</Alert.Root>
-		{/if}
-
 		{#if forgotInfo}
 			<Alert.Root class="border-subtle bg-app">
 				<KeyRound class="size-4 stroke-2 text-secondary-accent" />

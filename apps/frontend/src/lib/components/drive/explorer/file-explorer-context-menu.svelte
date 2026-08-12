@@ -76,12 +76,10 @@
 			<Star class="size-4 stroke-2" />
 			{entry.starred ? 'Hapus bintang' : 'Bintang'}
 		</ContextMenu.Item>
-		{#if entry.kind !== 'folder'}
-			<ContextMenu.Item class="gap-2" onclick={() => onShare(entry)}>
-				<Share2 class="size-4 stroke-2" />
-				Bagikan
-			</ContextMenu.Item>
-		{/if}
+		<ContextMenu.Item class="gap-2" onclick={() => onShare(entry)}>
+			<Share2 class="size-4 stroke-2" />
+			Bagikan
+		</ContextMenu.Item>
 		<ContextMenu.Separator />
 		<ContextMenu.Item variant="destructive" class="gap-2" onclick={() => onDelete(entry)}>
 			<Trash2 class="size-4 stroke-2" />

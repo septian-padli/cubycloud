@@ -11,6 +11,7 @@ export type FileCategory = 'all' | FileKind;
 export type ExplorerVariant = 'my-storage' | 'organization';
 
 export interface DriveUser {
+	id: string;
 	username: string;
 	displayName: string;
 	email: string;
@@ -56,7 +57,29 @@ export interface BreadcrumbSegment {
 
 export type SharePermission = 'viewer' | 'editor';
 
+export type ShareLinkAccess = 'public' | 'restricted';
+
 export type FileSource = 'my-storage' | 'organization' | 'shared';
+
+export interface ShareGrant {
+	userId: string;
+	username: string;
+	displayName: string;
+	permission: SharePermission;
+}
+
+export interface ShareLinkRecord {
+	token: string;
+	entryId: string;
+	entryName: string;
+	entryKind: FileKind;
+	access: ShareLinkAccess;
+	/** Plaintext mock only — never persist real passwords this way. */
+	password: string | null;
+	expiresAt: string | null;
+	ownerId: string;
+	ownerName: string;
+}
 
 export interface SharedFileItem extends FileEntry {
 	ownerName: string;

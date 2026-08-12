@@ -52,6 +52,7 @@
 		const mode = quotaChoice as AdminQuotaMode;
 		onCreate({
 			username: username.trim(),
+			displayName: username.trim(),
 			email: email.trim(),
 			password,
 			quotaMode: mode,

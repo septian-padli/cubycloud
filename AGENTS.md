@@ -78,3 +78,5 @@ Detail stack per area ada di `apps/frontend/AGENTS.md` dan `apps/backend/AGENTS.
 - **Zero arbitrary values** di Tailwind: patuhi token di `apps/frontend/DESIGN.md` (`bg-app`, `bg-surface`, `text-main`, `rounded-xl`, dll.)
 - Flat surfaces: **zero shadow** di seluruh UI (`shadow-none`); pemisahan visual via `border-subtle` dan surface layering — bukan elevasi bayangan
 - Theme light/dark: `$lib/theme.svelte.ts` + `ThemeToggle` — detail di `apps/frontend/AGENTS.md`
+- Button / card / switch / list-grid: kontrak visual di `apps/frontend/DESIGN.md` §4–§5 dan `apps/frontend/AGENTS.md` §2 (destructive = `bg-danger` + teks putih; card padding simetris via `--card-spacing`)
+- Route publik share: `/s/:token` (SITEMAP §E); profil user: `/drive/profile/[userId]` — mock UI di frontend, API belakangan

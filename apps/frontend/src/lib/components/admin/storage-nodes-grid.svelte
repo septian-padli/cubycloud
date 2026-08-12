@@ -83,7 +83,6 @@
 					<Button
 						type="button"
 						variant="secondary"
-						size="sm"
 						class="w-full"
 						disabled={!node.enabled}
 						onclick={() => onDetach(node)}

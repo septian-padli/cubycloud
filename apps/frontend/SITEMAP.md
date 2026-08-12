@@ -44,8 +44,11 @@ src/routes/
 │   │   │   └── +page.svelte         # /drive/starred
 │   │   ├── trash/
 │   │   │   └── +page.svelte         # /drive/trash
-│   │   └── storage-stats/
-│   │       └── +page.svelte         # /drive/storage-stats
+│   │   ├── storage-stats/
+│   │   │   └── +page.svelte         # /drive/storage-stats
+│   │   └── profile/
+│   │       └── [userId]/
+│   │           └── +page.svelte     # /drive/profile/:userId
 │   │
 │   └── admin/                       # Super Admin only (sidebar bottom)
 │       ├── settings/
@@ -157,7 +160,7 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
 - **Embedded modals / drawers:**
   - _File Preview Lightbox_ (`?preview=file_id`) — core formats; PDF jika add-on aktif
   - _Conflict Resolution Modal_ — Replace / Keep Both
-  - _Share Link Drawer_ — user-to-user, Public/Restricted, password, expiration
+  - _Share Sheet_ — tab Pengguna (cari user lalu tambah Viewer/Editor) + tab Tautan (password, expiration)
   - _New Folder Modal_
   - _Quota Exceeded Toast / Modal_ — `USER_QUOTA_EXCEEDED`
 - **Key components & actions:**
@@ -165,7 +168,7 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
   - File explorer list view — Nama, ukuran, tanggal, aksi
   - **Storage Node Badge:** tampil **hanya** jika role = Super Admin
   - Drag-and-drop — TUS + presigned cloud; cek user quota sebelum upload
-  - Actions: Download, Rename, Move, Zero-Byte Copy, Star/Unstar, Delete to Trash
+  - Actions: Download, Rename, Move, Zero-Byte Copy, Star/Unstar, **Bagikan** (file & folder), Delete to Trash
 
 #### `/drive/organization` (Organization Drive)
 
@@ -177,7 +180,7 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
 - **Embedded modals / drawers:**
   - _File Preview Lightbox_
   - _Conflict Resolution Modal_
-  - _Share Link Drawer_ (internal / tim)
+  - _Share Sheet_ (internal / tim)
 - **Key components & actions:**
   - Header banner + badge `[🏢 Organization]`
   - File explorer list view (komponen sama; node badge admin-only)
@@ -190,10 +193,11 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
 - **Embedded modals / drawers:**
   - _File Preview Lightbox_
   - _Share Details Modal_ — pemilik + `Viewer` / `Editor`
+  - _Share Sheet_ — hanya jika izin `Editor`
 - **Key components & actions:**
   - Shared files table
   - Permission badge — `Viewer` (`secondary` / Ochre), `Editor` (`primary` / Moss)
-  - Actions: Download, Preview; Edit/Delete jika `Editor`
+  - Actions: Download, Preview; Edit/Delete/**Bagikan** jika `Editor`
   - Quota: owner pays (tidak menambah usage penerima share)
 
 #### `/drive/starred` (Berbintang)
@@ -203,7 +207,7 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
 - **Access:** Authenticated
 - **Embedded modals / drawers:**
   - _File Preview Lightbox_
-  - _Share Link Drawer_
+  - _Share Sheet_
 - **Key components & actions:**
   - Starred files table (dari `my-storage`, `organization`, `shared`)
   - CTA `Hapus Bintang` (Unstar)
@@ -287,13 +291,14 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
 - **URL params:** `?preview=file_id`
 - **Access:** Public atau Restricted guest
 - **Embedded modals:**
-  - _Password Challenge Modal_
+  - _Password Challenge_ (full-page card)
+  - _Restricted login prompt_ → `/login?redirect=/s/{token}`
   - _File Preview Lightbox_
 - **Key components & actions:**
-  - Expired / Not Found view
-  - Restricted login prompt
-  - Guest file explorer / single-file preview
+  - Expired / Not Found view (copy berbeda)
+  - Guest file explorer (folder) / single-file card
   - Actions: Direct Download, Stream Preview, Download as ZIP (jika add-on aktif)
+- **Demo tokens (UI mock):** `demo-public`, `demo-folder`, `demo-password` (sandi `demo123`), `demo-restricted`, `demo-expired`
 
 ---
 

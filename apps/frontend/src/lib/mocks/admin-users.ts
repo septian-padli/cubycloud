@@ -10,6 +10,7 @@ export const MOCK_ADMIN_USERS: AdminUser[] = [
 	{
 		id: 'user-admin',
 		username: 'admin',
+		displayName: 'Super Admin',
 		email: 'admin@contoh.local',
 		role: 'super_admin',
 		quotaMode: 'unlimited',
@@ -18,6 +19,7 @@ export const MOCK_ADMIN_USERS: AdminUser[] = [
 	{
 		id: 'user-siti',
 		username: 'siti',
+		displayName: 'Siti Rahayu',
 		email: 'siti@contoh.local',
 		role: 'user',
 		quotaMode: 'default',
@@ -26,6 +28,7 @@ export const MOCK_ADMIN_USERS: AdminUser[] = [
 	{
 		id: 'user-budi',
 		username: 'budi',
+		displayName: 'Budi Santoso',
 		email: 'budi@contoh.local',
 		role: 'user',
 		quotaMode: 'override_gb',
@@ -35,6 +38,7 @@ export const MOCK_ADMIN_USERS: AdminUser[] = [
 	{
 		id: 'user-andi',
 		username: 'andi',
+		displayName: 'Andi Wijaya',
 		email: 'andi@contoh.local',
 		role: 'user',
 		quotaMode: 'override_gb',
@@ -44,6 +48,7 @@ export const MOCK_ADMIN_USERS: AdminUser[] = [
 	{
 		id: 'user-rina',
 		username: 'rina',
+		displayName: 'Rina Melati',
 		email: 'rina@contoh.local',
 		role: 'user',
 		quotaMode: 'default',

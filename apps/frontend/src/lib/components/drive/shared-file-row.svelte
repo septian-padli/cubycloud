@@ -10,6 +10,7 @@
 		Info,
 		MoreVertical,
 		Pencil,
+		Share2,
 		Trash2
 	} from '@lucide/svelte';
 	import DriveListRow from './drive-list-row.svelte';
@@ -23,6 +24,7 @@
 		onPreview,
 		onDownload,
 		onDetails,
+		onShare,
 		onEdit,
 		onDelete
 	}: {
@@ -32,6 +34,7 @@
 		onPreview: (entry: SharedFileItem) => void;
 		onDownload: (entry: SharedFileItem) => void;
 		onDetails: (entry: SharedFileItem) => void;
+		onShare: (entry: SharedFileItem) => void;
 		onEdit: (entry: SharedFileItem) => void;
 		onDelete: (entry: SharedFileItem) => void;
 	} = $props();
@@ -64,7 +67,7 @@
 								{...props}
 								type="button"
 								variant="ghost"
-								size="icon-sm"
+								size="icon"
 								class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
 								aria-label="Aksi berkas"
 								onclick={(e: MouseEvent) => e.stopPropagation()}
@@ -88,6 +91,10 @@
 						</DropdownMenu.Item>
 						{#if isEditor}
 							<DropdownMenu.Separator />
+							<DropdownMenu.Item class="gap-2" onclick={() => onShare(entry)}>
+								<Share2 class="size-4 stroke-2" />
+								Bagikan
+							</DropdownMenu.Item>
 							<DropdownMenu.Item class="gap-2" onclick={() => onEdit(entry)}>
 								<Pencil class="size-4 stroke-2" />
 								Edit
@@ -121,6 +128,10 @@
 		</ContextMenu.Item>
 		{#if isEditor}
 			<ContextMenu.Separator />
+			<ContextMenu.Item class="gap-2" onclick={() => onShare(entry)}>
+				<Share2 class="size-4 stroke-2" />
+				Bagikan
+			</ContextMenu.Item>
 			<ContextMenu.Item class="gap-2" onclick={() => onEdit(entry)}>
 				<Pencil class="size-4 stroke-2" />
 				Edit

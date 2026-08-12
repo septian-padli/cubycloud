@@ -74,7 +74,6 @@
 		<Button
 			type="button"
 			variant="destructive"
-			size="sm"
 			class="gap-1.5"
 			disabled={items.length === 0}
 			onclick={() => openPurge()}
@@ -114,7 +113,7 @@
 												{...props}
 												type="button"
 												variant="ghost"
-												size="icon-sm"
+												size="icon"
 												class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
 												aria-label="Aksi trash"
 												onclick={(e: MouseEvent) => e.stopPropagation()}

@@ -12,7 +12,7 @@
 	import { Eye, MoreVertical, Share2, Star } from '@lucide/svelte';
 	import StarredFileRow from './starred-file-row.svelte';
 	import FilePreviewDialog from './explorer/file-preview-dialog.svelte';
-	import ShareLinkSheet from './explorer/share-link-sheet.svelte';
+	import ShareSheet from './explorer/share-sheet.svelte';
 	import DriveFileGrid from './drive-file-grid.svelte';
 	import FileGridCard from './file-grid-card.svelte';
 
@@ -91,7 +91,7 @@
 											{...props}
 											type="button"
 											variant="ghost"
-											size="icon-sm"
+											size="icon"
 											class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
 											aria-label="Aksi berkas"
 											onclick={(e: MouseEvent) => e.stopPropagation()}
@@ -106,17 +106,17 @@
 											<Eye class="size-4 stroke-2" />
 											Pratinjau
 										</DropdownMenu.Item>
-										<DropdownMenu.Item
-											class="gap-2"
-											onclick={() => {
-												actionEntry = entry;
-												shareOpen = true;
-											}}
-										>
-											<Share2 class="size-4 stroke-2" />
-											Bagikan
-										</DropdownMenu.Item>
 									{/if}
+									<DropdownMenu.Item
+										class="gap-2"
+										onclick={() => {
+											actionEntry = entry;
+											shareOpen = true;
+										}}
+									>
+										<Share2 class="size-4 stroke-2" />
+										Bagikan
+									</DropdownMenu.Item>
 									<DropdownMenu.Item class="gap-2" onclick={() => onUnstar(entry)}>
 										<Star class="size-4 stroke-2" />
 										Hapus bintang
@@ -132,17 +132,17 @@
 							<Eye class="size-4 stroke-2" />
 							Pratinjau
 						</ContextMenu.Item>
-						<ContextMenu.Item
-							class="gap-2"
-							onclick={() => {
-								actionEntry = entry;
-								shareOpen = true;
-							}}
-						>
-							<Share2 class="size-4 stroke-2" />
-							Bagikan
-						</ContextMenu.Item>
 					{/if}
+					<ContextMenu.Item
+						class="gap-2"
+						onclick={() => {
+							actionEntry = entry;
+							shareOpen = true;
+						}}
+					>
+						<Share2 class="size-4 stroke-2" />
+						Bagikan
+					</ContextMenu.Item>
 					<ContextMenu.Item class="gap-2" onclick={() => onUnstar(entry)}>
 						<Star class="size-4 stroke-2" />
 						Hapus bintang
@@ -173,5 +173,5 @@
 	</div>
 {/if}
 
-<ShareLinkSheet bind:open={shareOpen} entry={actionEntry} />
+<ShareSheet bind:open={shareOpen} entry={actionEntry} />
 <FilePreviewDialog open={previewOpen} entry={previewEntry} onClose={() => syncPreview(null)} />

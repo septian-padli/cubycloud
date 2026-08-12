@@ -40,7 +40,7 @@ apps/backend/
 └── web/embed.go        # static embed bridge
 ```
 
-Product views (`/drive/home`, org, starred, stats) = **query layer VFS**, bukan modul Go terpisah.
+Product views (`/drive/home`, org, shared, starred, trash, storage-stats, profile) = **query layer VFS**, bukan modul Go terpisah. Halaman `/admin/*` UI di frontend mirror modul `admin/` + `jobs/` (settings, users/quota, add-ons/queue). Share UI (`/drive/shared`, sheet Bagikan, `/s/:token`) mirror modul `share/` — user-to-user grants vs tautan publik (password + expiry; token NanoID).
 
 ---
 

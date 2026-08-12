@@ -36,9 +36,14 @@
 	<div class="mt-auto shrink-0">
 		<QuotaWidget usedGb={quota.usedGb} limitGb={quota.limitGb} />
 
-		<div class="border-t border-subtle px-4 py-3">
-			<p class="truncate text-sm font-medium text-main">{user.displayName}</p>
-			<p class="truncate text-xs text-muted">@{user.username}</p>
+		<div class="border-t border-subtle px-3 py-2">
+			<a
+				href="/drive/profile/{user.id}"
+				class="block rounded-full px-3 py-2 transition-colors hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+			>
+				<p class="truncate text-sm font-medium text-main">{user.displayName}</p>
+				<p class="truncate text-xs text-muted">@{user.username}</p>
+			</a>
 		</div>
 	</div>
 </aside>

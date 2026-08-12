@@ -111,14 +111,14 @@
 				<p class="text-sm font-medium text-main">Backup basis data</p>
 				<p class="text-xs text-muted">Unduh salinan file SQLite (.db) untuk cadangan.</p>
 			</div>
-			<Button type="button" variant="outline" class="gap-1.5" onclick={downloadBackup}>
+			<Button type="button" variant="secondary" class="gap-1.5" onclick={downloadBackup}>
 				<Download class="size-4 stroke-2" />
 				Unduh Backup DB (.db)
 			</Button>
 		</div>
 	</Card.Content>
 	<Card.Footer class="justify-end border-t border-subtle">
-		<Button type="button" class="gap-1.5" onclick={onSave}>
+		<Button type="button" class="gap-1.5" onclick={onSave} size="lg">
 			<Save class="size-4 stroke-2" />
 			Simpan pengaturan
 		</Button>

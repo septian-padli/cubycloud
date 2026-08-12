@@ -59,14 +59,13 @@
 			<Button
 				type="button"
 				variant="secondary"
-				size="sm"
 				class="gap-1.5"
 				onclick={() => (cleanupOpen = true)}
 			>
 				<Sparkles class="size-4 stroke-2" />
 				Saran Pembersihan
 			</Button>
-			<Button type="button" variant="secondary" size="sm" class="gap-1.5" href="/drive/trash">
+			<Button type="button" variant="secondary" class="gap-1.5" href="/drive/trash">
 				<Trash2 class="size-4 stroke-2" />
 				Kelola Sampah
 			</Button>
@@ -93,7 +92,7 @@
 										{...props}
 										type="button"
 										variant="ghost"
-										size="icon-sm"
+										size="icon"
 										class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
 										aria-label="Aksi berkas"
 										onclick={(e: MouseEvent) => e.stopPropagation()}

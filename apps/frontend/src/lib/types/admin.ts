@@ -17,6 +17,7 @@ export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
 export interface AdminUser {
 	id: string;
 	username: string;
+	displayName: string;
 	email: string;
 	role: AdminRole;
 	quotaMode: AdminQuotaMode;

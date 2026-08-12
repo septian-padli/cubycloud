@@ -6,6 +6,7 @@
 	import { deriveDriveActiveId } from '$lib/drive-nav.js';
 	import { driveView } from '$lib/drive-view.svelte.js';
 	import { MOCK_DRIVE_USER, MOCK_QUOTA } from '$lib/mocks/drive.js';
+	import { setMockLoggedIn } from '$lib/mocks/auth-session.js';
 
 	let { children } = $props();
 
@@ -14,6 +15,7 @@
 	const activeId = $derived(deriveDriveActiveId(page.url.pathname));
 
 	onMount(() => {
+		setMockLoggedIn(true);
 		driveView.init();
 	});
 </script>

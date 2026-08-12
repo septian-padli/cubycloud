@@ -28,6 +28,7 @@
 			{
 				id: `user-${crypto.randomUUID().slice(0, 8)}`,
 				username: payload.username,
+				displayName: payload.displayName,
 				email: payload.email,
 				role: 'user',
 				quotaMode: payload.quotaMode,

@@ -44,7 +44,7 @@
 	<Button
 		type="button"
 		variant="ghost"
-		size="icon-sm"
+		size="icon"
 		class="md:hidden"
 		aria-label="Buka menu navigasi"
 		onclick={onMenuClick}
@@ -70,7 +70,6 @@
 		<Button
 			type="button"
 			variant="outline"
-			size="sm"
 			class="hidden text-xs sm:inline-flex"
 			onclick={toggleRole}
 			aria-label="Ganti role demo"

@@ -3,7 +3,8 @@
 	import { effectiveQuotaLabel } from '$lib/mocks/admin-users.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { MoreVertical, Pencil, Trash2 } from '@lucide/svelte';
+	import { MoreVertical, Eye, Pencil, Trash2 } from '@lucide/svelte';
+	import { goto } from '$app/navigation';
 
 	let {
 		users,
@@ -60,7 +61,7 @@
 											{...props}
 											type="button"
 											variant="ghost"
-											size="icon-sm"
+											size="icon"
 											class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
 											aria-label="Aksi {user.username}"
 										>
@@ -69,6 +70,13 @@
 									{/snippet}
 								</DropdownMenu.Trigger>
 								<DropdownMenu.Content align="end" class="min-w-40">
+									<DropdownMenu.Item
+										class="gap-2"
+										onclick={() => goto(`/drive/profile/${user.id}`)}
+									>
+										<Eye class="size-4 stroke-2" />
+										Lihat
+									</DropdownMenu.Item>
 									<DropdownMenu.Item
 										class="gap-2"
 										disabled={isSuperAdmin}

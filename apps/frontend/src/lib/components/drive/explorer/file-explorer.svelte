@@ -24,7 +24,7 @@
 	import RenameDialog from './rename-dialog.svelte';
 	import MoveDialog from './move-dialog.svelte';
 	import ConflictResolutionDialog from './conflict-resolution-dialog.svelte';
-	import ShareLinkSheet from './share-link-sheet.svelte';
+	import ShareSheet from './share-sheet.svelte';
 	import FilePreviewDialog from './file-preview-dialog.svelte';
 	import DriveFileGrid from '$lib/components/drive/drive-file-grid.svelte';
 	import FileGridCard from '$lib/components/drive/file-grid-card.svelte';
@@ -472,7 +472,7 @@
 		pendingUpload = null;
 	}}
 />
-<ShareLinkSheet bind:open={shareOpen} entry={actionEntry} />
+<ShareSheet bind:open={shareOpen} entry={actionEntry} />
 <FilePreviewDialog
 	open={previewOpen}
 	entry={previewEntry}

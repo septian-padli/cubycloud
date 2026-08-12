@@ -6,6 +6,7 @@ import type {
 } from '$lib/types/drive.js';
 
 export const MOCK_DRIVE_USER: DriveUser = {
+	id: 'user-admin',
 	username: 'admin',
 	displayName: 'Super Admin',
 	email: 'admin@contoh.local',

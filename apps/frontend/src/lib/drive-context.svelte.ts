@@ -7,6 +7,7 @@ export type DriveChrome = {
 	user: DriveUser;
 	quota: QuotaState;
 	setRole: (role: DriveRole) => void;
+	updateProfile: (patch: Pick<DriveUser, 'displayName' | 'email'>) => void;
 	requestUpload: () => void;
 	registerUploadHandler: (handler: (() => void) | null) => void;
 };
@@ -23,6 +24,10 @@ class DriveChromeState implements DriveChrome {
 
 	setRole(role: DriveRole) {
 		this.user.role = role;
+	}
+
+	updateProfile(patch: Pick<DriveUser, 'displayName' | 'email'>) {
+		this.user = { ...this.user, ...patch };
 	}
 
 	requestUpload() {

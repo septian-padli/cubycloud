@@ -45,7 +45,7 @@
 						{...props}
 						type="button"
 						variant="ghost"
-						size="icon-sm"
+						size="icon"
 						class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
 						aria-label="Aksi berkas"
 						onclick={(e: MouseEvent) => e.stopPropagation()}

@@ -9,9 +9,10 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import * as ContextMenu from '$lib/components/ui/context-menu/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { Download, Eye, Info, MoreVertical, Pencil, Trash2 } from '@lucide/svelte';
+	import { Download, Eye, Info, MoreVertical, Pencil, Share2, Trash2 } from '@lucide/svelte';
 	import SharedFileRow from './shared-file-row.svelte';
 	import ShareDetailsDialog from './share-details-dialog.svelte';
+	import ShareSheet from './explorer/share-sheet.svelte';
 	import FilePreviewDialog from './explorer/file-preview-dialog.svelte';
 	import DriveFileGrid from './drive-file-grid.svelte';
 	import FileGridCard from './file-grid-card.svelte';
@@ -26,6 +27,7 @@
 	let items = $state<SharedFileItem[]>(untrack(() => initialItems.map((e) => ({ ...e }))));
 	let selectedId = $state<string | null>(null);
 	let detailsOpen = $state(false);
+	let shareOpen = $state(false);
 	let actionEntry = $state<SharedFileItem | null>(null);
 
 	const previewId = $derived(page.url.searchParams.get('preview'));
@@ -102,7 +104,7 @@
 											{...props}
 											type="button"
 											variant="ghost"
-											size="icon-sm"
+											size="icon"
 											class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
 											aria-label="Aksi berkas"
 											onclick={(e: MouseEvent) => e.stopPropagation()}
@@ -132,6 +134,16 @@
 									</DropdownMenu.Item>
 									{#if isEditor}
 										<DropdownMenu.Separator />
+										<DropdownMenu.Item
+											class="gap-2"
+											onclick={() => {
+												actionEntry = entry;
+												shareOpen = true;
+											}}
+										>
+											<Share2 class="size-4 stroke-2" />
+											Bagikan
+										</DropdownMenu.Item>
 										<DropdownMenu.Item class="gap-2" onclick={() => onEdit(entry)}>
 											<Pencil class="size-4 stroke-2" />
 											Edit
@@ -171,6 +183,16 @@
 					</ContextMenu.Item>
 					{#if isEditor}
 						<ContextMenu.Separator />
+						<ContextMenu.Item
+							class="gap-2"
+							onclick={() => {
+								actionEntry = entry;
+								shareOpen = true;
+							}}
+						>
+							<Share2 class="size-4 stroke-2" />
+							Bagikan
+						</ContextMenu.Item>
 						<ContextMenu.Item class="gap-2" onclick={() => onEdit(entry)}>
 							<Pencil class="size-4 stroke-2" />
 							Edit
@@ -205,6 +227,10 @@
 					actionEntry = e;
 					detailsOpen = true;
 				}}
+				onShare={(e) => {
+					actionEntry = e;
+					shareOpen = true;
+				}}
 				onEdit={onEdit}
 				onDelete={onDelete}
 			/>
@@ -213,6 +239,7 @@
 {/if}
 
 <ShareDetailsDialog bind:open={detailsOpen} entry={actionEntry} />
+<ShareSheet bind:open={shareOpen} entry={actionEntry} />
 <FilePreviewDialog
 	open={previewOpen}
 	entry={previewEntry}
