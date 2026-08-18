@@ -39,7 +39,6 @@
 			id: 'organization',
 			label: 'Organization',
 			icon: Building2,
-			badge: '🏢',
 			href: '/drive/organization'
 		},
 		{ id: 'shared', label: 'Dibagikan pada saya', icon: Users, href: '/drive/shared' },

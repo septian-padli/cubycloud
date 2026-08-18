@@ -12,6 +12,7 @@
 		getBreadcrumbPath,
 		getChildren,
 		getFolderOptions,
+		isAncestor,
 		nextId
 	} from '$lib/mocks/file-tree.js';
 	import FileExplorerBreadcrumbs from './file-explorer-breadcrumbs.svelte';
@@ -201,6 +202,11 @@
 
 	onDestroy(() => {
 		chrome.registerUploadHandler(null);
+		draggedEntryId = null;
+		if (longPressTimer) {
+			clearTimeout(longPressTimer);
+			longPressTimer = null;
+		}
 	});
 
 	function onNewFolder(name: string) {
@@ -307,29 +313,169 @@
 	}
 
 	function onDragEnter(e: DragEvent) {
+		// Ignore internal item drag - check dataTransfer types
+		// Internal drag has 'text/plain' but no 'Files' type
+		const types = e.dataTransfer?.types || [];
+		const isInternalDrag = types.includes('text/plain') && !types.includes('Files');
+		if (isInternalDrag) return;
+		
 		e.preventDefault();
 		dragDepth += 1;
 		dragActive = true;
 	}
 
 	function onDragOver(e: DragEvent) {
+		// Ignore internal item drag
+		const types = e.dataTransfer?.types || [];
+		const isInternalDrag = types.includes('text/plain') && !types.includes('Files');
+		if (isInternalDrag) return;
+		
 		e.preventDefault();
 		if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
 	}
 
 	function onDragLeave(e: DragEvent) {
+		// Ignore internal item drag
+		const types = e.dataTransfer?.types || [];
+		const isInternalDrag = types.includes('text/plain') && !types.includes('Files');
+		if (isInternalDrag) return;
+		
 		e.preventDefault();
 		dragDepth = Math.max(0, dragDepth - 1);
 		if (dragDepth === 0) dragActive = false;
 	}
 
 	function onDrop(e: DragEvent) {
+		// Ignore internal item drag
+		const types = e.dataTransfer?.types || [];
+		const isInternalDrag = types.includes('text/plain') && !types.includes('Files');
+		if (isInternalDrag) return;
+		
 		e.preventDefault();
 		dragDepth = 0;
 		dragActive = false;
 		if (e.dataTransfer?.files?.length) {
 			handleUploadFiles(e.dataTransfer.files);
 		}
+	}
+
+
+	let draggedEntryId = $state<string | null>(null);
+	let dragOverFolderId = $state<string | null>(null);
+	let longPressTimer: number | null = null;
+	let isDraggingViaTouch = $state(false);
+	let lastClickTime = 0;
+	let dragStartAllowed = true;
+
+	function handleItemClick(entry: FileEntry) {
+		const now = Date.now();
+		if (now - lastClickTime < 300) {
+			// Double-click detected
+			dragStartAllowed = false;
+			openEntry(entry);
+			setTimeout(() => { dragStartAllowed = true; }, 100);
+		}
+		lastClickTime = now;
+	}
+
+	function handleItemDragStart(entry: FileEntry, e: DragEvent) {
+		if (!dragStartAllowed) {
+			e.preventDefault();
+			return;
+		}
+		if (!e.dataTransfer) return;
+		draggedEntryId = entry.id;
+		e.dataTransfer.effectAllowed = 'move';
+		e.dataTransfer.setData('text/plain', entry.id);
+	}
+
+	function handleItemDragEnd() {
+		draggedEntryId = null;
+		dragOverFolderId = null;
+		isDraggingViaTouch = false;
+	}
+
+	function handleTouchStart(entry: FileEntry, e: TouchEvent) {
+		longPressTimer = window.setTimeout(() => {
+			isDraggingViaTouch = true;
+			draggedEntryId = entry.id;
+			// ponytail: no visual feedback yet, add vibration/highlight when needed
+		}, 200);
+	}
+
+	function handleTouchEnd(e: TouchEvent) {
+		if (longPressTimer) {
+			clearTimeout(longPressTimer);
+			longPressTimer = null;
+		}
+		
+		// Mobile drop: complete move if dragging
+		if (isDraggingViaTouch && draggedEntryId) {
+			const touch = e.changedTouches[0];
+			const dropTarget = document.elementFromPoint(touch.clientX, touch.clientY);
+			const folderWrapper = dropTarget?.closest('[data-folder-id]');
+			
+			if (folderWrapper) {
+				const targetFolderId = folderWrapper.getAttribute('data-folder-id');
+				const targetFolder = findEntry(tree, targetFolderId || '');
+				
+				if (targetFolder && targetFolder.kind === 'folder') {
+					const movedEntry = findEntry(tree, draggedEntryId);
+					if (movedEntry && movedEntry.id !== targetFolder.id) {
+						// Circular move check
+						if (movedEntry.kind === 'folder' && isAncestor(tree, movedEntry.id, targetFolder.id)) {
+							toast.error('Tidak bisa memindahkan folder ke dalam subfolder-nya sendiri');
+						} else {
+							// Complete move
+							tree = tree.map((ent) =>
+								ent.id === draggedEntryId
+									? { ...ent, parentId: targetFolder.id, modifiedAt: 'Baru saja' }
+									: ent
+							);
+							toast.success(`"${movedEntry.name}" dipindahkan ke "${targetFolder.name}"`);
+						}
+					}
+				}
+			}
+		}
+		
+		isDraggingViaTouch = false;
+		draggedEntryId = null;
+	}
+
+	function handleFolderDragOver(entry: FileEntry, e: DragEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+		dragOverFolderId = entry.id;
+	}
+	function handleFolderDrop(targetFolder: FileEntry, e: DragEvent) {
+		e.preventDefault();
+		e.stopPropagation();
+		if (!draggedEntryId) return;
+		
+		const movedEntry = findEntry(tree, draggedEntryId);
+		if (!movedEntry) return;
+		
+		// Prevent self-drop
+		if (movedEntry.id === targetFolder.id) return;
+		
+		
+		// Prevent circular move: folder cannot be moved into its own descendant
+		if (movedEntry.kind === 'folder' && isAncestor(tree, movedEntry.id, targetFolder.id)) {
+			toast.error(`Tidak bisa memindahkan folder ke dalam subfolder-nya sendiri`);
+			draggedEntryId = null;
+			return;
+		}
+		
+		// Update tree
+		tree = tree.map((ent) =>
+			ent.id === draggedEntryId
+				? { ...ent, parentId: targetFolder.id, modifiedAt: 'Baru saja' }
+				: ent
+		);
+		toast.success(`"${movedEntry.name}" dipindahkan ke "${targetFolder.name}"`);
+		draggedEntryId = null;
 	}
 </script>
 
@@ -347,7 +493,7 @@
 
 <div class="flex flex-col gap-4">
 	<FileExplorerBreadcrumbs segments={breadcrumbs} onNavigate={navigateFolder} />
-	<FileExplorerToolbar bind:category onNewFolder={() => (newFolderOpen = true)} />
+	<FileExplorerToolbar bind:category onNewFolder={() => (newFolderOpen = true)} onUpload={() => fileInput?.click()} />
 
 	<FileExplorerDropzone
 		active={dragActive}
@@ -357,7 +503,9 @@
 		ondrop={onDrop}
 	>
 		{#if visible.length === 0}
-			<div class="overflow-hidden rounded-xl border border-subtle bg-surface px-4 py-12 text-center">
+			<div
+				class="overflow-hidden rounded-xl border border-subtle bg-surface px-4 py-12 text-center"
+			>
 				<p class="text-sm font-medium text-main">Folder kosong</p>
 				<p class="mt-1 text-xs text-muted">Seret berkas ke sini atau gunakan tombol Unggah.</p>
 			</div>
@@ -365,7 +513,7 @@
 			<DriveFileGrid>
 				{#each visible as entry (entry.id)}
 					{@const menuHandlers = {
-						onOpen: openEntry,
+						onOpen: () => openEntry(entry),
 						onDownload,
 						onRename: (e: FileEntry) => {
 							actionEntry = e;
@@ -383,22 +531,48 @@
 						},
 						onDelete
 					}}
-					<FileExplorerContextMenu {entry} {...menuHandlers}>
-						<FileGridCard
-							kind={entry.kind}
-							name={entry.name}
-							subtitle={entry.kind === 'folder'
-								? `Folder · ${entry.modifiedAt}`
-								: `${formatSize(entry.sizeBytes)} · ${entry.modifiedAt}`}
-							selected={selectedId === entry.id}
-							onSelect={() => (selectedId = entry.id)}
-							onOpen={() => openEntry(entry)}
-						>
-							{#snippet menu()}
-								<FileExplorerActionsMenu {entry} {...menuHandlers} />
-							{/snippet}
-						</FileGridCard>
-					</FileExplorerContextMenu>
+					<div
+						data-folder-id={entry.kind === 'folder' ? entry.id : undefined}
+						draggable="true"
+						onclick={() => handleItemClick(entry)}
+						ondragstart={(e) => handleItemDragStart(entry, e)}
+						ondragend={handleItemDragEnd}
+						ondblclick={() => openEntry(entry)}
+						ontouchstart={(e) => handleTouchStart(entry, e)}
+						ontouchend={handleTouchEnd}
+						ontouchmove={(e) => {
+							if (isDraggingViaTouch) {
+								e.preventDefault();
+							} else if (longPressTimer) {
+								clearTimeout(longPressTimer);
+								longPressTimer = null;
+							}
+						}}
+						ondragover={entry.kind === 'folder' ? (e) => handleFolderDragOver(entry, e) : undefined}
+						ondrop={entry.kind === 'folder' ? (e) => handleFolderDrop(entry, e) : undefined}
+		class={`${entry.id === draggedEntryId ? 'opacity-50 cursor-grabbing' : ''} ${
+			entry.kind === 'folder' && dragOverFolderId === entry.id
+				? 'ring-2 ring-primary/50 rounded-xl'
+				: ''
+		}`}
+					>
+						<FileExplorerContextMenu {entry} {...menuHandlers}>
+							<FileGridCard
+								kind={entry.kind}
+								name={entry.name}
+								subtitle={entry.kind === 'folder'
+									? `Folder · ${entry.modifiedAt}`
+									: `${formatSize(entry.sizeBytes)} · ${entry.modifiedAt}`}
+								selected={selectedId === entry.id}
+								onSelect={() => (selectedId = entry.id)}
+								onOpen={() => openEntry(entry)}
+							>
+								{#snippet menu()}
+									<FileExplorerActionsMenu {entry} {...menuHandlers} />
+								{/snippet}
+							</FileGridCard>
+						</FileExplorerContextMenu>
+					</div>
 				{/each}
 			</DriveFileGrid>
 		{:else}
@@ -408,28 +582,54 @@
 				aria-label="Daftar berkas"
 			>
 				{#each visible as entry (entry.id)}
-					<FileExplorerRow
-						{entry}
-						selected={selectedId === entry.id}
-						onOpen={openEntry}
-						onSelect={(e) => (selectedId = e.id)}
-						onDownload={onDownload}
-						onRename={(e) => {
-							actionEntry = e;
-							renameOpen = true;
+					<div
+						data-folder-id={entry.kind === 'folder' ? entry.id : undefined}
+						draggable="true"
+						onclick={() => handleItemClick(entry)}
+						ondragstart={(e) => handleItemDragStart(entry, e)}
+						ondragend={handleItemDragEnd}
+						ondblclick={() => openEntry(entry)}
+						ontouchstart={(e) => handleTouchStart(entry, e)}
+						ontouchend={handleTouchEnd}
+						ontouchmove={(e) => {
+							if (isDraggingViaTouch) {
+								e.preventDefault();
+							} else if (longPressTimer) {
+								clearTimeout(longPressTimer);
+								longPressTimer = null;
+							}
 						}}
-						onMove={(e) => {
-							actionEntry = e;
-							moveOpen = true;
-						}}
-						onCopy={onCopy}
-						onStar={onStar}
-						onShare={(e) => {
-							actionEntry = e;
-							shareOpen = true;
-						}}
-						onDelete={onDelete}
-					/>
+						ondragover={entry.kind === 'folder' ? (e) => handleFolderDragOver(entry, e) : undefined}
+						ondrop={entry.kind === 'folder' ? (e) => handleFolderDrop(entry, e) : undefined}
+						class={`${entry.id === draggedEntryId ? 'opacity-50 cursor-grabbing' : ''} ${
+							entry.kind === 'folder' && dragOverFolderId === entry.id
+								? 'ring-2 ring-primary/50'
+								: ''
+						}`}
+					>
+						<FileExplorerRow
+							{entry}
+							selected={selectedId === entry.id}
+							onOpen={openEntry}
+							onSelect={(e) => (selectedId = e.id)}
+							onDownload={onDownload}
+							onRename={(e) => {
+								actionEntry = e;
+								renameOpen = true;
+							}}
+							onMove={(e) => {
+								actionEntry = e;
+								moveOpen = true;
+							}}
+							onCopy={onCopy}
+							onStar={onStar}
+							onShare={(e) => {
+								actionEntry = e;
+								shareOpen = true;
+							}}
+							onDelete={onDelete}
+						/>
+					</div>
 				{/each}
 			</div>
 		{/if}
