@@ -13,6 +13,7 @@ import (
 	"github.com/cubycloud/backend/internal/config"
 	"github.com/cubycloud/backend/internal/database"
 	"github.com/cubycloud/backend/internal/middleware"
+	"github.com/cubycloud/backend/internal/modules/auth"
 	"github.com/cubycloud/backend/internal/modules/setup"
 	"github.com/cubycloud/backend/internal/storage"
 	"github.com/cubycloud/backend/web"
@@ -27,8 +28,12 @@ func main() {
 	log.Printf("Starting CubyCloud on port %s", cfg.Port)
 
 	// 2. Ensure directories exist
-	for _, dir := range []string{cfg.DataDirPath + "/db", cfg.StoragePath, cfg.TempTUSPath} {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+	for _, dir := range []string{cfg.DBPath, cfg.StoragePath, cfg.TempTUSPath} {
+		dirToCreate := dir
+		if dir == cfg.DBPath {
+			dirToCreate = cfg.DataDirPath + "/db"
+		}
+		if err := os.MkdirAll(dirToCreate, 0755); err != nil {
 			log.Fatal("Failed to create directory:", err)
 		}
 	}
@@ -41,7 +46,7 @@ func main() {
 	defer db.Close()
 
 	// 4. Init storage driver
-	driver := storage.NewStorageDriver(db)
+	driver := storage.NewStorageDriver(db, cfg.StoragePath)
 
 	// 5. Init setup guard cache
 	setupGuard := initSetupGuard(db)
@@ -62,6 +67,11 @@ func main() {
 
 	// 8. Routes
 	setup.RegisterRoutes(e, db, driver, setupGuard, cfg.DataDirPath, cfg.JWTSecret)
+	
+	// Auth routes (password reset)
+	authService := auth.NewService(db)
+	authHandler := auth.NewHandler(authService)
+	e.POST("/api/v1/auth/reset-password", authHandler.ResetPassword)
 
 	// 9. Serve embedded frontend
 	distFS, err := fs.Sub(web.Dist, "dist")

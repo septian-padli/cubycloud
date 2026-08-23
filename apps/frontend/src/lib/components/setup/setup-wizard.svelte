@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
+	import { browser } from '$app/environment';
 	import { scanStorageNodes, completeSetup } from '$lib/api/setup';
 	import type { CompleteSetupRequest } from '$lib/api/setup';
 	import {
@@ -46,38 +47,39 @@
 		secretKey: ''
 	});
 	let recoveryKey = $state('');
-	let recoveryAcknowledged = $state(false);
+	let recoveryDownloaded = $state(false);
 
 	const activeNodeCount = $derived(nodes.filter((n) => n.enabled).length);
 
-	const step1Valid = $derived(
-		admin.username.trim().length > 0 &&
-			admin.email.trim().length > 0 &&
-			admin.password.length >= 8 &&
-			admin.password === admin.confirmPassword
-	);
-	const step2Valid = $derived(activeNodeCount >= 1);
-	const step3Valid = $derived(Boolean(strategy));
-	const step4Valid = $derived(
-		!cloud.enabled ||
-			(cloud.endpoint.trim().length > 0 &&
-				cloud.bucket.trim().length > 0 &&
-				cloud.accessKey.trim().length > 0 &&
-				cloud.secretKey.trim().length > 0)
-	);
-	const step5Valid = $derived(recoveryAcknowledged);
-
-	const canNext = $derived(
-		currentStep === 1
-			? step1Valid
-			: currentStep === 2
-				? step2Valid
-				: currentStep === 3
-					? step3Valid
-					: currentStep === 4
-						? step4Valid
-						: step5Valid
-	);
+	// Validation
+	const canNext = $derived.by(() => {
+		switch (currentStep) {
+			case 1:
+				return (
+					admin.username.trim() !== '' &&
+					admin.email.trim() !== '' &&
+					admin.password.length >= 8 &&
+					admin.password === admin.confirmPassword
+				);
+			case 2:
+				return activeNodeCount > 0;
+			case 3:
+				// Cloud is optional
+				if (!cloud.enabled) return true;
+				return (
+					cloud.endpoint.trim() !== '' &&
+					cloud.bucket.trim() !== '' &&
+					cloud.accessKey.trim() !== '' &&
+					cloud.secretKey.trim() !== ''
+				);
+			case 4:
+				return strategy !== null;
+			case 5:
+				return recoveryDownloaded; // Must download before submit
+			default:
+				return false;
+		}
+	});
 
 	function goBack() {
 		if (currentStep > 1) {
@@ -87,17 +89,27 @@
 
 	async function goNext() {
 		if (!canNext) return;
+		
+		// Step 4 → Step 5: Generate recovery key
+		if (currentStep === 4) {
+			generateRecoveryKey();
+			currentStep = 5;
+			return;
+		}
+		
 		if (currentStep < 5) {
 			currentStep = (currentStep + 1) as SetupStepId;
 			return;
 		}
-		// Step 5: submit
+		
+		// Step 5: submit with pre-generated recovery key
 		try {
 			const req: CompleteSetupRequest = {
 				admin: {
 					username: admin.username,
 					email: admin.email,
-					password: admin.password
+					password: admin.password,
+					recovery_key: recoveryKey // Send client-generated key
 				},
 				storage_nodes: nodes
 					.filter((n) => n.enabled)
@@ -118,9 +130,10 @@
 					secret_key: cloud.secretKey
 				};
 			}
-			const res = await completeSetup(req);
-			recoveryKey = res.recovery_key;
-			successOpen = true;
+			await completeSetup(req);
+			clearLocalStorage();
+			// Redirect directly to home (no success dialog needed, key already downloaded)
+			goto('/drive/home');
 		} catch (err: any) {
 			if (err.status === 409) {
 				toast.error('Setup already completed');
@@ -134,6 +147,14 @@
 		}
 	}
 
+	function generateRecoveryKey() {
+		// Generate 32 random bytes → 64 hex chars (same as backend)
+		const array = new Uint8Array(32);
+		crypto.getRandomValues(array);
+		recoveryKey = Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
+		console.log('[Setup] Recovery key generated:', recoveryKey.length, 'chars');
+	}
+
 	function skipCloud() {
 		cloud = {
 			...cloud,
@@ -143,7 +164,7 @@
 			accessKey: '',
 			secretKey: ''
 		};
-		currentStep = 5;
+		currentStep = 4;
 	}
 
 	function onContinueHome() {
@@ -151,10 +172,115 @@
 		goto('/drive/home');
 	}
 
+	// localStorage key
+	const STORAGE_KEY = 'cubycloud_setup_draft';
+
+	// Save form state to localStorage
+	function saveToLocalStorage() {
+		if (!browser) return;
+		try {
+			const draft = {
+				currentStep,
+				admin: {
+					username: admin.username,
+					email: admin.email,
+					// NEVER save password to localStorage
+					password: '',
+					confirmPassword: ''
+				},
+				nodes,
+				strategy,
+				cloud: {
+					...cloud,
+					// NEVER save credentials to localStorage
+					accessKey: '',
+					secretKey: ''
+				},
+				timestamp: Date.now()
+			};
+			localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+		} catch (err) {
+			console.error('Failed to save draft:', err);
+		}
+	}
+
+	// Restore form state from localStorage
+	function restoreFromLocalStorage() {
+		if (!browser) return false;
+		try {
+			const saved = localStorage.getItem(STORAGE_KEY);
+			if (!saved) return false;
+
+			const draft = JSON.parse(saved);
+			
+			// Expire after 24 hours
+			const age = Date.now() - (draft.timestamp || 0);
+			if (age > 24 * 60 * 60 * 1000) {
+				localStorage.removeItem(STORAGE_KEY);
+				return false;
+			}
+
+			// Restore state
+			if (draft.currentStep) currentStep = draft.currentStep;
+			if (draft.admin) {
+				admin.username = draft.admin.username || '';
+				admin.email = draft.admin.email || '';
+			}
+			if (draft.nodes) nodes = draft.nodes;
+			if (draft.strategy) strategy = draft.strategy;
+			if (draft.cloud) {
+				cloud.enabled = draft.cloud.enabled || false;
+				cloud.provider = draft.cloud.provider || 'R2';
+				cloud.endpoint = draft.cloud.endpoint || '';
+				cloud.bucket = draft.cloud.bucket || '';
+			}
+
+			toast.success('Draft restored from previous session');
+			return true;
+		} catch (err) {
+			console.error('Failed to restore draft:', err);
+			localStorage.removeItem(STORAGE_KEY);
+			return false;
+		}
+	}
+
+	// Clear localStorage after successful setup
+	function clearLocalStorage() {
+		if (!browser) return;
+		try {
+			localStorage.removeItem(STORAGE_KEY);
+		} catch (err) {
+			console.error('Failed to clear draft:', err);
+		}
+	}
+
+	// Auto-save on state change
+	$effect(() => {
+		// Watch all form fields
+		void admin.username;
+		void admin.email;
+		void nodes;
+		void strategy;
+		void cloud.enabled;
+		void cloud.provider;
+		void cloud.endpoint;
+		void cloud.bucket;
+		void currentStep;
+
+		// Save after initial load
+		if (!loadingNodes) {
+			saveToLocalStorage();
+		}
+	});
+
 	onMount(async () => {
+		// Try restore first
+		const restored = restoreFromLocalStorage();
+
+		// Then scan nodes (if not restored or to refresh capacity)
 		try {
 			const data = await scanStorageNodes();
-			nodes = data.nodes.map((n, i) => ({
+			const scannedNodes = data.nodes.map((n, i) => ({
 				id: `node-${i}`,
 				name: n.path.split('/').pop() || n.path,
 				path: n.path,
@@ -164,6 +290,18 @@
 				enabled: true,
 				capacityCapGb: Math.round(n.capacity_bytes / 1e9)
 			}));
+			
+			// Merge: keep restored enabled state if paths match
+			if (restored && nodes.length > 0) {
+				scannedNodes.forEach((scanned) => {
+					const existing = nodes.find((n) => n.path === scanned.path);
+					if (existing) {
+						scanned.enabled = existing.enabled;
+						scanned.capacityCapGb = existing.capacityCapGb;
+					}
+				});
+			}
+			nodes = scannedNodes;
 		} catch {
 			toast.error('Failed to scan storage nodes');
 		} finally {
@@ -189,11 +327,11 @@
 		{:else if currentStep === 2}
 			<StepStorage bind:nodes bind:devices loading={loadingNodes} />
 		{:else if currentStep === 3}
-			<StepStrategy bind:strategy />
-		{:else if currentStep === 4}
 			<StepCloud bind:cloud />
+		{:else if currentStep === 4}
+			<StepStrategy bind:strategy />
 		{:else}
-			<StepRecovery {recoveryKey} bind:acknowledged={recoveryAcknowledged} />
+			<StepRecovery bind:recoveryKey bind:downloaded={recoveryDownloaded} />
 		{/if}
 
 		<div class="rounded-xl border border-subtle bg-surface px-4 py-4 md:px-5">
@@ -201,7 +339,7 @@
 				canBack={currentStep > 1}
 				{canNext}
 				isLast={currentStep === 5}
-				showSkip={currentStep === 4}
+				showSkip={currentStep === 3}
 				nextLabel="Selesaikan Setup & Masuk ke CubyCloud"
 				onBack={goBack}
 				onNext={goNext}

@@ -20,6 +20,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+const testValidRecoveryKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
 func TestRecoveryKeyGeneration(t *testing.T) {
 	recoveryKeyBytes := make([]byte, 32)
 	if _, err := rand.Read(recoveryKeyBytes); err != nil {
@@ -114,9 +116,10 @@ func TestCompleteSetup_Success_LocalOnly(t *testing.T) {
 
 	req := &CompleteSetupRequest{
 		Admin: AdminUser{
-			Username: "admin",
-			Email:    "admin@local",
-			Password: "password123",
+			Username:    "admin",
+			Email:       "admin@local",
+			Password:    "password123",
+			RecoveryKey: testValidRecoveryKey,
 		},
 		StorageNodes: []StorageNodeInput{
 			{Path: nodePath, CapacityBytes: 500000000000, Enabled: true},
@@ -182,9 +185,10 @@ func TestCompleteSetup_Success_LocalAndCloud(t *testing.T) {
 
 	req := &CompleteSetupRequest{
 		Admin: AdminUser{
-			Username: "admin",
-			Email:    "admin@local",
-			Password: "password123",
+			Username:    "admin",
+			Email:       "admin@local",
+			Password:    "password123",
+			RecoveryKey: testValidRecoveryKey,
 		},
 		StorageNodes: []StorageNodeInput{
 			{Path: nodePath, CapacityBytes: 500000000000, Enabled: true},
@@ -532,9 +536,10 @@ func TestCompleteSetup_ConcurrentRequests(t *testing.T) {
 
 	req := &CompleteSetupRequest{
 		Admin: AdminUser{
-			Username: "admin",
-			Email:    "admin@local",
-			Password: "password123",
+			Username:    "admin",
+			Email:       "admin@local",
+			Password:    "password123",
+			RecoveryKey: testValidRecoveryKey,
 		},
 		StorageNodes: []StorageNodeInput{
 			{Path: nodePath, CapacityBytes: 500000000000, Enabled: true},
@@ -593,9 +598,10 @@ func TestCompleteSetup_RecoveryKeyBcrypt(t *testing.T) {
 
 	req := &CompleteSetupRequest{
 		Admin: AdminUser{
-			Username: "admin",
-			Email:    "admin@local",
-			Password: "password123",
+			Username:    "admin",
+			Email:       "admin@local",
+			Password:    "password123",
+			RecoveryKey: testValidRecoveryKey,
 		},
 		StorageNodes: []StorageNodeInput{
 			{Path: nodePath, CapacityBytes: 500000000000, Enabled: true},
@@ -708,9 +714,10 @@ func TestCompleteSetup_MultipleStorageNodes(t *testing.T) {
 
 	req := &CompleteSetupRequest{
 		Admin: AdminUser{
-			Username: "admin",
-			Email:    "admin@local",
-			Password: "password123",
+			Username:    "admin",
+			Email:       "admin@local",
+			Password:    "password123",
+			RecoveryKey: testValidRecoveryKey,
 		},
 		StorageNodes: []StorageNodeInput{
 			{Path: node1, CapacityBytes: 500000000000, Enabled: true},
@@ -768,9 +775,10 @@ func TestCompleteSetup_CloudOnlyNoLocalNodes(t *testing.T) {
 
 	req := &CompleteSetupRequest{
 		Admin: AdminUser{
-			Username: "admin",
-			Email:    "admin@local",
-			Password: "password123",
+			Username:    "admin",
+			Email:       "admin@local",
+			Password:    "password123",
+			RecoveryKey: testValidRecoveryKey,
 		},
 		StorageNodes:      []StorageNodeInput{}, // no local nodes
 		PlacementStrategy: "FILL_FIRST",
@@ -830,9 +838,10 @@ func TestCompleteSetup_EmptyStorageNodesWithCloud(t *testing.T) {
 
 	req := &CompleteSetupRequest{
 		Admin: AdminUser{
-			Username: "admin",
-			Email:    "admin@local",
-			Password: "password123",
+			Username:    "admin",
+			Email:       "admin@local",
+			Password:    "password123",
+			RecoveryKey: testValidRecoveryKey,
 		},
 		StorageNodes:      []StorageNodeInput{},
 		PlacementStrategy: "FILL_FIRST",
@@ -883,9 +892,10 @@ func TestCompleteSetup_AllLocalNodesDisabled(t *testing.T) {
 
 	req := &CompleteSetupRequest{
 		Admin: AdminUser{
-			Username: "admin",
-			Email:    "admin@local",
-			Password: "password123",
+			Username:    "admin",
+			Email:       "admin@local",
+			Password:    "password123",
+			RecoveryKey: testValidRecoveryKey,
 		},
 		StorageNodes: []StorageNodeInput{
 			{Path: "/tmp/disabled1", CapacityBytes: 500000000000, Enabled: false},
@@ -949,7 +959,8 @@ func TestHandler_CompleteSetup_HTTP(t *testing.T) {
 		"admin": {
 			"username": "admin",
 			"email": "admin@local",
-			"password": "password123"
+			"password": "password123",
+			"recovery_key": "` + testValidRecoveryKey + `"
 		},
 		"storage_nodes": [
 			{"path": "` + nodePath + `", "capacity_bytes": 500000000000, "enabled": true}
@@ -1058,9 +1069,10 @@ func TestCompleteSetup_MostFreeSpaceStrategy(t *testing.T) {
 
 	req := &CompleteSetupRequest{
 		Admin: AdminUser{
-			Username: "admin",
-			Email:    "admin@local",
-			Password: "password123",
+			Username:    "admin",
+			Email:       "admin@local",
+			Password:    "password123",
+			RecoveryKey: testValidRecoveryKey,
 		},
 		StorageNodes: []StorageNodeInput{
 			{Path: nodePath, CapacityBytes: 500000000000, Enabled: true},

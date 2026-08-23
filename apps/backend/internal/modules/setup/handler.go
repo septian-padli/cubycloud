@@ -53,6 +53,14 @@ func (h *Handler) CompleteSetup(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
+func (h *Handler) GetStatus(c echo.Context) error {
+	resp, err := h.service.GetSetupStatus(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to get setup status")
+	}
+	return c.JSON(http.StatusOK, resp)
+}
+
 func (h *Handler) ScanNodes(c echo.Context) error {
 	resp, err := h.service.ScanStorageNodes(c.Request().Context())
 	if err != nil {
@@ -68,6 +76,7 @@ func (h *Handler) generateJWT(userID string) (string, error) {
 
 func RegisterRoutes(e *echo.Echo, db *bun.DB, storage storage.StorageDriver, setupGuard *middleware.SetupGuard, dataDirPath string, jwtSecret string) {
 	h := NewHandler(db, storage, setupGuard, dataDirPath, jwtSecret)
+	e.GET("/api/v1/setup/status", h.GetStatus)
 	e.GET("/api/v1/setup/scan-nodes", h.ScanNodes)
 	e.POST("/api/v1/setup/complete", h.CompleteSetup)
 }

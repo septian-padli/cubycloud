@@ -2,9 +2,9 @@ package setup
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -98,10 +98,24 @@ func (s *Service) ScanStorageNodes(ctx context.Context) (*ScanResponse, error) {
 	}, nil
 }
 
+func (s *Service) GetSetupStatus(ctx context.Context) (*StatusResponse, error) {
+	completed := s.setupGuard.IsCompleted()
+	if !completed {
+		dbCompleted, err := s.repo.IsSetupCompleted(ctx)
+		if err == nil && dbCompleted {
+			s.setupGuard.MarkCompleted()
+			completed = true
+		}
+	}
+	return &StatusResponse{
+		IsSetupCompleted: completed,
+	}, nil
+}
+
 func (s *Service) CompleteSetup(ctx context.Context, req *CompleteSetupRequest) (*CompleteSetupResponse, error) {
 	// Guard: check setup already completed
 	if s.setupGuard.IsCompleted() {
-		return nil, echo.NewHTTPError(409, "setup already completed")
+		return nil, echo.NewHTTPError(http.StatusForbidden, "setup already completed")
 	}
 
 	completed, err := s.repo.IsSetupCompleted(ctx)
@@ -110,7 +124,7 @@ func (s *Service) CompleteSetup(ctx context.Context, req *CompleteSetupRequest) 
 	}
 	if completed {
 		s.setupGuard.MarkCompleted()
-		return nil, echo.NewHTTPError(409, "setup already completed")
+		return nil, echo.NewHTTPError(http.StatusForbidden, "setup already completed")
 	}
 
 	// Validate
@@ -118,12 +132,15 @@ func (s *Service) CompleteSetup(ctx context.Context, req *CompleteSetupRequest) 
 		return nil, err
 	}
 
-	// Generate recovery key (32 bytes -> 64 hex chars)
-	recoveryKeyBytes := make([]byte, 32)
-	if _, err := rand.Read(recoveryKeyBytes); err != nil {
-		return nil, fmt.Errorf("generate recovery key: %w", err)
+	// Use client-provided recovery key
+	recoveryKey := req.Admin.RecoveryKey
+	if len(recoveryKey) != 64 {
+		return nil, echo.NewHTTPError(400, "recovery key must be 64 hex characters")
 	}
-	recoveryKey := hex.EncodeToString(recoveryKeyBytes)
+	// Validate hex
+	if _, err := hex.DecodeString(recoveryKey); err != nil {
+		return nil, echo.NewHTTPError(400, "recovery key must be valid hex string")
+	}
 
 	// Hash password and recovery key
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Admin.Password), bcryptCost)

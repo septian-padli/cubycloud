@@ -23,7 +23,11 @@ type StorageDriver interface {
 }
 
 // NewStorageDriver returns a StorageDriver wrapping LocalDriver.
-// ponytail: db unused for now; will hold encrypted cloud credentials later.
-func NewStorageDriver(db *bun.DB) StorageDriver {
-	return NewLocalDriver("/app/data/storage")
+// db will hold encrypted cloud credentials in future modules.
+func NewStorageDriver(db *bun.DB, basePath ...string) StorageDriver {
+	path := "/app/data/storage"
+	if len(basePath) > 0 && basePath[0] != "" {
+		path = basePath[0]
+	}
+	return NewLocalDriver(path)
 }

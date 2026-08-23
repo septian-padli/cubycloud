@@ -1,8 +1,21 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import ThemeToggle from '$lib/components/theme-toggle.svelte';
 	import { ArrowRight, Cloud, HardDrive, Shield } from '@lucide/svelte';
+	import { getSetupStatus } from '$lib/api/setup';
+
+	let isSetupCompleted = $state<boolean | null>(null);
+
+	onMount(async () => {
+		try {
+			const res = await getSetupStatus();
+			isSetupCompleted = res.is_setup_completed;
+		} catch (e) {
+			isSetupCompleted = false;
+		}
+	});
 </script>
 
 <svelte:head>
@@ -45,13 +58,20 @@
 						<strong class="font-medium text-main">October 2026</strong>.
 					</p>
 					<div class="mt-6 flex flex-wrap gap-3">
-						<Button href="/setup" size="lg" class="gap-2">
-							Mulai Setup
-							<ArrowRight class="size-4 stroke-2" />
-						</Button>
-						<Button href="/login" variant="outline" size="lg">
-							Masuk
-						</Button>
+						{#if isSetupCompleted}
+							<Button href="/drive/home" size="lg" class="gap-2">
+								Buka Drive
+								<ArrowRight class="size-4 stroke-2" />
+							</Button>
+							<Button href="/login" variant="outline" size="lg">
+								Masuk
+							</Button>
+						{:else}
+							<Button href="/setup" size="lg" class="gap-2">
+								Mulai Setup
+								<ArrowRight class="size-4 stroke-2" />
+							</Button>
+						{/if}
 					</div>
 				</div>
 			</div>

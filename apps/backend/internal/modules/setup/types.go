@@ -1,9 +1,10 @@
 package setup
 
 type AdminUser struct {
-	Username string `json:"username"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Username    string `json:"username"`
+	Email       string `json:"email"`
+	Password    string `json:"password"`
+	RecoveryKey string `json:"recovery_key"` // Client-generated recovery key
 }
 
 type StorageNodeInput struct {
@@ -43,4 +44,8 @@ type StorageNodeScan struct {
 type ScanResponse struct {
 	Nodes   []StorageNodeScan `json:"nodes"`
 	Devices []interface{}     `json:"devices"` // ponytail: empty for v1.0
+}
+
+type StatusResponse struct {
+	IsSetupCompleted bool `json:"is_setup_completed"`
 }

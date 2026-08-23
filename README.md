@@ -38,34 +38,81 @@ See the full PRD for architecture, NFRs, and stack decisions: [`docs/prd.md`](do
 
 ```text
 cubycloud/
+├── Makefile          # Monorepo build, dev, and test orchestration
+├── Dockerfile        # Production multi-stage single container image
 ├── apps/
-│   └── frontend/     # SvelteKit SPA (static build → go:embed)
+│   ├── backend/      # Go 1.22+ backend (Echo, SQLite WAL, Clean Architecture)
+│   └── frontend/     # SvelteKit SPA (adapter-static build → go:embed)
 ├── docs/
-│   └── prd.md        # Product requirements
+│   ├── prd.md        # Product requirements & business rules
+│   └── architecture.md # Architecture & system design
+├── scripts/          # Helper scripts (dev runner, setup reset)
 └── README.md
 ```
 
 ---
 
-## Quick start (frontend)
+## Quick start (Development)
 
-**Requirements:** [Bun](https://bun.sh) 1.x
+**Requirements:**
+- [Go](https://go.dev) 1.22+
+- [Bun](https://bun.sh) 1.x
+
+### Run Full Stack (Backend + Frontend)
 
 ```bash
+make dev
+```
+Or run directly via script: `./scripts/dev.sh`.
+- Frontend: [http://localhost:5173](http://localhost:5173)
+- Backend API: [http://localhost:8080](http://localhost:8080)
+
+### Run Backend Only (Go)
+
+```bash
+# From repository root
+make dev-backend
+
+# Or from apps/backend directory
+cd apps/backend
+go run ./cmd/server/main.go
+```
+The backend automatically creates `./data` for SQLite database and storage nodes with sensible development defaults.
+
+### Run Frontend Only (SvelteKit)
+
+```bash
+# From repository root
+make dev-frontend
+
+# Or from apps/frontend directory
 cd apps/frontend
 bun install
 bun run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173) for the coming soon page.
+---
+
+## Building Single Executable (Production)
 
 ```bash
-bun run build    # output: apps/frontend/build/
-bun run check
-bun run lint
+make build
+```
+This builds the SvelteKit frontend, synchronizes the static build to `apps/backend/web/dist/`, and compiles a single self-contained Go binary with embedded frontend at `apps/backend/bin/cubycloud`.
+
+```bash
+./apps/backend/bin/cubycloud
 ```
 
-Frontend details: [`apps/frontend/README.md`](apps/frontend/README.md)
+---
+
+## Testing
+
+```bash
+make test          # Run all backend + frontend tests
+make test-backend  # Run Go backend tests
+make test-frontend # Run SvelteKit type check
+```
 
 ---
 

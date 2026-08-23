@@ -1,1 +1,56 @@
-<h1>CubyCloud</h1>
+<!doctype html>
+<html lang="id">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="text-scale" content="scale" />
+		<script>
+			(function () {
+				try {
+					var t = localStorage.getItem('cubycloud-theme');
+					var dark =
+						t === 'dark' ||
+						((t === null || t === 'system') &&
+							window.matchMedia('(prefers-color-scheme: dark)').matches);
+					if (dark) document.documentElement.classList.add('dark');
+				} catch (e) {}
+			})();
+		</script>
+		<link href="/_app/immutable/entry/start.Br0Jd8yo.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/D1ZP0CRZ.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/BTo6kr93.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/Dt-HX3Vu.js" rel="modulepreload">
+		<link href="/_app/immutable/entry/app.D_GxbFu2.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/xihTtKlq.js" rel="modulepreload">
+		<link href="/_app/immutable/nodes/0.B8D5CBs5.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/CW32jobf.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/XBPbwMfU.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/DuZDuSjB.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/C4Yi9_s-.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/eg1aBbyT.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/CTNsjt0z.js" rel="modulepreload">
+		<link href="/_app/immutable/chunks/CWQEowZa.js" rel="modulepreload">
+		
+		<link href="/_app/immutable/assets/0.LJ49PMNf.css" rel="stylesheet">
+	</head>
+	<body data-sveltekit-preload-data="hover">
+		<div style="display: contents">
+			<script>
+				{
+					__sveltekit_yllexh = {
+						base: ""
+					};
+
+					const element = document.currentScript.parentElement;
+
+					Promise.all([
+						import("/_app/immutable/entry/start.Br0Jd8yo.js"),
+						import("/_app/immutable/entry/app.D_GxbFu2.js")
+					]).then(([kit, app]) => {
+						kit.start(app, element);
+					});
+				}
+			</script>
+		</div>
+	</body>
+</html>

@@ -35,8 +35,7 @@ fi
 # Create data directories
 export DATA_DIR_PATH=/tmp/cubycloud-dev
 mkdir -p $DATA_DIR_PATH/db
-mkdir -p $DATA_DIR_PATH/storage/ssd1
-mkdir -p $DATA_DIR_PATH/storage/ssd2
+mkdir -p $DATA_DIR_PATH/storage/default
 mkdir -p $DATA_DIR_PATH/temp/tus
 
 echo -e "${GREEN}Data directory: $DATA_DIR_PATH${NC}"

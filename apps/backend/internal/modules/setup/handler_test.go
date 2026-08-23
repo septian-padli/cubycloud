@@ -79,6 +79,7 @@ func TestScanNodes_EmptyStorage(t *testing.T) {
 
 	var resp ScanResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	assert.Empty(t, resp.Nodes)
+	assert.Len(t, resp.Nodes, 1)
+	assert.Equal(t, filepath.Join(tmpDir, "storage", "default"), resp.Nodes[0].Path)
 	assert.Empty(t, resp.Devices)
 }

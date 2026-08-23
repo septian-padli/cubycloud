@@ -18,6 +18,7 @@ export interface CompleteSetupRequest {
 		username: string;
 		email: string;
 		password: string;
+		recovery_key: string; // Client-generated recovery key
 	};
 	storage_nodes: Array<{
 		path: string;
@@ -39,6 +40,16 @@ export interface CompleteSetupRequest {
 export interface CompleteSetupResponse {
 	recovery_key: string;
 	redirect: string;
+}
+
+export interface SetupStatusResponse {
+	is_setup_completed: boolean;
+}
+
+export async function getSetupStatus(): Promise<SetupStatusResponse> {
+	const res = await fetch(`${API_BASE}/setup/status`);
+	if (!res.ok) throw new Error(`Status failed: ${res.status}`);
+	return res.json();
 }
 
 export async function scanStorageNodes(): Promise<ScanNodesResponse> {

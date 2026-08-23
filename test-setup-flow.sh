@@ -39,7 +39,8 @@ RESULT=$(curl -s -X POST http://localhost:8080/api/v1/setup/complete \
     \"admin\": {
       \"username\": \"admin\",
       \"email\": \"admin@test.com\",
-      \"password\": \"password123\"
+      \"password\": \"password123\",
+      \"recovery_key\": \"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\"
     },
     \"storage_nodes\": [
       {\"path\": \"$TEST_DIR/storage/disk1\", \"capacity_bytes\": 1000000000000, \"enabled\": true}
