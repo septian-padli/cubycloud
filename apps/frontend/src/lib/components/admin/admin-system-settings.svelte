@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { adminAPI } from '$lib/api/admin.js';
 	import type { AuditRetentionDays, SystemSettings } from '$lib/types/admin.js';
 	import { AUDIT_RETENTION_OPTIONS } from '$lib/types/admin.js';
 	import * as Card from '$lib/components/ui/card/index.js';
@@ -17,6 +18,8 @@
 		onSave: () => void;
 	} = $props();
 
+	let downloadingBackup = $state(false);
+
 	const unlimited = $derived(settings.defaultQuota.mode === 'unlimited');
 
 	function setUnlimited(checked: boolean) {
@@ -28,10 +31,16 @@
 		settings.auditRetentionDays = value as AuditRetentionDays;
 	}
 
-	function downloadBackup() {
-		toast.success('Backup DB diunduh (mock)', {
-			description: 'File cubycloud.db siap (simulasi).'
-		});
+	async function downloadBackup() {
+		downloadingBackup = true;
+		const resp = await adminAPI.downloadBackup();
+		downloadingBackup = false;
+
+		if (resp.error) {
+			toast.error('Gagal mengunduh backup', { description: resp.error });
+		} else {
+			toast.success('Backup DB berhasil diunduh');
+		}
 	}
 </script>
 
@@ -45,28 +54,25 @@
 	<Card.Content class="space-y-6">
 		<div class="space-y-3 rounded-xl border border-subtle bg-app px-4 py-4">
 			<div class="flex items-center justify-between gap-4">
-				<div>
-					<p class="text-sm font-medium text-main">Kuota default pengguna</p>
-					<p class="text-xs text-muted">Berlaku untuk pengguna baru tanpa override.</p>
+				<div class="space-y-1">
+					<p class="text-sm font-medium text-main">Kuota default unlimited</p>
+					<p class="text-xs text-muted">
+						Nonaktifkan batas penyimpanan untuk pengguna baru.
+					</p>
 				</div>
-				<div class="flex items-center gap-2">
-					<span class="text-xs text-muted">Tak terbatas</span>
-					<Switch
-						checked={unlimited}
-						aria-label="Kuota tak terbatas"
-						onCheckedChange={setUnlimited}
-					/>
-				</div>
+				<Switch checked={unlimited} onCheckedChange={setUnlimited} />
 			</div>
 			{#if !unlimited}
 				<div class="space-y-2">
-					<Label for="default-quota-gb" class="text-xs text-muted">Batas (GB)</Label>
+					<Label for="default-quota-gb" class="text-sm font-medium text-main">
+						Kuota default (GB)
+					</Label>
 					<Input
 						id="default-quota-gb"
 						type="number"
-						min={1}
-						class="max-w-xs"
+						min="1"
 						bind:value={settings.defaultQuota.gb}
+						class="max-w-xs"
 					/>
 				</div>
 			{/if}
@@ -74,19 +80,18 @@
 
 		<div class="space-y-2">
 			<Label for="audit-retention" class="text-sm font-medium text-main">
-				Retensi audit log
+				Retensi log audit
 			</Label>
 			<select
 				id="audit-retention"
-				class="flex h-10 w-full max-w-xs rounded-full border border-subtle bg-surface px-4 text-sm text-main shadow-none outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
 				value={settings.auditRetentionDays}
 				onchange={onRetentionChange}
+				class="flex h-10 w-full max-w-xs rounded-lg border border-subtle bg-app px-3 py-2 text-sm text-main ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
 			>
-				{#each AUDIT_RETENTION_OPTIONS as days (days)}
+				{#each AUDIT_RETENTION_OPTIONS as days}
 					<option value={days}>{days} hari</option>
 				{/each}
 			</select>
-			<p class="text-xs text-muted">Default: 90 hari.</p>
 		</div>
 
 		<div class="space-y-2">
@@ -96,31 +101,30 @@
 			<Input
 				id="worker-concurrency"
 				type="number"
-				min={1}
-				max={16}
-				class="max-w-xs"
+				min="1"
+				max="10"
 				bind:value={settings.workerConcurrency}
+				class="max-w-xs"
 			/>
-			<p class="text-xs text-muted">Jumlah job paralel di antrean SQLite (default: 2).</p>
 		</div>
 
 		<div
 			class="flex flex-col gap-3 rounded-xl border border-subtle bg-app px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
 		>
-			<div>
+			<div class="space-y-1">
 				<p class="text-sm font-medium text-main">Backup basis data</p>
-				<p class="text-xs text-muted">Unduh salinan file SQLite (.db) untuk cadangan.</p>
+				<p class="text-xs text-muted">Unduh file cubycloud.db untuk backup manual.</p>
 			</div>
-			<Button type="button" variant="secondary" class="gap-1.5" onclick={downloadBackup}>
-				<Download class="size-4 stroke-2" />
-				Unduh Backup DB (.db)
+			<Button type="button" variant="secondary" class="gap-1.5" onclick={downloadBackup} disabled={downloadingBackup}>
+				<Download class="size-3.5 stroke-2" />
+				{downloadingBackup ? 'Mengunduh...' : 'Unduh Backup DB'}
 			</Button>
 		</div>
 	</Card.Content>
 	<Card.Footer class="justify-end border-t border-subtle">
-		<Button type="button" class="gap-1.5" onclick={onSave} size="lg">
-			<Save class="size-4 stroke-2" />
-			Simpan pengaturan
+		<Button type="button" onclick={onSave} class="gap-1.5">
+			<Save class="size-3.5 stroke-2" />
+			Simpan Pengaturan
 		</Button>
 	</Card.Footer>
 </Card.Root>

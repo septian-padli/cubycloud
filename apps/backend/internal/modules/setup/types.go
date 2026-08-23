@@ -31,6 +31,7 @@ type CompleteSetupRequest struct {
 }
 
 type CompleteSetupResponse struct {
+	UserID      string `json:"-"` // Internal use only for JWT generation
 	RecoveryKey string `json:"recovery_key"`
 	Redirect    string `json:"redirect"`
 }

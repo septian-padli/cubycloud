@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/cubycloud/backend/internal/modules/admin"
 	"io/fs"
 	"log"
 	"net/http"
@@ -63,10 +64,15 @@ func main() {
 		AllowOrigins: []string{"*"},
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete},
 	}))
-	e.Use(setupGuard.Middleware())
 
 	// 8. Routes
 	setup.RegisterRoutes(e, db, driver, setupGuard, cfg.DataDirPath, cfg.JWTSecret)
+	
+	// Admin routes (JWT auth + Super Admin guard, bypasses setup guard)
+	dbPath := cfg.DataDirPath + "/db/cubycloud.db"
+	jwtAuth := middleware.JWTAuth(cfg.JWTSecret)
+	adminGuard := middleware.SuperAdminGuard(db)
+	admin.RegisterRoutes(e, db, driver, cfg.DataDirPath, dbPath, jwtAuth, adminGuard)
 	
 	// Auth routes (password reset)
 	authService := auth.NewService(db)

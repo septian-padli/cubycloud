@@ -251,11 +251,9 @@ func (s *Service) CompleteSetup(ctx context.Context, req *CompleteSetupRequest) 
 		return nil, fmt.Errorf("commit tx: %w", err)
 	}
 
-	// Update in-memory guard
-	s.setupGuard.MarkCompleted()
-
 	return &CompleteSetupResponse{
-		RecoveryKey: recoveryKey,
+		UserID:      user.ID,
+		RecoveryKey: req.Admin.RecoveryKey,
 		Redirect:    "/drive/home",
 	}, nil
 }

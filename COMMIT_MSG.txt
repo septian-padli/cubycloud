@@ -1,0 +1,32 @@
+feat(admin): implement full admin settings backend + frontend integration
+
+Backend:
+- Add admin module (handler, service, repository, types)
+- Implement 6 endpoints: GET/PUT settings, GET/disable/rescan nodes, GET backup
+- Add JWT auth middleware (parses cuby_token cookie, validates, sets user_id)
+- Add Super Admin guard middleware (checks SUPER_ADMIN role from database)
+- Wire admin routes with JWT auth + Super Admin guard
+- Update setup to generate real JWT with user ID as subject
+
+Frontend:
+- Create admin API client (lib/api/admin.ts)
+- Replace all mock data with real API calls
+- Add error handling with Indonesian toast notifications
+- Fix type compatibility for StorageNode and SystemSettings
+- Rewrite admin settings page with proper state management
+
+Testing:
+- Add integration test script (test-admin-settings.sh)
+- Test all 6 admin endpoints
+- Test JWT authentication flow
+- Test Super Admin role enforcement
+- Test validation rules (quota ≥1GB, retention 7/14/30/60/90, concurrency 1-10)
+- All 8 test scenarios pass
+
+Changes:
+- New: apps/backend/internal/middleware/jwt_auth.go
+- New: apps/backend/internal/middleware/super_admin_guard.go
+- New: apps/backend/internal/modules/admin/ (4 files)
+- New: apps/frontend/src/lib/api/admin.ts
+- New: test-admin-settings.sh
+- Modified: 6 backend files, 2 frontend files

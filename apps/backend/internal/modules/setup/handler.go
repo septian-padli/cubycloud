@@ -2,13 +2,14 @@ package setup
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/cubycloud/backend/internal/middleware"
 	"github.com/cubycloud/backend/internal/storage"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/uptrace/bun"
 )
-
 type Handler struct {
 	service   *Service
 	jwtSecret string
@@ -33,7 +34,7 @@ func (h *Handler) CompleteSetup(c echo.Context) error {
 	}
 
 	// Generate JWT
-	token, err := h.generateJWT(resp.RecoveryKey) // ponytail: use user ID after auth module lands
+	token, err := h.generateJWT(resp.UserID) // Use actual user ID for JWT subject
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "generate token failed")
 	}
@@ -70,13 +71,19 @@ func (h *Handler) ScanNodes(c echo.Context) error {
 }
 
 func (h *Handler) generateJWT(userID string) (string, error) {
-	// ponytail: stub until auth module with proper JWT signing lands; use jwt_secret_version from settings
-	return "stub_jwt_token_" + userID, nil
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub": userID,
+		"exp": time.Now().Add(7 * 24 * time.Hour).Unix(),
+	})
+	return token.SignedString([]byte(h.jwtSecret))
 }
-
 func RegisterRoutes(e *echo.Echo, db *bun.DB, storage storage.StorageDriver, setupGuard *middleware.SetupGuard, dataDirPath string, jwtSecret string) {
 	h := NewHandler(db, storage, setupGuard, dataDirPath, jwtSecret)
+	
+	// Setup routes: status/scan open, complete protected by setup guard
 	e.GET("/api/v1/setup/status", h.GetStatus)
 	e.GET("/api/v1/setup/scan-nodes", h.ScanNodes)
-	e.POST("/api/v1/setup/complete", h.CompleteSetup)
+	
+	setupGroup := e.Group("/api/v1/setup", setupGuard.Middleware())
+	setupGroup.POST("/complete", h.CompleteSetup)
 }
