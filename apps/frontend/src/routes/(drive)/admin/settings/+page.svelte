@@ -3,6 +3,7 @@
 	import { adminAPI } from '$lib/api/admin.js';
 	import type { StorageNode } from '$lib/types/setup.js';
 	import type { SystemSettings, AuditRetentionDays } from '$lib/types/admin.js';
+	import DrivePageHeader from '$lib/components/drive/drive-page-header.svelte';
 	import AddStorageNodeDialog from '$lib/components/admin/add-storage-node-dialog.svelte';
 	import EditStorageNodeDialog from '$lib/components/admin/edit-storage-node-dialog.svelte';
 	import StorageNodesGrid from '$lib/components/admin/storage-nodes-grid.svelte';
@@ -11,7 +12,6 @@
 	import RescanNodesDialog from '$lib/components/admin/rescan-nodes-dialog.svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { RefreshCw } from '@lucide/svelte';
-	import { toast } from 'svelte-sonner';
 
 	let nodes = $state<StorageNode[]>([]);
 	let settings = $state<SystemSettings>({
