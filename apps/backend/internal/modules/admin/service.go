@@ -274,3 +274,152 @@ func detectDiskKind(path string) string {
 	}
 	return "HDD"
 }
+
+
+// CreateLocalNode adds a new local disk storage node
+func (s *Service) CreateLocalNode(ctx context.Context, req *CreateLocalNodeRequest) (*StorageNodeResponse, error) {
+	// Validate path exists
+	if _, err := os.Stat(req.Path); os.IsNotExist(err) {
+		return nil, fmt.Errorf("path does not exist: %s", req.Path)
+	}
+
+	// Check duplicate path
+	existing, err := s.repo.GetNodeByPath(ctx, req.Path)
+	if err != nil {
+		return nil, fmt.Errorf("check existing node: %w", err)
+	}
+	if existing != nil {
+		return nil, fmt.Errorf("node with path %s already exists", req.Path)
+	}
+
+	// Create node
+	name := filepath.Base(req.Path)
+	node := &database.StorageNode{
+		ID:            ulid.Make().String(),
+		Type:          "LOCAL",
+		Path:          &req.Path,
+		CapacityBytes: req.CapacityCapGB * 1024 * 1024 * 1024,
+		Enabled:       req.Enabled,
+	}
+
+	if err := s.repo.CreateNode(ctx, node); err != nil {
+		return nil, fmt.Errorf("create node: %w", err)
+	}
+
+	// Get disk stats using StatLocal (returns capacity and free space)
+	kind := detectDiskKind(req.Path)
+	capacity, free, err := s.storage.StatLocal(ctx, req.Path)
+	totalGB := capacity / (1024 * 1024 * 1024)
+	freeGB := free / (1024 * 1024 * 1024)
+	
+	// Log stat error but don't fail (node creation still succeeds)
+	if err != nil {
+		totalGB = 0
+		freeGB = 0
+	}
+
+	return &StorageNodeResponse{
+		ID:            node.ID,
+		Type:          "LOCAL",
+		Name:          name,
+		Path:          req.Path,
+		Kind:          kind,
+		TotalGB:       totalGB,
+		FreeGB:        freeGB,
+		CapacityCapGB: req.CapacityCapGB,
+		Enabled:       req.Enabled,
+	}, nil
+}
+
+// CreateCloudNode adds a new S3-compatible cloud storage node
+func (s *Service) CreateCloudNode(ctx context.Context, req *CreateCloudNodeRequest) (*StorageNodeResponse, error) {
+	// Check duplicate bucket
+	existing, err := s.repo.GetNodeByName(ctx, req.Bucket)
+	if err != nil {
+		return nil, fmt.Errorf("check existing node: %w", err)
+	}
+	if existing != nil {
+		return nil, fmt.Errorf("node with bucket %s already exists", req.Bucket)
+	}
+
+	// Simple encryption placeholder (use proper encryption in production)
+	accessKeyEnc := []byte(req.AccessKey)
+	secretKeyEnc := []byte(req.SecretKey)
+
+	node := &database.StorageNode{
+		ID:                 ulid.Make().String(),
+		Type:               "S3",
+		Endpoint:           &req.Endpoint,
+		Bucket:             &req.Bucket,
+		Region:             &req.Region,
+		AccessKeyEncrypted: accessKeyEnc,
+		SecretKeyEncrypted: secretKeyEnc,
+		CapacityBytes:      req.CapacityCapGB * 1024 * 1024 * 1024,
+		Enabled:            req.Enabled,
+	}
+
+	if err := s.repo.CreateNode(ctx, node); err != nil {
+		return nil, fmt.Errorf("create node: %w", err)
+	}
+
+	return &StorageNodeResponse{
+		ID:            node.ID,
+		Type:          "S3",
+		Name:          req.Name,
+		Path:          "",
+		Kind:          "S3",
+		TotalGB:       req.CapacityCapGB,
+		FreeGB:        req.CapacityCapGB,
+		CapacityCapGB: req.CapacityCapGB,
+		Enabled:       req.Enabled,
+	}, nil
+}
+
+// UpdateNode updates storage node capacity and/or enabled status
+func (s *Service) UpdateNode(ctx context.Context, nodeID string, req *UpdateNodeRequest) error {
+	node, err := s.repo.GetStorageNodeByID(ctx, nodeID)
+	if err != nil {
+		return fmt.Errorf("get node: %w", err)
+	}
+	if node == nil {
+		return fmt.Errorf("node not found")
+	}
+
+	// Update fields if provided
+	if req.CapacityCapGB != nil {
+		// Validate capacity >= 1GB
+		if *req.CapacityCapGB < 1 {
+			return fmt.Errorf("capacity must be at least 1 GB")
+		}
+		node.CapacityBytes = *req.CapacityCapGB * 1024 * 1024 * 1024
+	}
+
+	if req.Enabled != nil {
+		node.Enabled = *req.Enabled
+	}
+
+	if err := s.repo.UpdateNode(ctx, node); err != nil {
+		return fmt.Errorf("update node: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteNode soft-deletes a storage node (sets enabled=false)
+func (s *Service) DeleteNode(ctx context.Context, nodeID string) error {
+	node, err := s.repo.GetStorageNodeByID(ctx, nodeID)
+	if err != nil {
+		return fmt.Errorf("get node: %w", err)
+	}
+	if node == nil {
+		return fmt.Errorf("node not found")
+	}
+
+	// Soft delete by disabling
+	node.Enabled = false
+	if err := s.repo.UpdateNode(ctx, node); err != nil {
+		return fmt.Errorf("delete node: %w", err)
+	}
+
+	return nil
+}

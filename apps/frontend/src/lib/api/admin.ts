@@ -121,6 +121,49 @@ class AdminAPI {
 			};
 		}
 	}
+
+	async addLocalNode(data: {
+		path: string;
+		capacity_cap_gb: number;
+		enabled: boolean;
+	}): Promise<{ data?: any; error?: string }> {
+		return this.request('/admin/storage-nodes', {
+			method: 'POST',
+			body: JSON.stringify(data)
+		});
+	}
+
+	async addCloudNode(data: {
+		name: string;
+		endpoint: string;
+		bucket: string;
+		region: string;
+		access_key: string;
+		secret_key: string;
+		capacity_cap_gb: number;
+		enabled: boolean;
+	}): Promise<{ data?: any; error?: string }> {
+		return this.request('/admin/storage-nodes/cloud', {
+			method: 'POST',
+			body: JSON.stringify(data)
+		});
+	}
+
+	async updateNode(
+		nodeId: string,
+		data: { capacity_cap_gb?: number; enabled?: boolean }
+	): Promise<{ data?: { message: string }; error?: string }> {
+		return this.request(`/admin/storage-nodes/${nodeId}`, {
+			method: 'PUT',
+			body: JSON.stringify(data)
+		});
+	}
+
+	async deleteNode(nodeId: string): Promise<{ data?: { message: string }; error?: string }> {
+		return this.request(`/admin/storage-nodes/${nodeId}`, {
+			method: 'DELETE'
+		});
+	}
 }
 
 export const adminAPI = new AdminAPI();

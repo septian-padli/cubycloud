@@ -89,3 +89,46 @@ func (r *Repository) UpsertStorageNode(ctx context.Context, node *database.Stora
 		Exec(ctx)
 	return err
 }
+
+// GetNodeByPath retrieves node by path
+func (r *Repository) GetNodeByPath(ctx context.Context, path string) (*database.StorageNode, error) {
+	var node database.StorageNode
+	err := r.db.NewSelect().
+		Model(&node).
+		Where("path = ?", path).
+		Scan(ctx)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return &node, err
+}
+
+// GetNodeByName retrieves cloud node by bucket name
+func (r *Repository) GetNodeByName(ctx context.Context, bucket string) (*database.StorageNode, error) {
+	var node database.StorageNode
+	err := r.db.NewSelect().
+		Model(&node).
+		Where("bucket = ? AND type = 'S3'", bucket).
+		Scan(ctx)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return &node, err
+}
+
+// CreateNode inserts a new storage node
+func (r *Repository) CreateNode(ctx context.Context, node *database.StorageNode) error {
+	_, err := r.db.NewInsert().
+		Model(node).
+		Exec(ctx)
+	return err
+}
+
+// UpdateNode updates a storage node
+func (r *Repository) UpdateNode(ctx context.Context, node *database.StorageNode) error {
+	_, err := r.db.NewUpdate().
+		Model(node).
+		WherePK().
+		Exec(ctx)
+	return err
+}

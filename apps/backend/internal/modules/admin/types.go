@@ -37,3 +37,28 @@ type StorageNodesListResponse struct {
 type DisableNodeRequest struct {
 	NodeID string `json:"node_id"`
 }
+
+// CreateLocalNodeRequest - Add local disk storage node
+type CreateLocalNodeRequest struct {
+	Path          string `json:"path"`
+	CapacityCapGB int64  `json:"capacity_cap_gb"`
+	Enabled       bool   `json:"enabled"`
+}
+
+// CreateCloudNodeRequest - Add S3-compatible cloud storage node
+type CreateCloudNodeRequest struct {
+	Name          string `json:"name"`
+	Endpoint      string `json:"endpoint"`
+	Bucket        string `json:"bucket"`
+	Region        string `json:"region"`
+	AccessKey     string `json:"access_key"`
+	SecretKey     string `json:"secret_key"`
+	CapacityCapGB int64  `json:"capacity_cap_gb"`
+	Enabled       bool   `json:"enabled"`
+}
+
+// UpdateNodeRequest - Update storage node
+type UpdateNodeRequest struct {
+	CapacityCapGB *int64 `json:"capacity_cap_gb,omitempty"`
+	Enabled       *bool  `json:"enabled,omitempty"`
+}

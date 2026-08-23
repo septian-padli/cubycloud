@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { StorageNode } from '$lib/types/setup.js';
+	import { HardDrive, Plus, Settings, Power, RefreshCw } from '@lucide/svelte';
 	import { isNodeCritical } from '$lib/mocks/admin-settings.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
@@ -9,9 +9,13 @@
 
 	let {
 		nodes,
+		onAdd,
+		onEdit,
 		onDetach
 	}: {
 		nodes: StorageNode[];
+		onAdd?: () => void;
+		onEdit?: (node: StorageNode) => void;
 		onDetach: (node: StorageNode) => void;
 	} = $props();
 
@@ -20,6 +24,15 @@
 		return ((node.totalGb - node.freeGb) / node.totalGb) * 100;
 	}
 </script>
+
+<div class="mb-4 flex justify-end gap-2">
+	{#if onAdd}
+		<Button variant="outline" size="sm" onclick={onAdd} class="gap-1.5">
+			<Plus class="size-3.5" />
+			Tambah Node
+		</Button>
+	{/if}
+</div>
 
 {#if nodes.length === 0}
 	<div class="rounded-xl border border-subtle bg-surface px-4 py-8 text-center shadow-none">
@@ -80,15 +93,31 @@
 						</p>
 					</div>
 
-					<Button
-						type="button"
-						variant="secondary"
-						class="w-full"
-						disabled={!node.enabled}
-						onclick={() => onDetach(node)}
-					>
-						Lepaskan node
-					</Button>
+					<div class="flex gap-2">
+						{#if onEdit}
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								class="flex-1 gap-1.5"
+								onclick={() => onEdit?.(node)}
+							>
+								<Settings class="size-3.5" />
+								Edit
+							</Button>
+						{/if}
+						<Button
+							type="button"
+							variant="secondary"
+							size="sm"
+							class="flex-1 gap-1.5"
+							disabled={!node.enabled}
+							onclick={() => onDetach(node)}
+						>
+							<Power class="size-3.5" />
+							Lepaskan
+						</Button>
+					</div>
 				</Card.Content>
 			</Card.Root>
 		{/each}
