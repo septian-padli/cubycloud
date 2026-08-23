@@ -9,24 +9,40 @@
 	import { Progress } from '$lib/components/ui/progress/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import { RefreshCw } from '@lucide/svelte';
-	import { cloneMockDevices, cloneMockNodes, simulateScan } from '$lib/mocks/setup.js';
+	import { scanStorageNodes } from '$lib/api/setup';
+	import { toast } from 'svelte-sonner';
 
 	let {
 		nodes = $bindable(),
-		devices = $bindable()
+		devices = $bindable(),
+		loading = false
 	}: {
 		nodes: StorageNode[];
 		devices: LinuxDevice[];
+		loading?: boolean;
 	} = $props();
 
 	let scanning = $state(false);
 
 	async function rescan() {
 		scanning = true;
-		await simulateScan();
-		nodes = cloneMockNodes();
-		devices = cloneMockDevices();
-		scanning = false;
+		try {
+			const data = await scanStorageNodes();
+			nodes = data.nodes.map((n, i) => ({
+				id: `node-${i}`,
+				name: n.path.split('/').pop() || n.path,
+				path: n.path,
+				kind: 'SSD' as const,
+				totalGb: Math.round(n.capacity_bytes / 1e9),
+				freeGb: Math.round(n.free_bytes / 1e9),
+				enabled: true,
+				capacityCapGb: Math.round(n.capacity_bytes / 1e9)
+			}));
+		} catch {
+			toast.error('Scan gagal');
+		} finally {
+			scanning = false;
+		}
 	}
 
 	function usedPercent(node: StorageNode) {
@@ -48,7 +64,7 @@
 			variant="outline"
 			size="sm"
 			class="shrink-0 gap-1.5"
-			disabled={scanning}
+			disabled={scanning || loading}
 			onclick={rescan}
 		>
 			<RefreshCw class="size-3.5 stroke-2 {scanning ? 'animate-spin' : ''}" />
@@ -56,7 +72,7 @@
 		</Button>
 	</Card.Header>
 	<Card.Content class="space-y-4">
-		{#if scanning}
+		{#if scanning || loading}
 			<div class="space-y-2 rounded-lg border border-subtle bg-app px-4 py-3">
 				<p class="text-xs font-medium text-muted">Memindai volume…</p>
 				<Progress value={66} max={100} />

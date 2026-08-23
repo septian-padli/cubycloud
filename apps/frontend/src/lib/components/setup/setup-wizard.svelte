@@ -1,16 +1,18 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { toast } from 'svelte-sonner';
+	import { scanStorageNodes, completeSetup } from '$lib/api/setup';
+	import type { CompleteSetupRequest } from '$lib/api/setup';
 	import {
 		SETUP_STEPS,
 		type AdminForm,
 		type CloudForm,
 		type PlacementStrategy,
-		type SetupStepId
+		type SetupStepId,
+		type StorageNode,
+		type LinuxDevice
 	} from '$lib/types/setup.js';
-	import {
-		cloneMockDevices,
-		cloneMockNodes,
-		generateMockRecoveryKey
-	} from '$lib/mocks/setup.js';
 	import * as Alert from '$lib/components/ui/alert/index.js';
 	import SetupStepper from './setup-stepper.svelte';
 	import SetupStepNav from './setup-step-nav.svelte';
@@ -24,7 +26,7 @@
 
 	let currentStep = $state<SetupStepId>(1);
 	let successOpen = $state(false);
-	let homeNotice = $state(false);
+	let loadingNodes = $state(true);
 
 	let admin = $state<AdminForm>({
 		username: '',
@@ -32,8 +34,8 @@
 		password: '',
 		confirmPassword: ''
 	});
-	let nodes = $state(cloneMockNodes());
-	let devices = $state(cloneMockDevices());
+	let nodes = $state<StorageNode[]>([]);
+	let devices = $state<LinuxDevice[]>([]);
 	let strategy = $state<PlacementStrategy>('FILL_FIRST');
 	let cloud = $state<CloudForm>({
 		enabled: false,
@@ -43,7 +45,7 @@
 		accessKey: '',
 		secretKey: ''
 	});
-	let recoveryKey = $state(generateMockRecoveryKey());
+	let recoveryKey = $state('');
 	let recoveryAcknowledged = $state(false);
 
 	const activeNodeCount = $derived(nodes.filter((n) => n.enabled).length);
@@ -80,17 +82,56 @@
 	function goBack() {
 		if (currentStep > 1) {
 			currentStep = (currentStep - 1) as SetupStepId;
-			homeNotice = false;
 		}
 	}
 
-	function goNext() {
+	async function goNext() {
 		if (!canNext) return;
 		if (currentStep < 5) {
 			currentStep = (currentStep + 1) as SetupStepId;
 			return;
 		}
-		successOpen = true;
+		// Step 5: submit
+		try {
+			const req: CompleteSetupRequest = {
+				admin: {
+					username: admin.username,
+					email: admin.email,
+					password: admin.password
+				},
+				storage_nodes: nodes
+					.filter((n) => n.enabled)
+					.map((n) => ({
+						path: n.path,
+						capacity_bytes: n.totalGb * 1e9,
+						enabled: true
+					})),
+				placement_strategy: strategy
+			};
+			if (cloud.enabled) {
+				req.cloud = {
+					enabled: true,
+					provider: cloud.provider,
+					endpoint: cloud.endpoint,
+					bucket: cloud.bucket,
+					access_key: cloud.accessKey,
+					secret_key: cloud.secretKey
+				};
+			}
+			const res = await completeSetup(req);
+			recoveryKey = res.recovery_key;
+			successOpen = true;
+		} catch (err: any) {
+			if (err.status === 409) {
+				toast.error('Setup already completed');
+			} else if (err.status === 400) {
+				toast.error(err.message || 'Validation error');
+			} else if (err.status === 500) {
+				toast.error('Server error. Please try again.');
+			} else {
+				toast.error('Cannot connect to server');
+			}
+		}
 	}
 
 	function skipCloud() {
@@ -107,9 +148,28 @@
 
 	function onContinueHome() {
 		successOpen = false;
-		homeNotice = true;
-		// /drive/home belum tersedia — tampilkan notice inline (UI-only).
+		goto('/drive/home');
 	}
+
+	onMount(async () => {
+		try {
+			const data = await scanStorageNodes();
+			nodes = data.nodes.map((n, i) => ({
+				id: `node-${i}`,
+				name: n.path.split('/').pop() || n.path,
+				path: n.path,
+				kind: 'SSD' as const,
+				totalGb: Math.round(n.capacity_bytes / 1e9),
+				freeGb: Math.round(n.free_bytes / 1e9),
+				enabled: true,
+				capacityCapGb: Math.round(n.capacity_bytes / 1e9)
+			}));
+		} catch {
+			toast.error('Failed to scan storage nodes');
+		} finally {
+			loadingNodes = false;
+		}
+	});
 </script>
 
 <div class="flex flex-col gap-6 md:flex-row md:items-start">
@@ -123,20 +183,11 @@
 			</p>
 		</div>
 
-		{#if homeNotice}
-			<Alert.Root class="border-subtle bg-surface">
-				<Info class="size-4 stroke-2 text-secondary-accent" />
-				<Alert.Title class="text-main">Beranda belum tersedia</Alert.Title>
-				<Alert.Description>
-					Modul Drive (/drive/home) akan tersedia setelah diimplementasi. Setup UI sudah selesai.
-				</Alert.Description>
-			</Alert.Root>
-		{/if}
 
 		{#if currentStep === 1}
 			<StepAdmin bind:admin />
 		{:else if currentStep === 2}
-			<StepStorage bind:nodes bind:devices />
+			<StepStorage bind:nodes bind:devices loading={loadingNodes} />
 		{:else if currentStep === 3}
 			<StepStrategy bind:strategy />
 		{:else if currentStep === 4}
@@ -165,5 +216,6 @@
 	username={admin.username}
 	nodeCount={activeNodeCount}
 	{strategy}
+	{recoveryKey}
 	onContinue={onContinueHome}
 />

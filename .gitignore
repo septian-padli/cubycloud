@@ -2,3 +2,7 @@
 graphify-out/
 .env.graphify.local
 apps/backend/bin/
+apps/backend/server
+apps/backend/setup.test
+apps/backend/cover.out
+apps/backend/bin/
