@@ -1,3 +1,4 @@
 # graphify — rebuild locally (`graphify extract .` or auto via post-commit hook)
 graphify-out/
 .env.graphify.local
+apps/backend/bin/
