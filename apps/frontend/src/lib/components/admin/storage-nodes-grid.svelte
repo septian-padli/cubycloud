@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { HardDrive, Plus, Settings, Power, RefreshCw } from '@lucide/svelte';
+	import { HardDrive, Plus, Settings, Power } from '@lucide/svelte';
 	import type { StorageNode } from '$lib/types/setup.js';
 	import { isNodeCritical } from '$lib/mocks/admin-settings.js';
 	import * as Card from '$lib/components/ui/card/index.js';
