@@ -1,12 +1,11 @@
 <script lang="ts">
 	import { HardDrive, Plus, Settings, Power, RefreshCw } from '@lucide/svelte';
+	import type { StorageNode } from '$lib/types/setup.js';
 	import { isNodeCritical } from '$lib/mocks/admin-settings.js';
 	import * as Card from '$lib/components/ui/card/index.js';
-	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Progress } from '$lib/components/ui/progress/index.js';
-	import { HardDrive } from '@lucide/svelte';
-
 	let {
 		nodes,
 		onAdd,

@@ -3,7 +3,8 @@
 	import { adminAPI } from '$lib/api/admin.js';
 	import type { StorageNode } from '$lib/types/setup.js';
 	import type { SystemSettings, AuditRetentionDays } from '$lib/types/admin.js';
-	import DrivePageHeader from '$lib/components/drive/drive-page-header.svelte';
+	import AddStorageNodeDialog from '$lib/components/admin/add-storage-node-dialog.svelte';
+	import EditStorageNodeDialog from '$lib/components/admin/edit-storage-node-dialog.svelte';
 	import StorageNodesGrid from '$lib/components/admin/storage-nodes-grid.svelte';
 	import AdminSystemSettings from '$lib/components/admin/admin-system-settings.svelte';
 	import DetachNodeDialog from '$lib/components/admin/detach-node-dialog.svelte';
@@ -24,7 +25,9 @@
 	let detachNode = $state<StorageNode | null>(null);
 
 	let rescanOpen = $state(false);
-
+	let showAddNodeDialog = $state(false);
+	let showEditNodeDialog = $state(false);
+	let nodeToEdit = $state<StorageNode | null>(null);
 	onMount(async () => {
 		await loadData();
 	});
@@ -58,6 +61,19 @@
 				path: n.path,
 				kind: (n.kind === 'SSD' || n.kind === 'HDD' ? n.kind : 'HDD') as 'SSD' | 'HDD',
 				totalGb: n.total_gb,
+
+	function handleAddNode() {
+		showAddNodeDialog = true;
+	}
+
+	function handleEditNode(node: StorageNode) {
+		nodeToEdit = node;
+		showEditNodeDialog = true;
+	}
+
+	function handleNodeUpdated() {
+		loadData();
+	}
 				freeGb: n.free_gb,
 				capacityCapGb: n.capacity_cap_gb,
 				enabled: n.enabled
@@ -163,7 +179,12 @@
 					Pindai Ulang Node
 				</Button>
 			</div>
-			<StorageNodesGrid {nodes} onDetach={openDetach} />
+			<StorageNodesGrid 
+				nodes={state.nodes} 
+				onAdd={handleAddNode}
+				onEdit={handleEditNode}
+				onDetach={openDetach} 
+			/>
 		</section>
 
 		<section>
@@ -174,3 +195,6 @@
 
 <DetachNodeDialog bind:open={detachOpen} node={detachNode} onDetach={applyDetach} />
 <RescanNodesDialog bind:open={rescanOpen} onRescanned={applyRescan} />
+
+<AddStorageNodeDialog bind:open={showAddNodeDialog} onAdded={handleNodeUpdated} />
+<EditStorageNodeDialog bind:open={showEditNodeDialog} node={nodeToEdit} onUpdated={handleNodeUpdated} />
