@@ -30,11 +30,15 @@ func (g *SetupGuard) IsCompleted() bool {
 func (g *SetupGuard) Middleware() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			if c.Path() == "/api/v1/setup/complete" {
+			path := c.Path()
+			
+			// Allow all setup endpoints
+			if path == "/api/v1/setup/complete" || path == "/api/v1/setup/scan-nodes" {
 				return next(c)
 			}
 
-			if !g.IsCompleted() && c.Path() != "/" && c.Path() != "/setup" {
+			// Redirect to /setup if not completed (except / and /setup)
+			if !g.IsCompleted() && path != "/" && path != "/setup" {
 				return c.Redirect(http.StatusTemporaryRedirect, "/setup")
 			}
 

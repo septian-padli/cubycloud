@@ -44,7 +44,19 @@ func (s *Service) ScanStorageNodes(ctx context.Context) (*ScanResponse, error) {
 	entries, err := os.ReadDir(storageRoot)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &ScanResponse{Nodes: []StorageNodeScan{}, Devices: []interface{}{}}, nil
+			// Storage directory belum ada, gunakan DATA_DIR sebagai default node
+			capacity, free, err := s.storage.StatLocal(ctx, s.dataDirPath)
+			if err != nil {
+				return &ScanResponse{Nodes: []StorageNodeScan{}, Devices: []interface{}{}}, nil
+			}
+			return &ScanResponse{
+				Nodes: []StorageNodeScan{{
+					Path:          filepath.Join(s.dataDirPath, "storage", "default"),
+					CapacityBytes: capacity,
+					FreeBytes:     free,
+				}},
+				Devices: []interface{}{},
+			}, nil
 		}
 		return nil, fmt.Errorf("read storage dir: %w", err)
 	}
@@ -66,6 +78,18 @@ func (s *Service) ScanStorageNodes(ctx context.Context) (*ScanResponse, error) {
 			CapacityBytes: capacity,
 			FreeBytes:     free,
 		})
+	}
+
+	// Kalau storage/ kosong, gunakan DATA_DIR sebagai default
+	if len(nodes) == 0 {
+		capacity, free, err := s.storage.StatLocal(ctx, s.dataDirPath)
+		if err == nil {
+			nodes = append(nodes, StorageNodeScan{
+				Path:          filepath.Join(s.dataDirPath, "storage", "default"),
+				CapacityBytes: capacity,
+				FreeBytes:     free,
+			})
+		}
 	}
 
 	return &ScanResponse{
@@ -261,15 +285,17 @@ func (s *Service) validate(ctx context.Context, req *CompleteSetupRequest) error
 			continue
 		}
 
-		// Path exists
+		// Auto-create path if not exists
 		if _, err := os.Stat(n.Path); os.IsNotExist(err) {
-			return echo.NewHTTPError(400, fmt.Sprintf("local node path does not exist: %s", n.Path))
+			if err := os.MkdirAll(n.Path, 0755); err != nil {
+				return echo.NewHTTPError(400, fmt.Sprintf("cannot create storage directory: %s", n.Path))
+			}
 		}
 
 		// Writable test
 		testFile := filepath.Join(n.Path, ".cuby_write_test")
 		if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
-			return echo.NewHTTPError(400, fmt.Sprintf("local node path not writable: %s", n.Path))
+			return echo.NewHTTPError(400, fmt.Sprintf("local node not writable: %s", n.Path))
 		}
 		os.Remove(testFile)
 	}
