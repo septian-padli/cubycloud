@@ -58,25 +58,25 @@
 			nodes = nodesResp.data.nodes.map((n) => ({
 				id: n.id,
 				name: n.name,
-				path: n.path,
-				kind: (n.kind === 'SSD' || n.kind === 'HDD' ? n.kind : 'HDD') as 'SSD' | 'HDD',
-				totalGb: n.total_gb,
+			id: n.id,
+			type: n.type,
+			name: n.name,
+			path: n.path,
+			kind: (n.kind === 'SSD' || n.kind === 'HDD' ? n.kind : 'HDD') as 'SSD' | 'HDD',
+			totalGb: n.total_gb,
+			freeGb: n.free_gb,
+			capacityCapGb: n.capacity_cap_gb,
+			enabled: n.enabled
+		}));
 
-	function handleAddNode() {
-		showAddNodeDialog = true;
-	}
+		const sysSettings = await adminAPI.getSettings();
+		settings = {
+			defaultQuota: sysSettings.default_quota,
+			auditRetentionDays: sysSettings.audit_retention_days,
+			workerConcurrency: sysSettings.worker_concurrency
+		};
 
-	function handleEditNode(node: StorageNode) {
-		nodeToEdit = node;
-		showEditNodeDialog = true;
-	}
-
-	function handleNodeUpdated() {
-		loadData();
-	}
-				freeGb: n.free_gb,
-				capacityCapGb: n.capacity_cap_gb,
-				enabled: n.enabled
+		loading = false;
 			}));
 		}
 
