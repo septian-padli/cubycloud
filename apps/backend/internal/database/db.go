@@ -19,7 +19,7 @@ var migrationsFS embed.FS
 // Connect opens SQLite with WAL mode, busy_timeout=5000, MaxOpenConns=1.
 // Runs migrations from embedded migrations/ folder.
 func Connect(dataDir string) (*bun.DB, error) {
-	dbPath := filepath.Join(dataDir, "db", "cuby.db")
+	dbPath := filepath.Join(dataDir, "db", "cubycloud.db")
 	return Open(context.Background(), dbPath)
 }
 
