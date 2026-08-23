@@ -181,7 +181,7 @@
 				</Button>
 			</div>
 			<StorageNodesGrid 
-		<StorageNodesGrid {nodes} onAddNode={handleAddNode} onEditNode={handleEditNode} />
+				{nodes}
 				onAdd={handleAddNode}
 				onEdit={handleEditNode}
 				onDetach={openDetach} 

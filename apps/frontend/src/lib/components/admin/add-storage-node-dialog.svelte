@@ -3,11 +3,11 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
-	import { Tabs, TabsContent, TabsList, TabsTrigger } from '$lib/components/ui/tabs/index.js';
 	import { Switch } from '$lib/components/ui/switch/index.js';
 	import { toast } from 'svelte-sonner';
 	import { adminAPI } from '$lib/api/admin.js';
 	import { HardDrive, Cloud } from '@lucide/svelte';
+
 
 	let {
 		open = $bindable(false),
