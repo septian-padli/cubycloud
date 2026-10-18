@@ -3,7 +3,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import DriveViewToggle from '$lib/components/drive/drive-view-toggle.svelte';
-	import { Plus, FolderPlus, Upload, ChevronDown } from '@lucide/svelte';
+	import { Plus, FolderPlus, Upload, ChevronDown, FolderUp } from '@lucide/svelte';
 	import { cn } from '$lib/utils.js';
 
 	const FILTERS: { id: FileCategory; label: string }[] = [
@@ -20,11 +20,15 @@
 	let {
 		category = $bindable('all' as FileCategory),
 		onNewFolder,
-		onUpload
+		onUpload,
+		onUploadFolder = () => {},
+		showFolderUpload = false
 	}: {
 		category?: FileCategory;
 		onNewFolder: () => void;
 		onUpload: () => void;
+		onUploadFolder?: () => void;
+		showFolderUpload?: boolean;
 	} = $props();
 </script>
 
@@ -75,6 +79,12 @@
 					<Upload class="size-4 stroke-2" />
 					Upload File
 				</DropdownMenu.Item>
+				{#if showFolderUpload}
+					<DropdownMenu.Item class="gap-2" onclick={onUploadFolder}>
+						<FolderUp class="size-4 stroke-2" />
+						Upload Folder
+					</DropdownMenu.Item>
+				{/if}
 			</DropdownMenu.Content>
 		</DropdownMenu.Root>
 	</div>

@@ -40,7 +40,7 @@ RESULT=$(curl -s -X POST http://localhost:8080/api/v1/setup/complete \
       \"username\": \"admin\",
       \"email\": \"admin@test.com\",
       \"password\": \"password123\",
-      \"recovery_key\": \"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\"
+      \"recovery_key\": \"ABCDE-FGHJK-LMNPQ-RSTUV-WXYZ2-34567\"
     },
     \"storage_nodes\": [
       {\"path\": \"$TEST_DIR/storage/disk1\", \"capacity_bytes\": 1000000000000, \"enabled\": true}
@@ -49,7 +49,7 @@ RESULT=$(curl -s -X POST http://localhost:8080/api/v1/setup/complete \
   }")
 
 KEY=$(echo "$RESULT" | jq -r '.recovery_key // empty')
-if [ -n "$KEY" ] && [ ${#KEY} -eq 64 ]; then
+if [[ "$KEY" =~ ^[A-Z0-9]{5}(-[A-Z0-9]{5}){5}$ ]]; then
   echo "✅ Setup completed successfully!"
   echo ""
   echo "Recovery Key: $KEY"

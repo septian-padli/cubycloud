@@ -26,7 +26,7 @@ End-to-end integration test covering:
   
 ✓ POST /api/v1/setup/complete
   Request: {admin, storage_nodes, placement_strategy, cloud?}
-  Response: {"recovery_key": "64-char-hex", "redirect": "/drive/home"}
+  Response: {"recovery_key": "<6x5 uppercase alphanumeric>", "redirect": "/drive/home"}
 ```
 
 ### 2. Storage Node Scanning
@@ -40,7 +40,7 @@ End-to-end integration test covering:
 ```bash
 ✓ User inserted: admintest (SUPER_ADMIN, quota=-1)
 ✓ Password: bcrypt hashed (cost=10)
-✓ Recovery key: 64-char hex, bcrypt hashed, returned once
+✓ Recovery key: generated client-side as 6×5 uppercase alphanumeric, returned once
 ✓ Storage nodes: 2 LOCAL nodes paired to database
 ✓ Settings: is_setup_completed=true, placement_strategy=FILL_FIRST
 ✓ JWT cookie: HTTP-only, SameSite=Lax, 7-day expiry
@@ -138,11 +138,13 @@ successOpen = true; // Show success modal
 ```
 
 **Success Modal:**
-- Display recovery key (64-char hex)
+- Display recovery key (30 characters in six groups of five)
 - Copy button → clipboard
 - Download button → `cubycloud-recovery-key.txt`
 - Acknowledge checkbox required
 - Continue → `goto('/drive/home')`
+
+Recovery-key hashes use SHA-256 over the canonical 30 characters without separators. Password hashes remain bcrypt. Reset uses `POST /api/v1/auth/reset-password`; a successful reset consumes the key atomically and returns `new_recovery_key`, which replaces the old key. Legacy 64-character hexadecimal keys are accepted only for stored bcrypt recovery hashes during migration; successful legacy resets rotate to the current 6×5/SHA-256 format.
 
 ---
 
@@ -284,7 +286,7 @@ apps/frontend/src/
 | Component | Implementation |
 |-----------|----------------|
 | **Passwords** | bcrypt cost=10 |
-| **Recovery Key** | 32 bytes random → hex (64 chars), bcrypt hashed |
+| **Recovery Key** | 30 random uppercase alphanumeric characters in six groups of five; SHA-256 hash stored. Legacy 64-character hex with bcrypt hash is migration-only. |
 | **Cloud Credentials** | AES-256-GCM, key derived from DATA_DIR_PATH via PBKDF2 |
 | **JWT** | HTTP-only cookie, SameSite=Lax, 7-day expiry |
 | **Setup Guard** | atomic.Bool prevents race conditions |

@@ -68,6 +68,10 @@
 				<Eye class="size-4 stroke-2" />
 				Buka
 			</DropdownMenu.Item>
+			<DropdownMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
+				<Download class="size-4 stroke-2" />
+				Unduh
+			</DropdownMenu.Item>
 		{/if}
 		<DropdownMenu.Item class="gap-2" onclick={() => onRename(entry)}>
 			<Pencil class="size-4 stroke-2" />
@@ -77,12 +81,10 @@
 			<FolderInput class="size-4 stroke-2" />
 			Pindahkan ke
 		</DropdownMenu.Item>
-		{#if entry.kind !== 'folder'}
-			<DropdownMenu.Item class="gap-2" onclick={() => onCopy(entry)}>
-				<Copy class="size-4 stroke-2" />
-				Duplikat
-			</DropdownMenu.Item>
-		{/if}
+		<DropdownMenu.Item class="gap-2" onclick={() => onCopy(entry)}>
+			<Copy class="size-4 stroke-2" />
+			Duplikat
+		</DropdownMenu.Item>
 		<DropdownMenu.Item class="gap-2" onclick={() => onStar(entry)}>
 			<Star class="size-4 stroke-2" />
 			{entry.starred ? 'Hapus bintang' : 'Bintang'}

@@ -337,7 +337,7 @@ Before implementing a non-trivial frontend change:
 1. Read the relevant section of `docs/prd.md`.
 2. Read the relevant section of `SITEMAP.md`.
 3. Read the relevant section of `DESIGN.md`.
-4. Query Graphify before broad code exploration.
+4. Query Codegraph before broad code exploration.
 5. Inspect existing components/state/API layers.
 6. Implement the smallest compatible change.
 7. Run appropriate checks.

@@ -11,9 +11,8 @@ NC='\033[0m' # No Color
 
 echo -e "${GREEN}Starting CubyCloud Development Environment${NC}"
 
-# Check dependencies
-if ! command -v go &> /dev/null; then
-    echo -e "${RED}Go not found. Install Go 1.22+${NC}"
+if ! command -v air &> /dev/null; then
+    echo -e "${RED}Air not found. Install Air to run the development backend.${NC}"
     exit 1
 fi
 
@@ -26,7 +25,7 @@ fi
 if [ ! -f apps/backend/.env ]; then
     echo -e "${YELLOW}Creating backend .env${NC}"
     cat > apps/backend/.env <<EOF
-PORT=8080
+PORT=8383
 DATA_DIR_PATH=/tmp/cubycloud-dev
 JWT_SECRET=dev-secret-change-in-production
 EOF
@@ -49,32 +48,50 @@ cleanup() {
 trap cleanup INT TERM
 
 # Start backend
-echo -e "${GREEN}Starting backend on :8080${NC}"
+DEV_BACKEND_PORT=8383
+export PORT="$DEV_BACKEND_PORT"
+echo -e "${GREEN}Starting backend on :${DEV_BACKEND_PORT}${NC}"
 cd apps/backend
-go run cmd/server/main.go &
+# Use air for hot reload instead of go run
+air &
 BACKEND_PID=$!
 cd ../..
 
-# Wait for backend
-echo -e "${YELLOW}Waiting for backend...${NC}"
+# Wait for the current My Storage route, not just the setup endpoint.
+echo -e "${YELLOW}Waiting for backend My Storage API...${NC}"
+BACKEND_STATUS=000
 for i in {1..30}; do
-    if curl -sf http://localhost:8080/api/v1/setup/scan-nodes > /dev/null 2>&1; then
+    BACKEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${DEV_BACKEND_PORT}/api/v1/drive/my-storage" || true)
+    if [ "$BACKEND_STATUS" = "401" ]; then
         echo -e "${GREEN}Backend ready${NC}"
         break
     fi
     sleep 1
 done
+if [ "$BACKEND_STATUS" != "401" ]; then
+    echo -e "${RED}Backend My Storage API unavailable (expected 401, got ${BACKEND_STATUS}).${NC}"
+    kill "$BACKEND_PID" 2>/dev/null || true
+    wait "$BACKEND_PID" 2>/dev/null || true
+    exit 1
+fi
+
+# Start frontend with the same backend port used above.
 
 # Start frontend
-echo -e "${GREEN}Starting frontend on :5173${NC}"
+echo -e "${GREEN}Starting frontend on :5188${NC}"
 cd apps/frontend
-bun run dev --host &
+VITE_API_PROXY_TARGET="http://localhost:${DEV_BACKEND_PORT}" bun run dev --port 5188 --host &
 FRONTEND_PID=$!
 cd ../..
 
-echo -e "${GREEN}✓ Backend: http://localhost:8080${NC}"
-echo -e "${GREEN}✓ Frontend: http://localhost:5173${NC}"
+echo -e "${GREEN}✓ Backend: http://localhost:8383${NC}"
+echo -e "${GREEN}✓ Frontend: http://localhost:5188${NC}"
 echo -e "${YELLOW}Press Ctrl+C to stop${NC}"
 
-# Wait for both
-wait
+# Monitor processes; if either exits unexpectedly, clean up
+while kill -0 "$BACKEND_PID" 2>/dev/null && kill -0 "$FRONTEND_PID" 2>/dev/null; do
+    sleep 1
+done
+
+echo -e "\n${RED}Salah satu service (backend atau frontend) terhenti.${NC}"
+cleanup

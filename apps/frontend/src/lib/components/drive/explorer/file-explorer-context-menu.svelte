@@ -57,6 +57,10 @@
 				<Eye class="size-4 stroke-2" />
 				Buka
 			</ContextMenu.Item>
+			<ContextMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
+				<Download class="size-4 stroke-2" />
+				Unduh
+			</ContextMenu.Item>
 		{/if}
 		<ContextMenu.Item class="gap-2" onclick={() => onRename(entry)}>
 			<Pencil class="size-4 stroke-2" />
@@ -66,12 +70,10 @@
 			<FolderInput class="size-4 stroke-2" />
 			Pindahkan ke
 		</ContextMenu.Item>
-		{#if entry.kind !== 'folder'}
-			<ContextMenu.Item class="gap-2" onclick={() => onCopy(entry)}>
-				<Copy class="size-4 stroke-2" />
-				Duplikat
-			</ContextMenu.Item>
-		{/if}
+		<ContextMenu.Item class="gap-2" onclick={() => onCopy(entry)}>
+			<Copy class="size-4 stroke-2" />
+			Duplikat
+		</ContextMenu.Item>
 		<ContextMenu.Item class="gap-2" onclick={() => onStar(entry)}>
 			<Star class="size-4 stroke-2" />
 			{entry.starred ? 'Hapus bintang' : 'Bintang'}

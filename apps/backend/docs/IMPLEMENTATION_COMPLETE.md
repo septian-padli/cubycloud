@@ -170,7 +170,7 @@ async function goNext() {
       cloud: cloud.enabled ? {...} : undefined
     });
     
-    recoveryKey = res.recovery_key;  // 64-char hex
+    recoveryKey = res.recovery_key;  // client-generated six groups of five
     successOpen = true;              // Show modal
   }
 }
@@ -213,7 +213,7 @@ LOCAL|/tmp/live-demo/storage/disk2|300000000000|1
 | Component | Implementation |
 |-----------|----------------|
 | **Password hashing** | bcrypt cost=10 |
-| **Recovery key** | 32 bytes random → hex (64 chars), bcrypt hashed |
+| **Recovery key** | Client-generated 6×5 uppercase alphanumeric; SHA-256 hash of canonical 30 chars |
 | **Cloud credentials** | AES-256-GCM, key derived from DATA_DIR_PATH via PBKDF2 |
 | **JWT authentication** | HTTP-only cookie, SameSite=Lax, 7-day expiry |
 | **Setup guard** | atomic.Bool prevents race conditions, 409 idempotent |
@@ -247,13 +247,13 @@ LOCAL|/tmp/live-demo/storage/disk2|300000000000|1
 
 ### Quick Test (30 seconds)
 ```bash
-./test-setup-flow.sh
+bash scripts/test/setup-flow.sh
 ```
 
 **Output**:
 ```
 ✅ Setup completed successfully!
-Recovery Key: 7099f61b1be80593a8745e5cba4f8f51ca6c7d110fbd1d04c8a0c92c26fb780b
+Recovery Key: ABCDE-FGHJK-LMNPQ-RSTUV-WXYZ2-34567
 Database: /tmp/cuby-quick-test/db/cubycloud.db
 
 User: admin (SUPER_ADMIN)

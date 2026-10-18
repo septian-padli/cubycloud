@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"github.com/cubycloud/backend/internal/database"
 	"github.com/cubycloud/backend/internal/storage"
@@ -142,7 +141,7 @@ func (s *Service) GetStorageNodes(ctx context.Context) ([]StorageNodeResponse, e
 		if node.Type == "LOCAL" && node.Path != nil {
 			nodeResp.Path = *node.Path
 			nodeResp.Name = filepath.Base(*node.Path)
-			nodeResp.Kind = detectDiskKind(*node.Path)
+			nodeResp.Kind = storage.DetectDiskKind(ctx, *node.Path)
 
 			// Get current free space
 			capacity, freeSpace, err := s.storage.StatLocal(ctx, *node.Path)
@@ -266,16 +265,6 @@ func (s *Service) RescanStorageNodes(ctx context.Context) ([]StorageNodeResponse
 	return s.GetStorageNodes(ctx)
 }
 
-// detectDiskKind returns "SSD" or "HDD" based on path heuristic
-func detectDiskKind(path string) string {
-	lower := strings.ToLower(path)
-	if strings.Contains(lower, "ssd") || strings.Contains(lower, "nvme") {
-		return "SSD"
-	}
-	return "HDD"
-}
-
-
 // CreateLocalNode adds a new local disk storage node
 func (s *Service) CreateLocalNode(ctx context.Context, req *CreateLocalNodeRequest) (*StorageNodeResponse, error) {
 	// Validate path exists
@@ -307,7 +296,7 @@ func (s *Service) CreateLocalNode(ctx context.Context, req *CreateLocalNodeReque
 	}
 
 	// Get disk stats using StatLocal (returns capacity and free space)
-	kind := detectDiskKind(req.Path)
+	kind := storage.DetectDiskKind(ctx, req.Path)
 	capacity, free, err := s.storage.StatLocal(ctx, req.Path)
 	totalGB := capacity / (1024 * 1024 * 1024)
 	freeGB := free / (1024 * 1024 * 1024)

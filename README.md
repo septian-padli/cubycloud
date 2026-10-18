@@ -57,6 +57,7 @@ cubycloud/
 **Requirements:**
 - [Go](https://go.dev) 1.22+
 - [Bun](https://bun.sh) 1.x
+- [Air](https://github.com/air-verse/air) (backend hot reload)
 
 ### Run Full Stack (Backend + Frontend)
 
@@ -64,8 +65,8 @@ cubycloud/
 make dev
 ```
 Or run directly via script: `./scripts/dev.sh`.
-- Frontend: [http://localhost:5173](http://localhost:5173)
-- Backend API: [http://localhost:8080](http://localhost:8080)
+- Frontend: [http://localhost:5188](http://localhost:5188)
+- Backend API: [http://localhost:8383](http://localhost:8383)
 
 ### Run Backend Only (Go)
 

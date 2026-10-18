@@ -61,7 +61,7 @@ SETUP_RESP=$(curl -s -X POST "$API/setup/complete" \
             "username": "admin",
             "email": "admin@test.local",
             "password": "Admin123!",
-            "recovery_key": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+            "recovery_key": "ABCDE-FGHJK-LMNPQ-RSTUV-WXYZ2-34567"
         },
         "storage_nodes": [{
             "path": "'"$DATA_DIR_PATH"'/storage/default",

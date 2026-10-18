@@ -1,9 +1,10 @@
 import type { PlacementStrategy, CloudProvider } from '$lib/types/setup';
 
-const API_BASE = 'http://localhost:8080/api/v1';
+const API_BASE = '/api/v1';
 
 export interface StorageNodeResponse {
 	path: string;
+	kind: string;
 	capacity_bytes: number;
 	free_bytes: number;
 }

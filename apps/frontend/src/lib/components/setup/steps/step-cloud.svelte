@@ -13,9 +13,11 @@
 	import { cn } from '$lib/utils.js';
 
 	let {
-		cloud = $bindable()
+		cloud = $bindable(),
+		noLocalNodes = false
 	}: {
 		cloud: CloudForm;
+		noLocalNodes?: boolean;
 	} = $props();
 
 	type TestState = 'idle' | 'loading' | 'success' | 'error';
@@ -77,6 +79,15 @@
 				}}
 			/>
 		</div>
+		{#if noLocalNodes}
+			<Alert.Root>
+				<Alert.Title>Minimal satu penyimpanan wajib diisi</Alert.Title>
+				<Alert.Description>
+					Tidak ada node lokal yang dipilih. Aktifkan node cloud di bawah untuk bisa
+					menyelesaikan setup.
+				</Alert.Description>
+			</Alert.Root>
+		{/if}
 
 		{#if cloud.enabled}
 			<div class="space-y-4">
@@ -180,15 +191,15 @@
 				</div>
 
 				{#if testState === 'success'}
-					<Alert.Root class="border border-subtle bg-surface">
-						<CheckCircle2 class="size-4 stroke-2 text-primary" />
-						<Alert.Title class="text-main">Koneksi berhasil</Alert.Title>
+					<Alert.Root variant="default">
+						<CheckCircle2 class="size-4 stroke-2" />
+						<Alert.Title>Koneksi berhasil</Alert.Title>
 						<Alert.Description>
 							Mock: kredensial diterima. Backend belum dihubungkan.
 						</Alert.Description>
 					</Alert.Root>
 				{:else if testState === 'error'}
-					<Alert.Root variant="destructive" class="border border-subtle">
+					<Alert.Root variant="destructive">
 						<XCircle class="size-4 stroke-2" />
 						<Alert.Title>Koneksi gagal</Alert.Title>
 						<Alert.Description>

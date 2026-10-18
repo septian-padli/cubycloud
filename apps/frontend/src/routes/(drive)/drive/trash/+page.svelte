@@ -1,7 +1,6 @@
 <script lang="ts">
 	import DrivePageHeader from '$lib/components/drive/drive-page-header.svelte';
 	import TrashFileList from '$lib/components/drive/trash-file-list.svelte';
-	import { MOCK_TRASH_FILES } from '$lib/mocks/trash-files.js';
 </script>
 
 <svelte:head>
@@ -10,7 +9,10 @@
 </svelte:head>
 
 <div class="flex flex-col gap-6">
-	<DrivePageHeader title="Trash" />
+	<DrivePageHeader
+		title="Trash"
+		description="Item yang dihapus akan disimpan di sini sebelum dihapus permanen setelah 30 hari."
+	/>
 
-	<TrashFileList initialItems={MOCK_TRASH_FILES} />
+	<TrashFileList />
 </div>

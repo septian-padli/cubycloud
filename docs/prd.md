@@ -205,7 +205,7 @@ CubyCloud ditujukan untuk ekosistem pengguna _self-hosted_ dan tim skala kecil/m
 │ • Zero-CLI Web Setup Wizard          │ • Progressive Web App (PWA)      │
 │ • Multi-Node Storage Pooling (VFS)   │ • Desktop & Mobile Native Sync   │
 │ • Resumable Upload/Download (TUS)    │ • Real-time Office Editing       │
-│ • Duplicate Handling (Replace/Suffix)│ • Email / SMTP Notifications     │
+│ • Duplicate Handling (Numeric Suffix) │ • Email / SMTP Notifications     │
 │ • Auto-Purge Trash (30 Days)         │ • Heavy Background Transcoding   │
 │ • Native Preview (Pic/Vid/Aud/Text)  │ • SaaS Billing & Payment Gateway │
 │ • Bundled Add-ons (ZIP, WebP, PDF)   │                                  │
@@ -252,9 +252,7 @@ Seluruh fitur di bawah ini **wajib ada, teruji, dan berfungsi penuh** pada rilis
 
 - **Flat Earthy UI Design System:** Tampilan 100% flat (_no hard shadows_ kecuali modal/toast), _earthy tones_ (Parchment Cream, Olive Moss), tipografi **Montserrat**, dan _list view_ storage-first — spesifikasi lengkap di [`apps/frontend/DESIGN.md`](../apps/frontend/DESIGN.md).
 - **Storage Node Badge Visibility:** Badge `[R2]` / `[SSD-n]` **hanya untuk Super Admin**. Regular User tidak melihat lokasi fisik node.
-- **Conflict Resolution Dialog:** Jika pengguna mengunggah berkas dengan nama yang sama di direktori yang sama, sistem menampilkan modal konfirmasi:
-- **Replace (Overwrite):** Menimpa berkas lama.
-- **Keep Both (Rename):** Otomatis menambahkan akhiran angka/tanggal (_suffix_, contoh: `Laporan_v1 (1).pdf`).
+- Konflik nama mengikuti kebijakan same-path di §4.4: upload/duplicate memilih suffix angka otomatis; rename/move menawarkan suffix yang tersedia atau membatalkan; tidak ada overwrite atau merge folder.
 
 - **Native Media Previewer:** Fitur pratinjau instan bawaan terbatas untuk 4 jenis format:
 - 📄 **Text/Code:** TXT, Markdown (.md), JSON, CSV, Log.
@@ -311,7 +309,7 @@ Fitur-fitur berikut **secara eksplisit TIDAK dimasukkan** ke dalam rilis v1.0 un
 
 - 🚫 **AI Workspace & MCP RAG Engine:** Tidak ada pemrosesan vector database, indeksasi dokumen RAG, maupun integrasi Ollama/LLM di v1.0 (ditunda ke Fase 2/3 Roadmap).
 - 🚫 **Grid View (File Explorer):** v1.0 hanya **List View**; toggle tampilan grid ditunda ke fase berikutnya.
-- 🚫 **File Versioning & History:** Tidak ada pencatatan riwayat versi file lama (v1, v2); file yang di-_replace_ akan langsung tertimpa.
+- 🚫 **File Versioning & History:** Tidak ada pencatatan riwayat versi file lama (v1, v2). Konflik nama tidak menimpa item lama; lihat kebijakan suffix di §4.4.
 - 🚫 **Progressive Web App (PWA):** Tidak ada dukungan instalasi PWA atau _offline caching asset_ di v1.0.
 - 🚫 **Desktop & Mobile Native Sync Client:** Tidak ada aplikasi _background sync_ (seperti Google Drive for Desktop).
 - 🚫 **Real-time Collaborative Office Editing:** Tidak ada integrasi OnlyOffice/Collabora untuk edit dokumen bersama secara live.
@@ -354,7 +352,7 @@ Modul ini bertanggung jawab menginsialisasi sistem saat pertama kali dijalankan 
     ├── Step 2: Storage Node Discovery (Volume Path + Optional Devices)
     ├── Step 3: Placement Strategy Selection (Fill-First / Round-Robin / Most-Free)
     ├── Step 4: Optional Cloud Node Setup (S3 / Cloudflare R2 API Credentials)
-    └── Step 5: Export Emergency Recovery Key (64-Character Hex Code)
+    └── Step 5: Generate and export Recovery Key (`XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`)
 
 ```
 
@@ -390,9 +388,10 @@ Modul ini bertanggung jawab menginsialisasi sistem saat pertama kali dijalankan 
 
 6. **Step 5 — Emergency Recovery Key Export:**
 
-- Sistem menggenerasi **64-character Hexadecimal Recovery Key** acak secara kriptografis.
-- GUI menyediakan tombol _"Copy Key"_ dan _"Download Key (.txt)"_. Kunci ini digunakan untuk memulihkan akses Super Admin jika lupa password.
-- Setelah selesai, `is_setup_completed` diubah menjadi `true` dan sistem mengarahkan ke Beranda `/drive/home`.
+- Browser generates a cryptographically secure random Recovery Key with 30 uppercase alphanumeric characters in six groups of five: `XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX` (35 characters including separators).
+- The key is shown for the user to copy or download. Setup stores the SHA-256 hash of its canonical 30-character value (without separators), not the plaintext key or a bcrypt hash.
+- The Recovery Key can be used once to reset the Super Admin password. Successful reset consumes the key atomically and returns a newly generated key in `new_recovery_key`; the previous key is no longer usable. The user must save the replacement key.
+- After setup, `is_setup_completed` is set to `true` and the system redirects to `/drive/home`.
 
 ---
 
@@ -474,16 +473,24 @@ Antarmuka file pribadi berbasis **SvelteKit SPA** dengan **Flat Earthy Design Sy
 
 1. **File Operations:**
 
-- Upload (Drag-and-Drop / File Picker), Direct Download, Rename, Move, Copy (_Zero-Byte Reference Copy_), Star/Unstar, Delete to Trash.
-- Upload / copy ke My Storage **dicek user quota** sebelum diterima (lihat §4.10).
+- Upload (file picker, drag-and-drop, and folder upload with nested contents), Direct Download, Rename, Move, Duplicate (_Zero-Byte Reference Copy_), Star/Unstar, Delete to Trash.
+- Upload / duplicate / move ke My Storage **dicek user quota** sebelum diterima (lihat §4.10).
+- Operasi folder berlaku rekursif terhadap seluruh isi folder. Penghapusan folder meminta konfirmasi bahwa seluruh isinya ikut dipindahkan ke Trash.
+- Folder upload diproses parsial: item yang berhasil tetap tersimpan jika item lain gagal, dan UI menampilkan item yang gagal.
 
-2. **Conflict Resolution Handling (Nama File Sama):**
+2. **Same-Path Name Conflicts:**
 
-- Jika pengguna mengunggah file dengan nama yang sudah ada di folder tujuan, sistem menampilkan modal konfirmasi dengan 2 pilihan:
-- **Replace (Overwrite):** Menimpa file lama.
-- **Keep Both (Rename):** Mengunggah file baru dengan otomatis memberikan suffix penomoran standar. Format: `NamaFile (1).ext`, `NamaFile (2).ext`.
+- Nama hanya konflik jika berada pada direktori (path) yang sama; item dengan nama sama di direktori berbeda diperbolehkan.
+- Upload dan duplicate otomatis memilih nama tersedia berikutnya dengan suffix angka, misalnya `Laporan (1).pdf`, `Laporan (2).pdf`. Saat folder di-upload/duplicate, suffix diterapkan pada folder root yang konflik; isi folder mempertahankan nama asal kecuali ada konflik sibling pada path tujuan.
+- Rename dan move tidak menimpa item. Jika nama bertabrakan di path tujuan, UI menawarkan nama tersedia berikutnya dengan suffix angka atau membatalkan aksi. Memindahkan folder tidak menggabungkan folder dengan nama sama.
 
-3. **Search & Quick Category Filters:**
+3. **Upload Queue & Progress:**
+
+- Saat file/folder diunggah, UI menampilkan notifikasi upload mengambang di kanan atas dengan progress bar. Chevron membuka daftar item yang sedang antre dan diunggah.
+- Notifikasi progres tetap terbuka sampai ditutup pengguna melalui tombol close atau digeser ke kanan. Setelah antrean selesai, UI menampilkan Sonner toast biasa di kanan bawah.
+
+4. **Search & Quick Category Filters:**
+
 
 - **Fuzzy Text Search:** Pencarian instan berdasarkan nama file/folder.
 - **Category Filter Chips:** Filter cepat berdasarkan tipe file:
@@ -493,12 +500,12 @@ Antarmuka file pribadi berbasis **SvelteKit SPA** dengan **Flat Earthy Design Sy
 - 📄 _Dokumen_ (PDF, TXT, MD, CSV, DOCX)
 - 🗜️ _Arsip_ (ZIP, RAR, 7Z)
 
-4. **Native Media Previewer:**
+5. **Native Media Previewer:**
 
 - _Double-click_ pada file membuka _lightbox modal_ untuk pratinjau instan berkas Gambar, Video MP4/WebM, Audio MP3/WAV/OGG, serta Teks/Code/Markdown.
 - **PDF:** pratinjau tersedia hanya jika add-on **PDF Previewer** diaktifkan Admin; jika nonaktif, PDF hanya dapat diunduh.
 
-5. **Network Resiliency & Resumable Transfer:**
+6. **Network Resiliency & Resumable Transfer:**
 
 - Menggunakan _chunked upload_ untuk disk lokal dan _multipart presigned transfer_ untuk S3/R2. Jika jaringan pengguna terputus saat upload/download, indikator _Progress Bar_ akan memposting status _Paused_ dan otomatis melanjutkan (_resume_) saat koneksi terhubung kembali.
 
@@ -733,7 +740,8 @@ Keamanan difokuskan pada perlindungan data kredensial, kontrol akses API, dan pe
 
 4. **Emergency Access Recovery:**
 
-- Penggunaan **64-Character Hexadecimal Recovery Key** yang dibuat secara acak saat Setup Wizard sebagai jalur pemulihan darurat jika Admin kehilangan akses kata sandi.
+- The current emergency recovery credential is the 30-character uppercase alphanumeric key generated in six groups of five during setup. Its canonical separator-free value is stored as a SHA-256 hash. Reset is single-use and rotates the key; see §4.1.6.
+- Migration-only compatibility: the backend accepts a legacy 64-character hexadecimal key only for accounts that still have a bcrypt recovery hash. Successful legacy recovery rotates the account to the current 6×5 format with SHA-256 storage. The legacy format is not generated or accepted by the UI.
 
 ---
 

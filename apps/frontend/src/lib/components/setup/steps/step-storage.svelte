@@ -32,7 +32,7 @@
 				id: `node-${i}`,
 				name: n.path.split('/').pop() || n.path,
 				path: n.path,
-				kind: 'SSD' as const,
+				kind: (n.kind === 'SSD' || n.kind === 'HDD' ? n.kind : 'HDD') as 'SSD' | 'HDD',
 				totalGb: Math.round(n.capacity_bytes / 1e9),
 				freeGb: Math.round(n.free_bytes / 1e9),
 				enabled: true,
@@ -54,10 +54,10 @@
 <Card.Root class="rounded-xl border-subtle bg-surface shadow-none">
 	<Card.Header class="flex flex-row items-start justify-between gap-3 space-y-0">
 		<div>
-			<Card.Title class="text-lg font-semibold text-main">Penyimpanan Lokal</Card.Title>
+			<Card.Title class="text-lg font-semibold text-main">Penyimpanan Lokal (Opsional)</Card.Title>
 			<Card.Description class="text-sm text-muted">
 				Pilih volume di <code class="text-xs">/app/data/storage/</code> dan tetapkan batas kapasitas
-				node.
+				node. Bisa dilewati jika hanya memakai penyimpanan cloud.
 			</Card.Description>
 		</div>
 		<Button

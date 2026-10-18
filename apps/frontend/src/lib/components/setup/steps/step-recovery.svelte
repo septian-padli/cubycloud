@@ -13,13 +13,10 @@
 		downloaded: boolean;
 	} = $props();
 
-	// Debug: Log when component mounts
-	$effect(() => {
-		console.log('[StepRecovery] recoveryKey:', recoveryKey ? `${recoveryKey.length} chars` : 'EMPTY');
-	});
+
 
 	function downloadKey() {
-		if (!recoveryKey || recoveryKey.length !== 64) {
+		if (!recoveryKey || recoveryKey.length !== 35) {
 			toast.error('Recovery key belum di-generate!');
 			return;
 		}
@@ -39,11 +36,12 @@
 	}
 
 	function copyKey() {
-		if (!recoveryKey || recoveryKey.length !== 64) {
+		if (!recoveryKey || recoveryKey.length !== 35) {
 			toast.error('Recovery key belum di-generate!');
 			return;
 		}
 		navigator.clipboard.writeText(recoveryKey).then(() => {
+			downloaded = true;
 			toast.success('Recovery key disalin ke clipboard');
 		});
 	}
@@ -60,9 +58,9 @@
 		</Card.Description>
 	</Card.Header>
 	<Card.Content class="space-y-4">
-		<Alert.Root variant="destructive" class="border-red-500/30 bg-red-500/5">
-			<Alert.Title class="text-red-700">⚠️ Penting!</Alert.Title>
-			<Alert.Description class="text-red-600">
+		<Alert.Root variant="destructive">
+			<Alert.Title>⚠️ Penting!</Alert.Title>
+			<Alert.Description>
 				Recovery key ini <strong>tidak akan ditampilkan lagi</strong> setelah setup selesai.
 				<strong class="block mt-1">Download sekarang atau Anda tidak bisa memulihkan password!</strong>
 			</Alert.Description>
@@ -70,9 +68,9 @@
 
 		<!-- Recovery Key Display -->
 		<div class="rounded-xl border border-subtle bg-app p-4">
-			<div class="mb-2 text-xs font-medium text-muted">RECOVERY KEY (64 karakter)</div>
+			<div class="mb-2 text-xs font-medium text-muted">RECOVERY KEY (6 × 5 karakter)</div>
 			{#if !recoveryKey || recoveryKey.length === 0}
-				<code class="block break-all rounded-lg bg-surface px-3 py-3 font-mono text-sm text-red-500 border border-subtle">
+				<code class="block break-all rounded-lg bg-surface px-3 py-3 font-mono text-sm text-danger border border-subtle">
 					⚠️ Recovery key belum di-generate! Silakan reload halaman.
 				</code>
 			{:else}
@@ -92,7 +90,7 @@
 			>
 				{#if downloaded}
 					<Check class="size-4" />
-					Sudah Diunduh
+					Sudah Disimpan
 				{:else}
 					<Download class="size-4" />
 					Download Key
@@ -112,10 +110,13 @@
 		</div>
 
 		{#if downloaded}
-			<div class="flex items-start gap-2 rounded-lg bg-green-500/10 border border-green-500/30 px-3 py-2 text-sm text-green-700">
-				<Check class="size-4 mt-0.5 flex-shrink-0" />
-				<span>Recovery key sudah diunduh. Anda bisa melanjutkan setup.</span>
-			</div>
+			<Alert.Root variant="default">
+				<Check class="size-4 stroke-2" />
+				<Alert.Title>Recovery key tersimpan</Alert.Title>
+				<Alert.Description>
+					Recovery key sudah disimpan (diunduh atau disalin). Anda bisa melanjutkan setup.
+				</Alert.Description>
+			</Alert.Root>
 		{/if}
 	</Card.Content>
 </Card.Root>

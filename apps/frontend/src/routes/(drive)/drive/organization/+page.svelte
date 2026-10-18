@@ -24,8 +24,8 @@
 		{/snippet}
 	</DrivePageHeader>
 
-	<Alert.Root class="rounded-xl border-subtle bg-surface text-main shadow-none">
-		<Building2 class="size-4 stroke-2 text-primary" />
+	<Alert.Root variant="default">
+		<Building2 class="size-4 stroke-2" />
 		<Alert.Title>Drive bersama tim</Alert.Title>
 		<Alert.Description>
 			Semua anggota dapat membaca, menulis, mengunduh, dan menghapus di pohon Organization.

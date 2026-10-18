@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { HardDrive, Plus, Settings, Power } from '@lucide/svelte';
+	import { HardDrive, Settings } from '@lucide/svelte';
 	import type { StorageNode } from '$lib/types/setup.js';
 	import { isNodeCritical } from '$lib/mocks/admin-settings.js';
 	import * as Card from '$lib/components/ui/card/index.js';
@@ -8,30 +8,19 @@
 	import { Progress } from '$lib/components/ui/progress/index.js';
 	let {
 		nodes,
-		onAdd,
-		onEdit,
-		onDetach
+		onEdit
 	}: {
 		nodes: StorageNode[];
-		onAdd?: () => void;
-		onEdit?: (node: StorageNode) => void;
-		onDetach: (node: StorageNode) => void;
+		onEdit: (node: StorageNode) => void;
 	} = $props();
 
 	function usedPercent(node: StorageNode) {
-		if (node.totalGb <= 0) return 0;
-		return ((node.totalGb - node.freeGb) / node.totalGb) * 100;
+		if (node.capacityCapGb <= 0) return 0;
+		const usedGb = node.capacityCapGb - node.freeGb;
+		return (usedGb / node.capacityCapGb) * 100;
 	}
 </script>
 
-<div class="mb-4 flex justify-end gap-2">
-	{#if onAdd}
-		<Button variant="outline" size="sm" onclick={onAdd} class="gap-1.5">
-			<Plus class="size-3.5" />
-			Tambah Node
-		</Button>
-	{/if}
-</div>
 
 {#if nodes.length === 0}
 	<div class="rounded-xl border border-subtle bg-surface px-4 py-8 text-center shadow-none">
@@ -80,7 +69,7 @@
 					<div class="space-y-2">
 						<div class="flex justify-between text-xs text-muted">
 							<span>{node.freeGb} GB bebas</span>
-							<span>{node.totalGb} GB total</span>
+							<span>{node.capacityCapGb} GB kapasitas</span>
 						</div>
 						<Progress
 							value={used}
@@ -88,35 +77,20 @@
 							indicatorClass={critical ? 'bg-danger' : 'bg-primary'}
 						/>
 						<p class="text-xs text-muted">
-							Batas kapasitas: {node.capacityCapGb} GB · terpakai {Math.round(used)}%
+							Terpakai {Math.round(used)}%
 						</p>
 					</div>
 
-					<div class="flex gap-2">
-						{#if onEdit}
-							<Button
-								type="button"
-								variant="outline"
-								size="sm"
-								class="flex-1 gap-1.5"
-								onclick={() => onEdit?.(node)}
-							>
-								<Settings class="size-3.5" />
-								Edit
-							</Button>
-						{/if}
-						<Button
-							type="button"
-							variant="secondary"
-							size="sm"
-							class="flex-1 gap-1.5"
-							disabled={!node.enabled}
-							onclick={() => onDetach(node)}
-						>
-							<Power class="size-3.5" />
-							Lepaskan
-						</Button>
-					</div>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						class="w-full gap-1.5"
+						onclick={() => onEdit(node)}
+					>
+						<Settings class="size-3.5" />
+						Edit
+					</Button>
 				</Card.Content>
 			</Card.Root>
 		{/each}

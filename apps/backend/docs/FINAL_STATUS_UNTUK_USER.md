@@ -86,7 +86,7 @@ completeSetup(data)    → POST /api/v1/setup/complete
 4. Step 3: Pilih placement strategy (FILL_FIRST / DISTRIBUTED)
 5. Step 4: Optional cloud storage (R2/S3 credentials)
 6. Step 5: Review → Submit
-7. Modal muncul dengan recovery key (64-char hex)
+7. Modal muncul dengan recovery key 6×5 uppercase alfanumerik
 8. User copy/download → Acknowledge
 9. **Redirect ke `/drive/home`** ✅
 
@@ -154,7 +154,9 @@ Storage nodes:
 | Component | Implementation |
 |-----------|----------------|
 | Password hashing | bcrypt cost=10 |
-| Recovery key | 32 bytes random → hex (64 chars), bcrypt hashed |
+| Recovery key | Client-generated 6×5 uppercase alphanumeric; SHA-256 hash of canonical 30 chars |
+| Recovery-key reset | `POST /api/v1/auth/reset-password` atomically consumes the key and returns a replacement `new_recovery_key`; old key cannot be reused |
+| Legacy migration | 64-character hex accepted only with an existing bcrypt recovery hash; success rotates to 6×5/SHA-256 |
 | Cloud credentials | AES-256-GCM, PBKDF2 key derivation |
 | JWT authentication | HTTP-only cookie, SameSite=Lax, 7-day expiry |
 | Setup guard | atomic.Bool cache, 409 idempotent |
@@ -196,7 +198,7 @@ cd /Users/septianpadli/MyData/SoftwareDev/cubycloud
 **Expected output**:
 ```
 ✅ Setup completed successfully!
-Recovery Key: [64-char-hex]
+Recovery Key: [6×5 uppercase alphanumeric]
 Database: /tmp/cuby-quick-test/db/cubycloud.db
 User: admin (SUPER_ADMIN)
 Storage: LOCAL @ /tmp/cuby-quick-test/storage/disk1
@@ -248,7 +250,7 @@ Scan Storage Nodes:
 Complete Setup:
   Request: POST /api/v1/setup/complete
   Response: {
-    "recovery_key": "3391f59dabdf25dabb8f680ddbdf49658313533713f703bc42e7ad7b610c32e9",
+    "recovery_key": "[6×5 uppercase alphanumeric]",
     "redirect": "/drive/home"
   }
   Result: ✅ Working

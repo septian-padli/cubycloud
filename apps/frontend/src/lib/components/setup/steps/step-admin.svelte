@@ -73,9 +73,9 @@
 			{/if}
 		</div>
 
-		<Alert.Root class="border-subtle bg-app">
-			<ShieldAlert class="size-4 stroke-2 text-secondary-accent" />
-			<Alert.Title class="text-main">Akun pertama</Alert.Title>
+		<Alert.Root variant="default">
+			<ShieldAlert class="size-4 stroke-2" />
+			<Alert.Title>Akun pertama</Alert.Title>
 			<Alert.Description>
 				Super Admin memiliki akses penuh ke pengaturan penyimpanan dan pengguna.
 			</Alert.Description>

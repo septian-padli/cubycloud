@@ -2,8 +2,10 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { getSetupStatus } from '$lib/api/setup';
+	import { goto } from '$app/navigation';
+	import { authAPI } from '$lib/api/auth.js';
 	import DriveShell from '$lib/components/drive/drive-shell.svelte';
-	import ErrorPage from '$lib/components/error/error-page.svelte';
+	import SetupRequiredPage from '$lib/components/setup/setup-required-page.svelte';
 	import { setDriveChrome } from '$lib/drive-context.svelte.js';
 	import { deriveDriveActiveId } from '$lib/drive-nav.js';
 	import { driveView } from '$lib/drive-view.svelte.js';
@@ -23,24 +25,32 @@
 		try {
 			const status = await getSetupStatus();
 			isCompleted = status.is_setup_completed;
-		} catch (e) {
-			console.warn('[Drive Guard] Could not verify setup status:', e);
-		} finally {
-			checking = false;
-		}
-		if (isCompleted) {
+			if (!isCompleted) {
+				checking = false;
+				return;
+			}
+
+			// Verify authentication with backend
+			const meResp = await authAPI.getMe();
+			if (meResp.error || !meResp.data) {
+				const currentPath = page.url.pathname + page.url.search;
+				void goto(`/login?redirect=${encodeURIComponent(currentPath)}`);
+				return;
+			}
+
 			setMockLoggedIn(true);
 			driveView.init();
+		} catch (e) {
+			console.warn('[Drive Guard] Could not verify session:', e);
+		} finally {
+			checking = false;
 		}
 	});
 </script>
 
 {#if !checking}
 	{#if !isCompleted}
-		<ErrorPage
-			status={403}
-			message="Setup sistem belum diselesaikan. Silakan selesaikan setup terlebih dahulu."
-		/>
+		<SetupRequiredPage />
 	{:else}
 		<DriveShell {activeId}>
 			{#snippet content()}

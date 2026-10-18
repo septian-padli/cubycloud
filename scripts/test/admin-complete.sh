@@ -43,7 +43,7 @@ echo ""
 echo "3️⃣  Setup: Creating super admin..."
 SETUP_RESP=$(curl -s -c /tmp/cuby_cookies.txt -X POST http://localhost:8765/api/v1/setup \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@test.local","password":"Test1234!","recovery_key":"test-recovery-key-1234567890"}')
+  -d '{"email":"admin@test.local","password":"Test1234!","recovery_key":"ABCDE-FGHJK-LMNPQ-RSTUV-WXYZ2-34567"}')
 
 if echo "$SETUP_RESP" | grep -q "error"; then
   echo "❌ Setup failed: $SETUP_RESP"

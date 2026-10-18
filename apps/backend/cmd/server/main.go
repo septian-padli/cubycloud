@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"github.com/cubycloud/backend/internal/modules/admin"
 	"io/fs"
 	"log"
 	"net/http"
@@ -14,7 +13,10 @@ import (
 	"github.com/cubycloud/backend/internal/config"
 	"github.com/cubycloud/backend/internal/database"
 	"github.com/cubycloud/backend/internal/middleware"
+	"github.com/cubycloud/backend/internal/modules/admin"
 	"github.com/cubycloud/backend/internal/modules/auth"
+	"github.com/cubycloud/backend/internal/jobs"
+	"github.com/cubycloud/backend/internal/modules/mystorage"
 	"github.com/cubycloud/backend/internal/modules/setup"
 	"github.com/cubycloud/backend/internal/storage"
 	"github.com/cubycloud/backend/web"
@@ -62,22 +64,27 @@ func main() {
 	e.Use(echomw.Recover())
 	e.Use(echomw.CORSWithConfig(echomw.CORSConfig{
 		AllowOrigins: []string{"*"},
-		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete},
+		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
 	}))
 
 	// 8. Routes
 	setup.RegisterRoutes(e, db, driver, setupGuard, cfg.DataDirPath, cfg.JWTSecret)
-	
+
 	// Admin routes (JWT auth + Super Admin guard, bypasses setup guard)
 	dbPath := cfg.DataDirPath + "/db/cubycloud.db"
 	jwtAuth := middleware.JWTAuth(cfg.JWTSecret)
 	adminGuard := middleware.SuperAdminGuard(db)
 	admin.RegisterRoutes(e, db, driver, cfg.DataDirPath, dbPath, jwtAuth, adminGuard)
-	
-	// Auth routes (password reset)
-	authService := auth.NewService(db)
-	authHandler := auth.NewHandler(authService)
-	e.POST("/api/v1/auth/reset-password", authHandler.ResetPassword)
+
+	// Auth routes (login, logout, me, reset-password)
+	auth.RegisterRoutes(e, db, cfg.JWTSecret, jwtAuth)
+
+	// My Storage VFS endpoints (authenticated per-user file operations & trash).
+	mystorage.RegisterRoutes(e, db, driver, jwtAuth)
+
+	// Background cron worker for 30-day trash auto-purge
+	trashPurgeJob := jobs.StartTrashPurgeJob(context.Background(), db, driver, 1*time.Hour, 30*24*time.Hour)
+	defer trashPurgeJob.Stop()
 
 	// 9. Serve embedded frontend
 	distFS, err := fs.Sub(web.Dist, "dist")

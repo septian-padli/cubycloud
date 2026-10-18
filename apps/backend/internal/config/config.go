@@ -21,7 +21,7 @@ type Config struct {
 func Load() *Config {
 	loadDotEnv()
 
-	port := getEnv("PORT", "8080")
+	port := getEnv("PORT", "8383")
 
 	// Determine DataDirPath with sensible defaults:
 	// 1. DATA_DIR_PATH env if specified

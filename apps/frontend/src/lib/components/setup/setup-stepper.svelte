@@ -5,9 +5,11 @@
 	import { Check } from '@lucide/svelte';
 
 	let {
-		currentStep
+		currentStep,
+		onSelectStep
 	}: {
 		currentStep: SetupStepId;
+		onSelectStep: (step: SetupStepId) => void;
 	} = $props();
 
 	const progressValue = $derived(((currentStep - 1) / SETUP_STEPS.length) * 100);
@@ -25,10 +27,15 @@
 			{#each SETUP_STEPS as step (step.id)}
 				{@const done = step.id < currentStep}
 				{@const active = step.id === currentStep}
-				<div
+				<button
+					type="button"
+					disabled={!done}
+					aria-current={active ? 'step' : undefined}
+					onclick={() => onSelectStep(step.id)}
 					class={cn(
-						'flex items-start gap-3 rounded-lg px-3 py-2.5 transition-colors',
+						'flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors disabled:cursor-default',
 						active && 'bg-primary/10',
+						done && 'cursor-pointer hover:bg-primary/5',
 						!active && !done && 'opacity-70'
 					)}
 				>
@@ -52,7 +59,7 @@
 						</p>
 						<p class="mt-0.5 text-xs text-muted">{step.description}</p>
 					</div>
-				</div>
+				</button>
 			{/each}
 		</nav>
 	</div>

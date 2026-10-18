@@ -2,7 +2,7 @@ package setup
 
 import (
 	"context"
-	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"net/http"
@@ -17,29 +17,37 @@ import (
 	"github.com/cubycloud/backend/internal/middleware"
 	"github.com/cubycloud/backend/internal/storage"
 	"github.com/labstack/echo/v4"
-	"golang.org/x/crypto/bcrypt"
 )
 
-const testValidRecoveryKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+const testValidRecoveryKey = "ABCDE-FGHIJ-KLMNP-QRSTU-VWXYZ-23456"
 
-func TestRecoveryKeyGeneration(t *testing.T) {
-	recoveryKeyBytes := make([]byte, 32)
-	if _, err := rand.Read(recoveryKeyBytes); err != nil {
-		t.Fatalf("generate recovery key: %v", err)
+func TestRecoveryKeySHA256Hash(t *testing.T) {
+	key, ok := normalizeRecoveryKey(strings.ToLower(testValidRecoveryKey))
+	if !ok {
+		t.Fatal("expected grouped lowercase key to normalize")
 	}
-	recoveryKey := hex.EncodeToString(recoveryKeyBytes)
-
-	if len(recoveryKey) != 64 {
-		t.Errorf("recovery key length = %d, want 64", len(recoveryKey))
+	want := sha256.Sum256([]byte(strings.ReplaceAll(testValidRecoveryKey, "-", "")))
+	got := hashRecoveryKey(key)
+	if got != hex.EncodeToString(want[:]) {
+		t.Fatalf("hash = %q, want SHA-256 %q", got, hex.EncodeToString(want[:]))
 	}
-
-	hash, err := bcrypt.GenerateFromPassword([]byte(recoveryKey), bcryptCost)
-	if err != nil {
-		t.Fatalf("bcrypt hash: %v", err)
+	if len(got) != 64 {
+		t.Fatalf("SHA-256 hex length = %d, want 64", len(got))
 	}
+}
 
-	if err := bcrypt.CompareHashAndPassword(hash, []byte(recoveryKey)); err != nil {
-		t.Errorf("bcrypt verify failed: %v", err)
+func TestNormalizeRecoveryKey(t *testing.T) {
+	for _, input := range []string{
+		testValidRecoveryKey,
+		strings.ToLower(strings.ReplaceAll(testValidRecoveryKey, "-", "")),
+		" ABCDE FGHIJ-KLMNP QRSTU-VWXYZ 23456 ",
+	} {
+		if got, ok := normalizeRecoveryKey(input); !ok || got != strings.ReplaceAll(testValidRecoveryKey, "-", "") {
+			t.Errorf("normalizeRecoveryKey(%q) = %q, %v", input, got, ok)
+		}
+	}
+	if _, ok := normalizeRecoveryKey("ABCDE-FGHIJ-KLMNP-QRSTU-WXYZ"); ok {
+		t.Fatal("expected incorrectly grouped short key to be rejected")
 	}
 }
 
@@ -125,7 +133,7 @@ func TestCompleteSetup_Success_LocalOnly(t *testing.T) {
 			{Path: nodePath, CapacityBytes: 500000000000, Enabled: true},
 		},
 		PlacementStrategy: "FILL_FIRST",
-		Cloud: CloudConfig{Enabled: false},
+		Cloud:             CloudConfig{Enabled: false},
 	}
 
 	ctx := context.Background()
@@ -583,7 +591,7 @@ func TestCompleteSetup_ConcurrentRequests(t *testing.T) {
 	}
 }
 
-func TestCompleteSetup_RecoveryKeyBcrypt(t *testing.T) {
+func TestCompleteSetup_RecoveryKeySHA256(t *testing.T) {
 	db := setupTestDB(t)
 	defer cleanupTestDB(t, db)
 
@@ -616,8 +624,9 @@ func TestCompleteSetup_RecoveryKeyBcrypt(t *testing.T) {
 		t.Fatalf("CompleteSetup: %v", err)
 	}
 
-	if len(resp.RecoveryKey) != 64 {
-		t.Errorf("RecoveryKey length = %d, want 64", len(resp.RecoveryKey))
+	normalizedKey, ok := normalizeRecoveryKey(resp.RecoveryKey)
+	if !ok || len(resp.RecoveryKey) != 35 {
+		t.Fatalf("RecoveryKey = %q, want six groups of five characters", resp.RecoveryKey)
 	}
 
 	var user database.User
@@ -629,10 +638,8 @@ func TestCompleteSetup_RecoveryKeyBcrypt(t *testing.T) {
 	if user.RecoveryKeyHash == nil {
 		t.Fatal("RecoveryKeyHash is nil")
 	}
-
-	err = bcrypt.CompareHashAndPassword([]byte(*user.RecoveryKeyHash), []byte(resp.RecoveryKey))
-	if err != nil {
-		t.Errorf("bcrypt verify failed: %v", err)
+	if want := hashRecoveryKey(normalizedKey); *user.RecoveryKeyHash != want {
+		t.Errorf("RecoveryKeyHash = %q, want SHA-256 %q", *user.RecoveryKeyHash, want)
 	}
 }
 

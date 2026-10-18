@@ -133,42 +133,51 @@ For changes spanning frontend and backend:
 ## 5. AI Agent Toolchain
 
 The following tools are mandatory for agents working on this repository.
-
 | Tool         | Purpose                                                         | Configuration                                                   |
 | ------------ | --------------------------------------------------------------- | --------------------------------------------------------------- |
-| **Graphify** | Codebase/document knowledge graph and architectural exploration | `.cursor/rules/graphify.mdc`, `.cursor/mcp.json`, `GRAPHIFY.md` |
+| **Codegraph** | Codebase knowledge graph, symbol navigation, and architectural exploration | `.cursor/rules/codegraph.mdc`, `.cursor/mcp.json`, `codegraph init` |
 | **RTK**      | Reduce shell command output and token usage                     | `.cursor/rules/rtk.mdc`, `RTK.md`                               |
 | **Ponytail** | Keep changes small and avoid unnecessary abstraction            | `.cursor/rules/ponytail.mdc`                                    |
 
+## 5.1. Bahasa dan Komunikasi
+
+Semua komunikasi langsung dengan pengguna **harus dalam Bahasa Indonesia**.
+
+- Jawaban, penjelasan, ringkasan, dan dialog interaktif → Bahasa Indonesia.
+- istilah teknis, kode, path file, command, API names → tetap dalam bentuk aslinya (English).
+: ponynail: section 5.1 sudah benar, hanya hapus duplikasi 5.1 table
+
 These tools are workflow requirements, not product architecture.
 
-### Graphify
+### Codegraph
 
-Use Graphify before exploring unfamiliar code or architecture.
+Use Codegraph before exploring unfamiliar code or architecture.
 
 For structural questions, prefer:
 
 ```bash
-graphify query "<question>"
-graphify path "<concept A>" "<concept B>"
-graphify explain "<concept>"
+codegraph orient --root . --budget small
+codegraph explore "<question>"
+codegraph search "<symbol or query>" --json
+codegraph path "<file A>" "<file B>"
+codegraph explain "<file or symbol>"
+codegraph deps <file>          # rdeps for reverse dependencies
+codegraph impact --base <ref> --head <ref>
 ```
 
 Use the result to identify relevant files before performing broad exploration.
 
-After modifying source code:
+After a pull, merge, or large branch switch:
 
 ```bash
-graphify update .
+codegraph sync .
 ```
 
-After modifying product documentation:
+After modifying source code no manual rebuild is required — the `.codegraph/cache/index-v1/` cache invalidates on demand. Use `codegraph doctor` when results look stale.
 
-```bash
-./scripts/graphify-extract.sh
-```
+Do not treat generated Codegraph output as source code or documentation. Do not use Codegraph as a substitute for reading the actual source files when implementation details matter.
 
-Do not treat generated Graphify output as source code or documentation. Do not use Graphify as a substitute for reading the actual source files when implementation details matter.
+> Graphify is **deprecated for this repository**. Do not invoke graphify commands, rebuild graphify graphs, or follow graphify skill instructions here; Codegraph is the only mandatory graph tool.
 
 ### RTK
 
@@ -369,12 +378,12 @@ If a rule only concerns one area, it belongs in that area's `AGENTS.md`.
 For non-trivial work:
 
 1. Identify the affected project and source-of-truth documents.
-2. Query Graphify before broad code exploration.
+2. Query Codegraph before broad code exploration.
 3. Read the relevant project-level `AGENTS.md`.
 4. Read the source-of-truth documentation relevant to the change.
 5. Make the smallest correct implementation.
 6. Run appropriate validation/tests.
-7. Run `graphify update .` after code changes.
+7. Run `codegraph sync .` after code changes if the graph metadata looks stale.
 8. Update the owning documentation when the contract itself changed.
 
 Never use `AGENTS.md` as a substitute for understanding the product or architecture.

@@ -99,14 +99,14 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
 - **Access:** Unauthenticated, first-boot only (`is_setup_completed === false`)
 - **Post-complete redirect:** `/drive/home`
 - **Embedded modals:**
-  - _Emergency Key Backup Modal_ — wajib Copy/Download Hex Key 64-karakter sebelum selesai
+  - _Recovery Key Backup Modal_ — show the current key in six groups of five uppercase alphanumeric characters (`XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`); offer Copy/Download and require acknowledgement before continuing
   - _Device Scan Error Modal_ — jika mount volume/device gagal dipindai
 - **Key components & actions:**
   - **Step 1:** Super Admin form (username, email, password; validasi **minimal 8 karakter**)
   - **Step 2:** Scanner disk lokal (`/app/data/storage/*`) + **node capacity cap**; opsional device Linux
   - **Step 3:** Placement strategy (`FILL_FIRST` / `ROUND_ROBIN` / `MOST_FREE_SPACE`)
   - **Step 4 (optional):** Kredensial Cloudflare R2 / AWS S3 / S3 Compatible (endpoint custom)
-  - **Step 5:** Export Emergency Recovery Key
+  - **Step 5:** Generate and export the Recovery Key (30 characters, six groups of five)
   - **CTA:** `Selesaikan Setup & Masuk ke CubyCloud`
 
 ---
@@ -133,7 +133,9 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
 - **Embedded modals:**
   - _Recovery Success Modal_ — sukses lalu minta login ulang
 - **Key components & actions:**
-  - Input 64-char Hex Recovery Key + password baru
+  - Input current 6×5 Recovery Key + new password
+  - UI accepts the current key format only; legacy 64-character hexadecimal keys are not supported by the UI
+  - On successful reset, show and require saving the replacement key returned as `new_recovery_key`; the supplied key is single-use
   - CTA `Reset Password Super Admin`
 
 ---
@@ -158,17 +160,20 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
 - **URL params:** `?folder=folder_id&preview=file_id`
 - **Access:** Authenticated
 - **Embedded modals / drawers:**
-  - _File Preview Lightbox_ (`?preview=file_id`) — core formats; PDF jika add-on aktif
-  - _Conflict Resolution Modal_ — Replace / Keep Both
-  - _Share Sheet_ — tab Pengguna (cari user lalu tambah Viewer/Editor) + tab Tautan (password, expiration)
+  - _File Preview Lightbox_ (`?preview=file_id`) — existing product behavior
+  - _Name Conflict Dialog_ — upload/duplicate use the next available numeric suffix automatically; rename/move offer that name or cancel, without overwriting or merging folders
+  - _Folder Delete Confirmation_ — confirm that deleting a folder also sends all of its contents to Trash
+  - _Upload Queue Notification_ — floating top-right, below the top navigation; progress is weighted by file size and reaches 100% only after server success; expandable queued/uploading items remain until closed or swiped right, then a regular completion toast appears at bottom-right
+  - _Share Sheet_ — existing product behavior; unchanged by this file-management scope
   - _New Folder Modal_
   - _Quota Exceeded Toast / Modal_ — `USER_QUOTA_EXCEEDED`
 - **Key components & actions:**
   - Category filter chips
   - File explorer list view — Nama, ukuran, tanggal, aksi
   - **Storage Node Badge:** tampil **hanya** jika role = Super Admin
-  - Drag-and-drop — TUS + presigned cloud; cek user quota sebelum upload
-  - Actions: Download, Rename, Move, Zero-Byte Copy, Star/Unstar, **Bagikan** (file & folder), Delete to Trash
+  - Upload file/folder via picker or drag-and-drop — process each file independently, preserve folder hierarchy, show failed items, and check user quota
+  - Download file/folder; Rename; Move; recursive Duplicate (zero-byte references); Delete to Trash recursively
+  - Existing preview, star, and share behavior remains unchanged and is not expanded by this scope
 
 #### `/drive/organization` (Organization Drive)
 

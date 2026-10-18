@@ -15,7 +15,7 @@ func TestConfigLoad_Defaults(t *testing.T) {
 	os.Unsetenv("JWT_SECRET")
 
 	cfg := Load()
-	assert.Equal(t, "8080", cfg.Port)
+	assert.Equal(t, "8383", cfg.Port)
 	assert.NotEmpty(t, cfg.DataDirPath)
 	assert.NotEmpty(t, cfg.JWTSecret)
 	assert.Equal(t, filepath.Join(cfg.DataDirPath, "db", "cubycloud.db"), cfg.DBPath)

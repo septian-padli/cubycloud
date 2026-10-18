@@ -1,7 +1,3 @@
-# graphify — rebuild locally (`graphify extract .` or auto via post-commit hook)
-graphify-out/
-.env.graphify.local
-
 # Environment variables
 .env
 *.env
@@ -32,3 +28,7 @@ apps/frontend/node_modules/
 !.vscode/settings.json
 !.vscode/extensions.json
 
+.codegraph/
+apps/backend/tmp/
+apps/frontend/test-results/
+graphify-out/

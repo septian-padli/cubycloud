@@ -2,12 +2,15 @@ package setup
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/cubycloud/backend/internal/database"
 	"github.com/cubycloud/backend/internal/middleware"
@@ -21,11 +24,11 @@ import (
 const bcryptCost = 10
 
 type Service struct {
-	repo         *Repository
-	db           *bun.DB
-	storage      storage.StorageDriver
-	setupGuard   *middleware.SetupGuard
-	dataDirPath  string
+	repo        *Repository
+	db          *bun.DB
+	storage     storage.StorageDriver
+	setupGuard  *middleware.SetupGuard
+	dataDirPath string
 }
 
 func NewService(db *bun.DB, storage storage.StorageDriver, setupGuard *middleware.SetupGuard, dataDirPath string) *Service {
@@ -40,7 +43,7 @@ func NewService(db *bun.DB, storage storage.StorageDriver, setupGuard *middlewar
 
 func (s *Service) ScanStorageNodes(ctx context.Context) (*ScanResponse, error) {
 	storageRoot := filepath.Join(s.dataDirPath, "storage")
-	
+
 	entries, err := os.ReadDir(storageRoot)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -52,6 +55,7 @@ func (s *Service) ScanStorageNodes(ctx context.Context) (*ScanResponse, error) {
 			return &ScanResponse{
 				Nodes: []StorageNodeScan{{
 					Path:          filepath.Join(s.dataDirPath, "storage", "default"),
+					Kind:          storage.DetectDiskKind(ctx, s.dataDirPath),
 					CapacityBytes: capacity,
 					FreeBytes:     free,
 				}},
@@ -66,15 +70,16 @@ func (s *Service) ScanStorageNodes(ctx context.Context) (*ScanResponse, error) {
 		if !entry.IsDir() {
 			continue
 		}
-		
+
 		nodePath := filepath.Join(storageRoot, entry.Name())
 		capacity, free, err := s.storage.StatLocal(ctx, nodePath)
 		if err != nil {
 			continue // ponytail: skip unreadable nodes
 		}
-		
+
 		nodes = append(nodes, StorageNodeScan{
 			Path:          nodePath,
+			Kind:          storage.DetectDiskKind(ctx, nodePath),
 			CapacityBytes: capacity,
 			FreeBytes:     free,
 		})
@@ -86,6 +91,7 @@ func (s *Service) ScanStorageNodes(ctx context.Context) (*ScanResponse, error) {
 		if err == nil {
 			nodes = append(nodes, StorageNodeScan{
 				Path:          filepath.Join(s.dataDirPath, "storage", "default"),
+				Kind:          storage.DetectDiskKind(ctx, s.dataDirPath),
 				CapacityBytes: capacity,
 				FreeBytes:     free,
 			})
@@ -132,26 +138,17 @@ func (s *Service) CompleteSetup(ctx context.Context, req *CompleteSetupRequest) 
 		return nil, err
 	}
 
-	// Use client-provided recovery key
-	recoveryKey := req.Admin.RecoveryKey
-	if len(recoveryKey) != 64 {
-		return nil, echo.NewHTTPError(400, "recovery key must be 64 hex characters")
-	}
-	// Validate hex
-	if _, err := hex.DecodeString(recoveryKey); err != nil {
-		return nil, echo.NewHTTPError(400, "recovery key must be valid hex string")
+	// Normalize and hash the client-generated recovery key.
+	recoveryKey, ok := normalizeRecoveryKey(req.Admin.RecoveryKey)
+	if !ok {
+		return nil, echo.NewHTTPError(400, "recovery key must contain 30 alphanumeric characters in six groups of five")
 	}
 
-	// Hash password and recovery key
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Admin.Password), bcryptCost)
 	if err != nil {
 		return nil, fmt.Errorf("hash password: %w", err)
 	}
-
-	recoveryKeyHash, err := bcrypt.GenerateFromPassword([]byte(recoveryKey), bcryptCost)
-	if err != nil {
-		return nil, fmt.Errorf("hash recovery key: %w", err)
-	}
+	recoveryKeyHash := hashRecoveryKey(recoveryKey)
 
 	// Transaction
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -162,7 +159,7 @@ func (s *Service) CompleteSetup(ctx context.Context, req *CompleteSetupRequest) 
 
 	// Create user
 	userID := ulid.Make().String()
-	recoveryKeyHashStr := string(recoveryKeyHash)
+	recoveryKeyHashStr := recoveryKeyHash
 	user := &database.User{
 		ID:              userID,
 		Username:        req.Admin.Username,
@@ -236,12 +233,12 @@ func (s *Service) CompleteSetup(ctx context.Context, req *CompleteSetupRequest) 
 
 	// Update settings
 	settings := map[string]string{
-		"is_setup_completed":         "true",
-		"placement_strategy":         req.PlacementStrategy,
-		"jwt_secret_version":         "1",
-		"default_user_quota_gb":      "100",
-		"worker_concurrency_limit":   "2",
-		"audit_log_retention_days":   "90",
+		"is_setup_completed":       "true",
+		"placement_strategy":       req.PlacementStrategy,
+		"jwt_secret_version":       "1",
+		"default_user_quota_gb":    "100",
+		"worker_concurrency_limit": "2",
+		"audit_log_retention_days": "90",
 	}
 	if err := s.repo.UpdateSettingsTx(ctx, tx, settings); err != nil {
 		return nil, fmt.Errorf("update settings: %w", err)
@@ -250,6 +247,8 @@ func (s *Service) CompleteSetup(ctx context.Context, req *CompleteSetupRequest) 
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit tx: %w", err)
 	}
+
+	s.setupGuard.MarkCompleted()
 
 	return &CompleteSetupResponse{
 		UserID:      user.ID,
@@ -330,4 +329,24 @@ func (s *Service) validate(ctx context.Context, req *CompleteSetupRequest) error
 	}
 
 	return nil
+}
+func normalizeRecoveryKey(value string) (string, bool) {
+	var normalized strings.Builder
+	for _, char := range strings.TrimSpace(value) {
+		if char == '-' || unicode.IsSpace(char) {
+			continue
+		}
+		char = unicode.ToUpper(char)
+		if !((char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9')) {
+			return "", false
+		}
+		normalized.WriteRune(char)
+	}
+	key := normalized.String()
+	return key, len(key) == 30
+}
+
+func hashRecoveryKey(key string) string {
+	sum := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(sum[:])
 }

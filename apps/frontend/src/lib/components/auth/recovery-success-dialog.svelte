@@ -1,31 +1,92 @@
 <script lang="ts">
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { KeyRound } from '@lucide/svelte';
+	import { Check, Copy, Download, KeyRound } from '@lucide/svelte';
+	import { toast } from 'svelte-sonner';
 
 	let {
 		open = $bindable(false),
+		recoveryKey,
 		onContinue
 	}: {
 		open?: boolean;
+		recoveryKey: string;
 		onContinue: () => void;
 	} = $props();
+
+	let saved = $state(false);
+
+	function handleOpenChange(nextOpen: boolean) {
+		if (nextOpen || saved) open = nextOpen;
+	}
+
+	async function copyKey() {
+		try {
+			await navigator.clipboard.writeText(recoveryKey);
+			saved = true;
+			toast.success('Recovery key disalin');
+		} catch {
+			toast.error('Tidak dapat menyalin recovery key. Coba unduh kuncinya.');
+		}
+	}
+
+	function downloadKey() {
+		const blob = new Blob([recoveryKey], { type: 'text/plain' });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = `cubycloud-recovery-key-${Date.now()}.txt`;
+		document.body.appendChild(link);
+		link.click();
+		link.remove();
+		URL.revokeObjectURL(url);
+		saved = true;
+	}
 </script>
 
-<Dialog.Root bind:open>
-	<Dialog.Content class="rounded-xl sm:max-w-md" showCloseButton={false}>
+<Dialog.Root bind:open onOpenChange={handleOpenChange}>
+	<Dialog.Content
+		class="rounded-xl sm:max-w-md"
+		showCloseButton={false}
+		onEscapeKeydown={(event) => {
+			if (!saved) event.preventDefault();
+		}}
+		onInteractOutside={(event) => {
+			if (!saved) event.preventDefault();
+		}}
+	>
 		<Dialog.Header>
 			<div class="mb-2 flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
 				<KeyRound class="size-5 stroke-2" />
 			</div>
-			<Dialog.Title class="text-lg font-semibold text-main">Password berhasil direset</Dialog.Title>
+			<Dialog.Title class="text-lg font-semibold text-main">Simpan Recovery Key baru</Dialog.Title>
 			<Dialog.Description class="text-sm text-muted">
-				Password Super Admin sudah diperbarui. Silakan masuk kembali dengan password baru.
+				Kunci lama sudah tidak berlaku. Salin atau unduh kunci baru ini sekarang; kunci ini tidak akan
+				ditampilkan lagi.
 			</Dialog.Description>
 		</Dialog.Header>
 
+		<code class="block break-all rounded-lg border border-subtle bg-app px-3 py-3 text-center font-mono text-sm text-main select-all">
+			{recoveryKey}
+		</code>
+
+		<div class="grid grid-cols-2 gap-3">
+			<Button variant="outline" class="gap-2" onclick={copyKey}>
+				{#if saved}<Check class="size-4" />{:else}<Copy class="size-4" />{/if}
+				Salin
+			</Button>
+			<Button variant="outline" class="gap-2" onclick={downloadKey}>
+				<Download class="size-4" />
+				Unduh
+			</Button>
+		</div>
+
+		{#if saved}
+			<p class="text-sm text-primary" role="status">Kunci sudah disimpan. Anda bisa melanjutkan.</p>
+		{/if}
+
 		<Dialog.Footer>
-			<Button class="w-full" onclick={onContinue}>Ke halaman Masuk</Button>
+			<Button class="w-full" disabled={!saved} onclick={onContinue}>Ke halaman Masuk</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

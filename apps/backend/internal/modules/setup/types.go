@@ -38,6 +38,7 @@ type CompleteSetupResponse struct {
 
 type StorageNodeScan struct {
 	Path          string `json:"path"`
+	Kind          string `json:"kind"`
 	CapacityBytes int64  `json:"capacity_bytes"`
 	FreeBytes     int64  `json:"free_bytes"`
 }

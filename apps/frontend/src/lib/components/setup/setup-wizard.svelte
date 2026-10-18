@@ -49,33 +49,40 @@
 	let recoveryKey = $state('');
 	let recoveryDownloaded = $state(false);
 
-	const activeNodeCount = $derived(nodes.filter((n) => n.enabled).length);
+	const activeNodeCount = $derived(
+		nodes.filter((n) => n.enabled).length + (cloud.enabled ? 1 : 0)
+	);
 
-	// Validation
+	// Per-step validation — each rule surfaces in its own tab, never only at submit.
+	const adminValid = $derived(
+		admin.username.trim() !== '' &&
+			admin.email.trim() !== '' &&
+			admin.password.length >= 8 &&
+			admin.password === admin.confirmPassword
+	);
+	const cloudValid = $derived(
+		!cloud.enabled ||
+			(cloud.endpoint.trim() !== '' &&
+				cloud.bucket.trim() !== '' &&
+				cloud.accessKey.trim() !== '' &&
+				cloud.secretKey.trim() !== '')
+	);
+
 	const canNext = $derived.by(() => {
 		switch (currentStep) {
 			case 1:
-				return (
-					admin.username.trim() !== '' &&
-					admin.email.trim() !== '' &&
-					admin.password.length >= 8 &&
-					admin.password === admin.confirmPassword
-				);
+				return adminValid;
 			case 2:
-				return activeNodeCount > 0;
+				// Local storage is optional; "at least one node" is enforced on step 3
+				return true;
 			case 3:
-				// Cloud is optional
-				if (!cloud.enabled) return true;
-				return (
-					cloud.endpoint.trim() !== '' &&
-					cloud.bucket.trim() !== '' &&
-					cloud.accessKey.trim() !== '' &&
-					cloud.secretKey.trim() !== ''
-				);
+				// Cloud is optional, but at least one storage node (local or cloud) is required
+				return cloudValid && (cloud.enabled || activeNodeCount > 0);
 			case 4:
 				return strategy !== null;
 			case 5:
-				return recoveryDownloaded; // Must download before submit
+				// Final gate re-checks every tab so no validation fires only at submit
+				return recoveryDownloaded && adminValid && cloudValid && strategy !== null;
 			default:
 				return false;
 		}
@@ -86,6 +93,10 @@
 			currentStep = (currentStep - 1) as SetupStepId;
 		}
 	}
+	function goToPreviousStep(step: SetupStepId) {
+		if (step < currentStep) currentStep = step;
+	}
+
 
 	async function goNext() {
 		if (!canNext) return;
@@ -115,7 +126,7 @@
 					.filter((n) => n.enabled)
 					.map((n) => ({
 						path: n.path,
-						capacity_bytes: n.totalGb * 1e9,
+					capacity_bytes: n.capacityCapGb * 1e9,
 						enabled: true
 					})),
 				placement_strategy: strategy
@@ -148,11 +159,13 @@
 	}
 
 	function generateRecoveryKey() {
-		// Generate 32 random bytes → 64 hex chars (same as backend)
-		const array = new Uint8Array(32);
-		crypto.getRandomValues(array);
-		recoveryKey = Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
-		console.log('[Setup] Recovery key generated:', recoveryKey.length, 'chars');
+		const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+		const random = crypto.getRandomValues(new Uint8Array(30));
+		const characters = Array.from(random, (value) => alphabet[value & 31]);
+		recoveryKey = characters.reduce(
+			(key, character, index) => key + (index > 0 && index % 5 === 0 ? '-' : '') + character,
+			''
+		);
 	}
 
 	function skipCloud() {
@@ -284,7 +297,7 @@
 				id: `node-${i}`,
 				name: n.path.split('/').pop() || n.path,
 				path: n.path,
-				kind: 'SSD' as const,
+				kind: (n.kind === 'SSD' || n.kind === 'HDD' ? n.kind : 'HDD') as 'SSD' | 'HDD',
 				totalGb: Math.round(n.capacity_bytes / 1e9),
 				freeGb: Math.round(n.free_bytes / 1e9),
 				enabled: true,
@@ -311,7 +324,7 @@
 </script>
 
 <div class="flex flex-col gap-6 md:flex-row md:items-start">
-	<SetupStepper {currentStep} />
+	<SetupStepper {currentStep} onSelectStep={goToPreviousStep} />
 
 	<div class="min-w-0 flex-1 space-y-4">
 		<div>
@@ -327,11 +340,21 @@
 		{:else if currentStep === 2}
 			<StepStorage bind:nodes bind:devices loading={loadingNodes} />
 		{:else if currentStep === 3}
-			<StepCloud bind:cloud />
+			<StepCloud bind:cloud noLocalNodes={nodes.filter((n) => n.enabled).length === 0} />
 		{:else if currentStep === 4}
 			<StepStrategy bind:strategy />
 		{:else}
 			<StepRecovery bind:recoveryKey bind:downloaded={recoveryDownloaded} />
+			{#if !adminValid || !cloudValid}
+				<Alert.Root>
+					<Alert.Title>Data belum lengkap</Alert.Title>
+					<Alert.Description>
+						{!adminValid
+							? 'Lengkapi dulu data akun (username, email, password) di Langkah 1.'
+							: 'Lengkapi dulu kredensial cloud di Langkah 3.'}
+					</Alert.Description>
+				</Alert.Root>
+			{/if}
 		{/if}
 
 		<div class="rounded-xl border border-subtle bg-surface px-4 py-4 md:px-5">

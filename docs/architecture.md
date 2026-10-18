@@ -267,12 +267,14 @@ Mencegah serangan _Brute-force_ pada endpoint `/login` dan `/s/:token`.
 - Setelah login sukses, JWT disimpan di **HTTP-Only Cookie** dengan `SameSite=Lax` dan atribut `Secure` saat HTTPS.
 - Middleware Auth memvalidasi cookie pada request API terlindungi.
 
-### 3. Session Invalidation (JWT Versioning)
+### 3. Emergency Recovery Key
 
-Jika sistem diretas atau _Super Admin_ lupa kata sandi dan menggunakan _Emergency Recovery Key 64-char_:
+If the Super Admin uses the Emergency Recovery Key to reset a forgotten password:
 
-- Setelah _recovery_ sukses, nilai `jwt_secret_version` di tabel SQLite `settings` bertambah 1 (+1).
-- _Middleware Auth_ akan langsung menolak token JWT lama (karena versinya tidak cocok), memaksa **logout instan** di seluruh sesi/perangkat di dunia.
+- The current key is generated client-side using a cryptographically secure random number generator: 30 uppercase alphanumeric characters in six groups of five (`XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`).
+- The backend canonicalizes input by normalizing case and ignoring hyphens and whitespace. Setup stores SHA-256 of the canonical 30-character key, not bcrypt.
+- Reset consumes the key atomically, updates the password (which remains bcrypt), and returns a newly generated 6×5 key as `new_recovery_key`. The previous key cannot be reused.
+- Migration-only legacy fallback: a 64-character hexadecimal key is accepted only if that account still has a bcrypt recovery hash. After a successful legacy reset, the account is rotated to a 6×5 key stored as SHA-256. The legacy format is not the current format.
 
 ### 4. Password Hashing (bcrypt)
 

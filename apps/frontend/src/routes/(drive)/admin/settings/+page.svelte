@@ -8,10 +8,9 @@
 	import EditStorageNodeDialog from '$lib/components/admin/edit-storage-node-dialog.svelte';
 	import StorageNodesGrid from '$lib/components/admin/storage-nodes-grid.svelte';
 	import AdminSystemSettings from '$lib/components/admin/admin-system-settings.svelte';
-	import DetachNodeDialog from '$lib/components/admin/detach-node-dialog.svelte';
-	import RescanNodesDialog from '$lib/components/admin/rescan-nodes-dialog.svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { RefreshCw } from '@lucide/svelte';
+	import { Plus } from '@lucide/svelte';
+	import { toast } from 'svelte-sonner';
 
 	let nodes = $state<StorageNode[]>([]);
 	let settings = $state<SystemSettings>({
@@ -21,10 +20,6 @@
 	});
 	let loading = $state(true);
 
-	let detachOpen = $state(false);
-	let detachNode = $state<StorageNode | null>(null);
-
-	let rescanOpen = $state(false);
 	let showAddNodeDialog = $state(false);
 	let showEditNodeDialog = $state(false);
 	let nodeToEdit = $state<StorageNode | null>(null);
@@ -84,39 +79,6 @@
 		loadData();
 	}
 
-	function openDetach(node: StorageNode) {
-		detachNode = node;
-		detachOpen = true;
-	}
-
-	async function applyDetach(nodeId: string) {
-		const resp = await adminAPI.disableNode(nodeId);
-		if (resp.error) {
-			toast.error('Gagal menonaktifkan node', { description: resp.error });
-		} else {
-			toast.success('Node berhasil dinonaktifkan');
-			await loadData();
-		}
-	}
-
-	async function applyRescan() {
-		const resp = await adminAPI.rescanNodes();
-		if (resp.error) {
-			toast.error('Gagal memindai ulang nodes', { description: resp.error });
-		} else if (resp.data) {
-			toast.success('Node berhasil dipindai ulang');
-			nodes = resp.data.nodes.map((n) => ({
-				id: n.id,
-				name: n.name,
-				path: n.path,
-				kind: (n.kind === 'SSD' || n.kind === 'HDD' ? n.kind : 'HDD') as 'SSD' | 'HDD',
-				totalGb: n.total_gb,
-				freeGb: n.free_gb,
-				capacityCapGb: n.capacity_cap_gb,
-				enabled: n.enabled
-			}));
-		}
-	}
 
 	async function saveSettings() {
 		const resp = await adminAPI.updateSettings({
@@ -174,18 +136,13 @@
 					type="button"
 					variant="secondary"
 					class="shrink-0 gap-1.5"
-					onclick={() => (rescanOpen = true)}
+					onclick={handleAddNode}
 				>
-					<RefreshCw class="size-3.5 stroke-2" />
-					Pindai Ulang Node
+					<Plus class="size-3.5 stroke-2" />
+					Tambah Node
 				</Button>
 			</div>
-			<StorageNodesGrid 
-				{nodes}
-				onAdd={handleAddNode}
-				onEdit={handleEditNode}
-				onDetach={openDetach} 
-			/>
+			<StorageNodesGrid {nodes} onEdit={handleEditNode} />
 		</section>
 
 		<section>
@@ -194,8 +151,6 @@
 	{/if}
 </div>
 
-<DetachNodeDialog bind:open={detachOpen} node={detachNode} onDetach={applyDetach} />
-<RescanNodesDialog bind:open={rescanOpen} onRescanned={applyRescan} />
 
 <AddStorageNodeDialog bind:open={showAddNodeDialog} onAdded={handleNodeUpdated} />
 <EditStorageNodeDialog bind:open={showEditNodeDialog} node={nodeToEdit} onUpdated={handleNodeUpdated} />

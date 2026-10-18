@@ -34,11 +34,11 @@ RUN apk add --no-cache ca-certificates tzdata \
 
 COPY --from=backend-builder /cubycloud /app/cubycloud
 
-ENV PORT=8080
+ENV PORT=8383
 ENV DATA_DIR_PATH=/app/data
 ENV ENV=production
 
 VOLUME ["/app/data"]
-EXPOSE 8080
+EXPOSE 8383
 
 ENTRYPOINT ["/app/cubycloud"]

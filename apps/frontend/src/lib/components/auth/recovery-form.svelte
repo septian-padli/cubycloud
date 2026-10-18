@@ -7,19 +7,21 @@
 	import { Label } from '$lib/components/ui/label/index.js';
 	import PasswordInput from '$lib/components/password-input.svelte';
 	import RecoverySuccessDialog from './recovery-success-dialog.svelte';
+	import { authAPI } from '$lib/api/auth.js';
+	import { toast } from 'svelte-sonner';
 	import { KeyRound } from '@lucide/svelte';
 
 	let recoveryKey = $state('');
+	let newRecoveryKey = $state('');
 	let password = $state('');
 	let confirmPassword = $state('');
 	let submitted = $state(false);
+	let loading = $state(false);
+	let errorMessage = $state('');
 	let successOpen = $state(false);
 
-	const HEX_64 = /^[0-9A-Fa-f]{64}$/;
-
-	const keyInvalid = $derived(
-		submitted && (recoveryKey.length !== 64 || !HEX_64.test(recoveryKey))
-	);
+	const KEY_FORMAT = /^[A-Z0-9]{5}(?:-[A-Z0-9]{5}){5}$/;
+	const keyInvalid = $derived(submitted && !KEY_FORMAT.test(recoveryKey));
 	const passwordTooShort = $derived(
 		(submitted || password.length > 0) && password.length > 0 && password.length < 8
 	);
@@ -32,25 +34,44 @@
 	const confirmEmpty = $derived(submitted && confirmPassword.length === 0);
 
 	const canSubmit = $derived(
-		HEX_64.test(recoveryKey) &&
+		KEY_FORMAT.test(recoveryKey) &&
 			password.length >= 8 &&
 			password === confirmPassword
 	);
 
 	function onKeyInput(e: Event) {
 		const target = e.currentTarget as HTMLInputElement;
-		const filtered = target.value.replace(/[^0-9A-Fa-f]/g, '').slice(0, 64).toUpperCase();
-		recoveryKey = filtered;
-		if (target.value !== filtered) {
-			target.value = filtered;
-		}
+		const raw = target.value.replace(/[-\s]/g, '').replace(/[^A-Z0-9]/gi, '').slice(0, 30).toUpperCase();
+		recoveryKey = raw.match(/.{1,5}/g)?.join('-') ?? '';
+		if (target.value !== recoveryKey) target.value = recoveryKey;
 	}
 
-	function onSubmit(e: Event) {
+	async function onSubmit(e: Event) {
 		e.preventDefault();
 		submitted = true;
-		if (!canSubmit) return;
-		successOpen = true;
+		errorMessage = '';
+		if (!canSubmit || loading) return;
+
+		loading = true;
+		try {
+			const res = await authAPI.resetPassword({
+				username: 'admin',
+				recovery_key: recoveryKey,
+				new_password: password
+			});
+
+			if (res.error || !res.data) {
+				errorMessage = res.error ?? 'Respons pemulihan tidak valid';
+				toast.error('Gagal memulihkan akses', { description: errorMessage });
+				return;
+			}
+
+			newRecoveryKey = res.data.new_recovery_key;
+			toast.success('Password berhasil direset');
+			successOpen = true;
+		} finally {
+			loading = false;
+		}
 	}
 
 	function onContinue() {
@@ -63,16 +84,15 @@
 	<Card.Header>
 		<Card.Title class="text-lg font-semibold text-main">Pulihkan Akses Admin</Card.Title>
 		<Card.Description class="text-sm text-muted">
-			Reset password Super Admin dengan Emergency Recovery Key 64 karakter.
+			Reset password Super Admin dengan Emergency Recovery Key 6 × 5 karakter.
 		</Card.Description>
 	</Card.Header>
 	<Card.Content class="space-y-4">
-		<Alert.Root variant="destructive" class="border-danger/30">
+		<Alert.Root variant="destructive">
 			<KeyRound class="size-4 stroke-2" />
 			<Alert.Title>Tanpa email recovery</Alert.Title>
 			<Alert.Description>
-				CubyCloud v1.0 tidak mengirim email pemulihan. Hanya kunci hex dari setup yang dapat
-				memulihkan akses Super Admin.
+			CubyCloud tidak mengirim email pemulihan. Gunakan Emergency Recovery Key terbaru yang disimpan saat setup.
 			</Alert.Description>
 		</Alert.Root>
 
@@ -84,15 +104,15 @@
 					class="font-mono text-xs"
 					autocomplete="off"
 					spellcheck={false}
-					maxlength={64}
-					placeholder="64 karakter hexadecimal"
+					maxlength={35}
+					placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX"
 					value={recoveryKey}
 					aria-invalid={keyInvalid}
 					oninput={onKeyInput}
 				/>
-				<p class="text-xs text-muted">{recoveryKey.length}/64 karakter</p>
+				<p class="text-xs text-muted">{recoveryKey.replaceAll('-', '').length}/30 karakter</p>
 				{#if keyInvalid}
-					<p class="text-xs text-danger">Kunci harus tepat 64 karakter hexadecimal.</p>
+					<p class="text-xs text-danger">Masukkan kunci 6 kelompok, masing-masing 5 karakter alfanumerik.</p>
 				{/if}
 			</div>
 
@@ -126,7 +146,13 @@
 				{/if}
 			</div>
 
-			<Button type="submit" class="w-full">Reset Password Super Admin</Button>
+			{#if errorMessage}
+				<p class="text-xs text-danger">{errorMessage}</p>
+			{/if}
+
+			<Button type="submit" class="w-full" disabled={loading}>
+				{loading ? 'Memproses reset...' : 'Reset Password Super Admin'}
+			</Button>
 		</form>
 
 		<p class="text-center text-sm text-muted">
@@ -136,4 +162,4 @@
 	</Card.Content>
 </Card.Root>
 
-<RecoverySuccessDialog bind:open={successOpen} {onContinue} />
+<RecoverySuccessDialog bind:open={successOpen} recoveryKey={newRecoveryKey} {onContinue} />

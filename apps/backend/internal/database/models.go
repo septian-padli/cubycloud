@@ -42,3 +42,17 @@ type Setting struct {
 	Key   string `bun:"key,pk"`
 	Value string `bun:"value,notnull"`
 }
+
+type MyStorageItem struct {
+	bun.BaseModel `bun:"table:my_storage_items,alias:msi"`
+
+	ID         string     `bun:"id,pk"`
+	OwnerID    string     `bun:"owner_id,notnull"`
+	Name       string     `bun:"name,notnull"`
+	Kind       string     `bun:"kind,notnull"`
+	SizeBytes  int64      `bun:"size_bytes,notnull,default:0"`
+	ParentID   *string    `bun:"parent_id"`
+	DiskKey    *string    `bun:"disk_key"`
+	ModifiedAt time.Time  `bun:"modified_at,notnull"`
+	DeletedAt  *time.Time `bun:"deleted_at"`
+}

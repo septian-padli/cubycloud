@@ -58,7 +58,7 @@ export interface SetupStepMeta {
 export const SETUP_STEPS: SetupStepMeta[] = [
 	{ id: 1, title: 'Akun Super Admin', description: 'Buat akun administrator pertama' },
 	{ id: 2, title: 'Penyimpanan Lokal', description: 'Pilih node penyimpanan' },
-	{ id: 3, title: 'Cloud (Opsional)', description: 'Hubungkan R2, S3, atau S3 Compatible' },
+	{ id: 3, title: 'Cloud', description: 'Hubungkan R2, S3, atau S3 Compatible' },
 	{ id: 4, title: 'Strategi Penempatan', description: 'Atur alokasi berkas' },
 	{ id: 5, title: 'Konfirmasi', description: 'Tinjau konfigurasi dan selesaikan setup' }
 ];
