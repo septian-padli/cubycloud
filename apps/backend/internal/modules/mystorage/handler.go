@@ -18,7 +18,7 @@ type Handler struct {
 	service *Service
 }
 
-func RegisterRoutes(e *echo.Echo, db *bun.DB, driver storage.StorageDriver, jwtAuth echo.MiddlewareFunc) {
+func RegisterRoutes(e *echo.Echo, db *bun.DB, driver storage.StorageDriver, jwtAuth echo.MiddlewareFunc) *Handler {
 	h := &Handler{service: NewService(db, driver)}
 	g := e.Group("/api/v1/drive/my-storage", jwtAuth)
 	g.GET("", h.list)
@@ -29,12 +29,22 @@ func RegisterRoutes(e *echo.Echo, db *bun.DB, driver storage.StorageDriver, jwtA
 	g.PATCH("/:id", h.update)
 	g.POST("/:id/duplicate", h.duplicate)
 	g.DELETE("/:id", h.delete)
+	g.PATCH("/items/:id/move", h.MoveItem)
+	g.POST("/items/:id/star", h.ToggleStar)
+	g.PUT("/items/:id/star", h.ToggleStar)
+	g.GET("/starred", h.ListStarred)
 
 	trash := e.Group("/api/v1/drive/trash", jwtAuth)
 	trash.GET("", h.listTrash)
 	trash.POST("/:id/restore", h.restoreTrash)
 	trash.DELETE("/:id", h.purgeTrashOne)
 	trash.DELETE("", h.purgeTrashAll)
+
+	return h
+}
+
+func NewHandler(service *Service) *Handler {
+	return &Handler{service: service}
 }
 
 func owner(c echo.Context) string {
@@ -287,4 +297,60 @@ func respond(c echo.Context, err error) error {
 	default:
 		return echo.NewHTTPError(500, "internal server error")
 	}
+}
+
+type MoveItemRequest struct {
+	TargetParentID *string `json:"target_parent_id"`
+}
+
+func (h *Handler) MoveItem(c echo.Context) error {
+	var req MoveItemRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": "invalid request"})
+	}
+	node, suggestion, err := h.service.MoveItem(c.Request().Context(), owner(c), c.Param("id"), req.TargetParentID)
+	if errors.Is(err, ErrNameConflict) {
+		return c.JSON(http.StatusConflict, map[string]string{
+			"error":          "name already in use",
+			"suggested_name": suggestion,
+		})
+	}
+	if errors.Is(err, ErrCircularMove) || errors.Is(err, ErrBadParent) {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
+	if errors.Is(err, ErrNotFound) {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "not_found"})
+	}
+	if err != nil {
+		return respond(c, err)
+	}
+	return c.JSON(http.StatusOK, node)
+}
+
+func (h *Handler) ToggleStar(c echo.Context) error {
+	itemID := c.Param("id")
+	isStarred, err := h.service.ToggleStar(c.Request().Context(), owner(c), itemID)
+	if errors.Is(err, ErrNotFound) {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "not_found"})
+	}
+	if err != nil {
+		return respond(c, err)
+	}
+	return c.JSON(http.StatusOK, map[string]any{
+		"id":         itemID,
+		"is_starred": isStarred,
+	})
+}
+
+func (h *Handler) ListStarred(c echo.Context) error {
+	items, err := h.service.ListStarred(c.Request().Context(), owner(c))
+	if err != nil {
+		return respond(c, err)
+	}
+	if items == nil {
+		items = make([]VFSNode, 0)
+	}
+	return c.JSON(http.StatusOK, map[string]any{
+		"items": items,
+	})
 }

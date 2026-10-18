@@ -26,6 +26,11 @@ var (
 	errInvalidName = errors.New("invalid name")
 	errBadParent   = errors.New("parent is not a folder")
 	errMoveCycle   = errors.New("cannot move folder into itself")
+
+	ErrNotFound     = errNotFound
+	ErrNameConflict = errors.New("name already in use")
+	ErrCircularMove = errors.New("cannot move folder into itself or its descendant")
+	ErrBadParent    = errBadParent
 )
 
 type Item struct {
@@ -35,8 +40,11 @@ type Item struct {
 	SizeBytes  int64     `json:"size_bytes"`
 	ParentID   *string   `json:"parent_id"`
 	ModifiedAt time.Time `json:"modified_at"`
+	IsStarred  bool      `json:"is_starred"`
 	DiskKey    *string   `json:"-"`
 }
+
+type VFSNode = Item
 
 type Folder struct {
 	ID       string  `json:"id"`
@@ -55,10 +63,14 @@ func NewService(db *bun.DB, driver storage.StorageDriver) *Service {
 }
 
 func (s *Service) List(ctx context.Context, owner string, parent *string) ([]Item, []Folder, error) {
-	query := `SELECT id,name,kind,size_bytes,parent_id,modified_at,disk_key FROM my_storage_items WHERE owner_id=? AND deleted_at IS NULL AND `
-	args := []any{owner}
+	query := `SELECT i.id, i.name, i.kind, i.size_bytes, i.parent_id, i.modified_at, i.disk_key,
+		CASE WHEN s.id IS NOT NULL THEN 1 ELSE 0 END AS is_starred
+		FROM my_storage_items i
+		LEFT JOIN vfs_starred s ON s.node_id = i.id AND s.user_id = ?
+		WHERE i.owner_id=? AND i.deleted_at IS NULL AND `
+	args := []any{owner, owner}
 	if parent == nil || *parent == "" {
-		query += `parent_id IS NULL`
+		query += `i.parent_id IS NULL`
 	} else {
 		parentItem, err := s.get(ctx, owner, *parent)
 		if err != nil {
@@ -67,10 +79,10 @@ func (s *Service) List(ctx context.Context, owner string, parent *string) ([]Ite
 		if parentItem.Kind != "folder" {
 			return nil, nil, errNotFound
 		}
-		query += `parent_id=?`
+		query += `i.parent_id=?`
 		args = append(args, *parent)
 	}
-	query += ` ORDER BY kind DESC,name COLLATE NOCASE`
+	query += ` ORDER BY i.kind DESC, i.name COLLATE NOCASE`
 	rows, err := s.db.DB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, nil, err
@@ -79,7 +91,7 @@ func (s *Service) List(ctx context.Context, owner string, parent *string) ([]Ite
 	items := make([]Item, 0)
 	for rows.Next() {
 		var i Item
-		if err = rows.Scan(&i.ID, &i.Name, &i.Kind, &i.SizeBytes, &i.ParentID, &i.ModifiedAt, &i.DiskKey); err != nil {
+		if err = rows.Scan(&i.ID, &i.Name, &i.Kind, &i.SizeBytes, &i.ParentID, &i.ModifiedAt, &i.DiskKey, &i.IsStarred); err != nil {
 			return nil, nil, err
 		}
 		items = append(items, i)
@@ -135,10 +147,15 @@ func (s *Service) get(ctx context.Context, owner, id string) (Item, error) {
 	var i Item
 	err := s.db.DB.QueryRowContext(
 		ctx,
-		`SELECT id,name,kind,size_bytes,parent_id,modified_at,disk_key FROM my_storage_items WHERE id=? AND owner_id=? AND deleted_at IS NULL`,
+		`SELECT i.id, i.name, i.kind, i.size_bytes, i.parent_id, i.modified_at, i.disk_key,
+			CASE WHEN s.id IS NOT NULL THEN 1 ELSE 0 END AS is_starred
+		FROM my_storage_items i
+		LEFT JOIN vfs_starred s ON s.node_id = i.id AND s.user_id = ?
+		WHERE i.id=? AND i.owner_id=? AND i.deleted_at IS NULL`,
+		owner,
 		id,
 		owner,
-	).Scan(&i.ID, &i.Name, &i.Kind, &i.SizeBytes, &i.ParentID, &i.ModifiedAt, &i.DiskKey)
+	).Scan(&i.ID, &i.Name, &i.Kind, &i.SizeBytes, &i.ParentID, &i.ModifiedAt, &i.DiskKey, &i.IsStarred)
 	if errors.Is(err, sql.ErrNoRows) {
 		return i, errNotFound
 	}
@@ -291,28 +308,128 @@ func (r *countingReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func (s *Service) UploadLimit(ctx context.Context, owner string) (int64, error, error) {
-	tx, err := s.db.BeginTx(ctx, nil)
+func (s *Service) localPlacement(ctx context.Context) (string, string, int64, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, COALESCE(path,''), capacity_bytes, enabled FROM storage_nodes WHERE type='LOCAL' ORDER BY created_at ASC, id ASC`)
 	if err != nil {
-		return 0, nil, err
+		return "", "", 0, err
 	}
-	defer tx.Rollback()
-	quotaRemaining, err := s.quotaRemaining(ctx, tx, owner)
+	type localNode struct {
+		id, path string
+		capacity int64
+		enabled  bool
+	}
+	var all []localNode
+	for rows.Next() {
+		var n localNode
+		var enabled int
+		if err := rows.Scan(&n.id, &n.path, &n.capacity, &enabled); err != nil {
+			_ = rows.Close()
+			return "", "", 0, err
+		}
+		n.enabled = enabled != 0
+		all = append(all, n)
+	}
+	err = rows.Err()
+	_ = rows.Close()
+	if err != nil {
+		return "", "", 0, err
+	}
+	legacyID := ""
+	for _, n := range all {
+		if legacyID == "" {
+			legacyID = n.id
+		}
+		if strings.HasSuffix(filepath.ToSlash(n.path), "/storage/default") {
+			legacyID = n.id
+			break
+		}
+	}
+	var candidates []localNode
+	for _, n := range all {
+		if n.enabled {
+			candidates = append(candidates, n)
+		}
+	}
+	if len(candidates) == 0 {
+		return "", "", 0, nil
+	}
+	for i := range candidates {
+		var used int64
+		err = s.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(size_bytes),0) FROM (SELECT disk_key,MAX(size_bytes) size_bytes FROM my_storage_items WHERE kind='file' AND disk_key IS NOT NULL AND (storage_node_id=? OR (storage_node_id IS NULL AND ?=?)) GROUP BY disk_key)`, candidates[i].id, candidates[i].id, legacyID).Scan(&used)
+		if err != nil {
+			return "", "", 0, err
+		}
+		reserve := candidates[i].capacity / 20
+		if candidates[i].capacity%20 != 0 {
+			reserve++
+		}
+		candidates[i].capacity -= used + reserve
+		physicalCapacity, physicalFree, statErr := s.storage.StatLocal(ctx, candidates[i].path)
+		if statErr != nil {
+			return "", "", 0, statErr
+		}
+		if physicalCapacity > 0 {
+			physicalReserve := physicalCapacity / 20
+			if physicalCapacity%20 != 0 {
+				physicalReserve++
+			}
+			physicalFree -= physicalReserve
+			if physicalFree < candidates[i].capacity {
+				candidates[i].capacity = physicalFree
+			}
+		}
+	}
+	var availableNodes []localNode
+	for _, n := range candidates {
+		if n.capacity > 0 {
+			availableNodes = append(availableNodes, n)
+		}
+	}
+	if len(availableNodes) == 0 {
+		return candidates[0].id, candidates[0].path, 0, nil
+	}
+	candidates = availableNodes
+	selected := 0
+	var strategy string
+	_ = s.db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key='placement_strategy'`).Scan(&strategy)
+	switch strategy {
+	case "MOST_FREE_SPACE":
+		for i := range candidates {
+			if candidates[i].capacity > candidates[selected].capacity {
+				selected = i
+			}
+		}
+	case "ROUND_ROBIN":
+		selected = int(time.Now().UnixNano() % int64(len(candidates)))
+	default:
+		for i := range candidates {
+			if candidates[i].capacity > 0 {
+				selected = i
+				break
+			}
+		}
+	}
+	if candidates[selected].capacity < 0 {
+		candidates[selected].capacity = 0
+	}
+	return candidates[selected].id, candidates[selected].path, candidates[selected].capacity, nil
+}
+
+func (s *Service) UploadLimit(ctx context.Context, owner string) (int64, error, error) {
+	quotaRemaining, err := s.quotaRemaining(ctx, s.db.DB, owner)
 	if err != nil {
 		return 0, nil, err
 	}
 	if quotaRemaining == 0 {
 		return 0, nil, errQuota
 	}
-	capacity, free, err := s.storage.StatLocal(ctx, "")
+	nodeID, _, safeFree, err := s.localPlacement(ctx)
 	if err != nil {
 		return 0, nil, err
 	}
-	reserve := capacity / 20
-	if capacity%20 != 0 {
-		reserve++
+	if nodeID == "" {
+		return 0, nil, errStorageFull
 	}
-	safeFree := free - reserve
 	if safeFree <= 0 {
 		return 0, nil, errStorageFull
 	}
@@ -353,22 +470,51 @@ func (s *Service) Upload(ctx context.Context, owner, name string, parent *string
 	}
 
 	id := ulid.Make().String()
+	nodeID, nodePath, available, err := s.localPlacement(ctx)
+	if err != nil {
+		return Item{}, err
+	}
+	var storedNodeID any
+	if nodeID != "" {
+		storedNodeID = nodeID
+		if maxBytes > available {
+			maxBytes = available
+			limitErr = errStorageFull
+		}
+	}
 	readLimit := maxBytes
 	if readLimit < int64(^uint64(0)>>1) {
 		readLimit++
 	}
 	counter := &countingReader{Reader: io.LimitReader(r, readLimit)}
-	if err = s.storage.WriteLocal(ctx, "", id, counter); err != nil {
-		_ = s.storage.DeleteLocal(ctx, "", id)
+	if err = s.storage.WriteLocal(ctx, nodePath, id, counter); err != nil {
+		_ = s.storage.DeleteLocal(ctx, nodePath, id)
 		return Item{}, err
 	}
 	cleanup := func() {
-		_ = s.storage.DeleteLocal(ctx, "", id)
+		_ = s.storage.DeleteLocal(ctx, nodePath, id)
 	}
 	size := counter.n
 	if size > maxBytes {
 		cleanup()
 		return Item{}, limitErr
+	}
+	if nodeID != "" {
+		physicalCapacity, physicalFree, statErr := s.storage.StatLocal(ctx, nodePath)
+		if statErr != nil {
+			cleanup()
+			return Item{}, statErr
+		}
+		if physicalCapacity > 0 {
+			reserve := physicalCapacity / 20
+			if physicalCapacity%20 != 0 {
+				reserve++
+			}
+			if physicalFree < reserve {
+				cleanup()
+				return Item{}, errStorageFull
+			}
+		}
 	}
 
 	tx, err = s.db.BeginTx(ctx, nil)
@@ -406,17 +552,41 @@ func (s *Service) Upload(ctx context.Context, owner, name string, parent *string
 		cleanup()
 		return Item{}, err
 	}
-
+	if nodeID != "" {
+		var capacity, used int64
+		if err = tx.QueryRowContext(ctx, `SELECT capacity_bytes FROM storage_nodes WHERE id=? AND type='LOCAL' AND enabled=1`, nodeID).Scan(&capacity); err != nil {
+			cleanup()
+			return Item{}, errStorageFull
+		}
+		legacyID, legacyErr := legacyLocalStorageNodeID(ctx, tx)
+		if legacyErr != nil {
+			cleanup()
+			return Item{}, legacyErr
+		}
+		if err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(size_bytes),0) FROM (SELECT disk_key,MAX(size_bytes) size_bytes FROM my_storage_items WHERE kind='file' AND disk_key IS NOT NULL AND (storage_node_id=? OR (storage_node_id IS NULL AND ?=?)) GROUP BY disk_key)`, nodeID, nodeID, legacyID).Scan(&used); err != nil {
+			cleanup()
+			return Item{}, err
+		}
+		reserve := capacity / 20
+		if capacity%20 != 0 {
+			reserve++
+		}
+		if capacity-used-reserve < size {
+			cleanup()
+			return Item{}, errStorageFull
+		}
+	}
 	now := time.Now().UTC()
 	_, err = tx.ExecContext(
 		ctx,
-		`INSERT INTO my_storage_items(id,owner_id,name,kind,size_bytes,parent_id,disk_key,modified_at) VALUES(?,?,?,'file',?,?,?,?)`,
+		`INSERT INTO my_storage_items(id,owner_id,name,kind,size_bytes,parent_id,disk_key,storage_node_id,modified_at) VALUES(?,?,?,'file',?,?,?,?,?)`,
 		id,
 		owner,
 		candidate,
 		size,
 		parent,
 		id,
+		storedNodeID,
 		now,
 	)
 	if err != nil {
@@ -432,6 +602,15 @@ func (s *Service) Upload(ctx context.Context, owner, name string, parent *string
 
 type quotaQuery interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func legacyLocalStorageNodeID(ctx context.Context, q quotaQuery) (string, error) {
+	var id string
+	err := q.QueryRowContext(ctx, `SELECT id FROM storage_nodes WHERE type='LOCAL' ORDER BY CASE WHEN path LIKE '%/storage/default' THEN 0 ELSE 1 END, created_at ASC, id ASC LIMIT 1`).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return id, err
 }
 
 func (s *Service) quotaRemaining(ctx context.Context, q quotaQuery, owner string) (int64, error) {
@@ -577,14 +756,33 @@ func (s *Service) getTx(ctx context.Context, tx quotaQuery, owner, id string) (I
 	var i Item
 	err := tx.QueryRowContext(
 		ctx,
-		`SELECT id,name,kind,size_bytes,parent_id,modified_at,disk_key FROM my_storage_items WHERE id=? AND owner_id=? AND deleted_at IS NULL`,
+		`SELECT i.id, i.name, i.kind, i.size_bytes, i.parent_id, i.modified_at, i.disk_key,
+			CASE WHEN s.id IS NOT NULL THEN 1 ELSE 0 END AS is_starred
+		FROM my_storage_items i
+		LEFT JOIN vfs_starred s ON s.node_id = i.id AND s.user_id = ?
+		WHERE i.id=? AND i.owner_id=? AND i.deleted_at IS NULL`,
+		owner,
 		id,
 		owner,
-	).Scan(&i.ID, &i.Name, &i.Kind, &i.SizeBytes, &i.ParentID, &i.ModifiedAt, &i.DiskKey)
+	).Scan(&i.ID, &i.Name, &i.Kind, &i.SizeBytes, &i.ParentID, &i.ModifiedAt, &i.DiskKey, &i.IsStarred)
 	if errors.Is(err, sql.ErrNoRows) {
 		return i, errNotFound
 	}
 	return i, err
+}
+func (s *Service) localPathForKey(ctx context.Context, key string) (string, error) {
+	var nodePath *string
+	err := s.db.QueryRowContext(ctx, `SELECT sn.path FROM my_storage_items i LEFT JOIN storage_nodes sn ON sn.id=i.storage_node_id WHERE i.disk_key=? ORDER BY i.storage_node_id IS NULL LIMIT 1`, key).Scan(&nodePath)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if nodePath == nil {
+		return "", nil
+	}
+	return *nodePath, nil
 }
 
 func (s *Service) Delete(ctx context.Context, owner, id string) error {
@@ -655,7 +853,7 @@ func (s *Service) Duplicate(ctx context.Context, owner, id string) (Item, error)
 		}
 		_, err = tx.ExecContext(
 			ctx,
-			`INSERT INTO my_storage_items(id,owner_id,name,kind,size_bytes,parent_id,disk_key,modified_at) VALUES(?,?,?,?,?,?,?,?)`,
+			`INSERT INTO my_storage_items(id,owner_id,name,kind,size_bytes,parent_id,disk_key,storage_node_id,modified_at) VALUES(?,?,?,?,?,?,?,(SELECT storage_node_id FROM my_storage_items WHERE id=?),?)`,
 			ids[item.ID],
 			owner,
 			newName,
@@ -663,6 +861,7 @@ func (s *Service) Duplicate(ctx context.Context, owner, id string) (Item, error)
 			item.SizeBytes,
 			parent,
 			disk,
+			item.ID,
 			time.Now().UTC(),
 		)
 		if err != nil {
@@ -711,7 +910,11 @@ func (s *Service) Download(ctx context.Context, owner, id string) (Item, io.Read
 		return item, nil, err
 	}
 	if item.Kind == "file" {
-		r, err := s.storage.ReadLocal(ctx, "", *item.DiskKey)
+		nodePath, err := s.localPathForKey(ctx, *item.DiskKey)
+		if err != nil {
+			return item, nil, err
+		}
+		r, err := s.storage.ReadLocal(ctx, nodePath, *item.DiskKey)
 		return item, r, err
 	}
 	r, err := s.zipFolder(ctx, owner, item)
@@ -729,7 +932,12 @@ func (s *Service) zipFolder(ctx context.Context, owner string, root Item) (io.Re
 				if f.Kind != "file" {
 					continue
 				}
-				r, e := s.storage.ReadLocal(ctx, "", *f.DiskKey)
+				nodePath, e := s.localPathForKey(ctx, *f.DiskKey)
+				if e != nil {
+					err = e
+					break
+				}
+				r, e := s.storage.ReadLocal(ctx, nodePath, *f.DiskKey)
 				if e != nil {
 					err = e
 					break
@@ -767,4 +975,210 @@ func (s *Service) zipFolder(ctx context.Context, owner string, root Item) (io.Re
 		_ = pw.CloseWithError(err)
 	}()
 	return pr, nil
+}
+
+func (s *Service) MoveItem(ctx context.Context, userID string, itemID string, targetParentID *string) (*VFSNode, string, error) {
+	targetParentID = normalizeParent(targetParentID)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	defer tx.Rollback()
+
+	var i VFSNode
+	err = tx.QueryRowContext(
+		ctx,
+		`SELECT i.id, i.name, i.kind, i.size_bytes, i.parent_id, i.modified_at, i.disk_key,
+			CASE WHEN s.id IS NOT NULL THEN 1 ELSE 0 END AS is_starred
+		FROM my_storage_items i
+		LEFT JOIN vfs_starred s ON s.node_id = i.id AND s.user_id = ?
+		WHERE i.id=? AND i.owner_id=? AND i.deleted_at IS NULL`,
+		userID,
+		itemID,
+		userID,
+	).Scan(&i.ID, &i.Name, &i.Kind, &i.SizeBytes, &i.ParentID, &i.ModifiedAt, &i.DiskKey, &i.IsStarred)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, "", ErrNotFound
+	}
+	if err != nil {
+		return nil, "", err
+	}
+
+	if targetParentID != nil {
+		if *targetParentID == itemID {
+			return nil, "", ErrCircularMove
+		}
+
+		var targetKind string
+		err = tx.QueryRowContext(
+			ctx,
+			`SELECT kind FROM my_storage_items WHERE id=? AND owner_id=? AND deleted_at IS NULL`,
+			*targetParentID,
+			userID,
+		).Scan(&targetKind)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, "", ErrBadParent
+		}
+		if err != nil {
+			return nil, "", err
+		}
+		if targetKind != "folder" {
+			return nil, "", ErrBadParent
+		}
+
+		if i.Kind == "folder" {
+			var n int
+			err = tx.QueryRowContext(
+				ctx,
+				`WITH RECURSIVE descendants(id) AS (
+					SELECT id FROM my_storage_items WHERE parent_id=? AND owner_id=? AND deleted_at IS NULL
+					UNION ALL
+					SELECT m.id FROM my_storage_items m JOIN descendants d ON m.parent_id=d.id WHERE m.owner_id=? AND m.deleted_at IS NULL
+				) SELECT COUNT(*) FROM descendants WHERE id=?`,
+				itemID,
+				userID,
+				userID,
+				*targetParentID,
+			).Scan(&n)
+			if err != nil {
+				return nil, "", err
+			}
+			if n > 0 {
+				return nil, "", ErrCircularMove
+			}
+		}
+	}
+
+	var count int
+	err = tx.QueryRowContext(
+		ctx,
+		`SELECT COUNT(*) FROM my_storage_items WHERE owner_id=? AND deleted_at IS NULL AND name=? AND COALESCE(parent_id,'')=COALESCE(?,'') AND id<>?`,
+		userID,
+		i.Name,
+		targetParentID,
+		itemID,
+	).Scan(&count)
+	if err != nil {
+		return nil, "", err
+	}
+	if count > 0 {
+		suggestion, e := uniqueName(ctx, tx, userID, targetParentID, i.Name, itemID)
+		if e != nil {
+			return nil, "", e
+		}
+		return nil, suggestion, ErrNameConflict
+	}
+
+	now := time.Now().UTC()
+	_, err = tx.ExecContext(
+		ctx,
+		`UPDATE my_storage_items SET parent_id=?, modified_at=? WHERE id=? AND owner_id=? AND deleted_at IS NULL`,
+		targetParentID,
+		now,
+		itemID,
+		userID,
+	)
+	if err != nil {
+		return nil, "", err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return nil, "", err
+	}
+
+	i.ParentID = targetParentID
+	i.ModifiedAt = now
+	return &i, "", nil
+}
+
+func (s *Service) ToggleStar(ctx context.Context, userID string, itemID string) (bool, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+
+	var existsID string
+	err = tx.QueryRowContext(
+		ctx,
+		`SELECT id FROM my_storage_items WHERE id=? AND owner_id=? AND deleted_at IS NULL`,
+		itemID,
+		userID,
+	).Scan(&existsID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, ErrNotFound
+	}
+	if err != nil {
+		return false, err
+	}
+
+	var starredID string
+	err = tx.QueryRowContext(
+		ctx,
+		`SELECT id FROM vfs_starred WHERE user_id=? AND node_id=?`,
+		userID,
+		itemID,
+	).Scan(&starredID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return false, err
+	}
+
+	if err == nil {
+		_, err = tx.ExecContext(ctx, `DELETE FROM vfs_starred WHERE user_id=? AND node_id=?`, userID, itemID)
+		if err != nil {
+			return false, err
+		}
+		if err = tx.Commit(); err != nil {
+			return false, err
+		}
+		return false, nil
+	}
+
+	starID := ulid.Make().String()
+	now := time.Now().UTC()
+	_, err = tx.ExecContext(
+		ctx,
+		`INSERT INTO vfs_starred(id, user_id, node_id, starred_at) VALUES(?, ?, ?, ?)`,
+		starID,
+		userID,
+		itemID,
+		now,
+	)
+	if err != nil {
+		return false, err
+	}
+	if err = tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (s *Service) ListStarred(ctx context.Context, userID string) ([]VFSNode, error) {
+	query := `
+		SELECT i.id, i.name, i.kind, i.size_bytes, i.parent_id, i.modified_at, i.disk_key, 1 AS is_starred
+		FROM my_storage_items i
+		JOIN vfs_starred s ON s.node_id = i.id AND s.user_id = ?
+		WHERE i.owner_id = ? AND i.deleted_at IS NULL
+		ORDER BY s.starred_at DESC
+	`
+	rows, err := s.db.DB.QueryContext(ctx, query, userID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]VFSNode, 0)
+	for rows.Next() {
+		var i VFSNode
+		if err = rows.Scan(&i.ID, &i.Name, &i.Kind, &i.SizeBytes, &i.ParentID, &i.ModifiedAt, &i.DiskKey, &i.IsStarred); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	return items, rows.Err()
+}
+
+func (s *Service) ListFiles(ctx context.Context, owner string, parent *string) ([]VFSNode, error) {
+	items, _, err := s.List(ctx, owner, parent)
+	return items, err
 }

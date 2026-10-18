@@ -27,6 +27,7 @@ type StorageNodeResponse struct {
 	TotalGB       int64  `json:"total_gb"`
 	FreeGB        int64  `json:"free_gb"`
 	CapacityCapGB int64  `json:"capacity_cap_gb"`
+	UsedBytes     int64  `json:"used_bytes"`
 	Enabled       bool   `json:"enabled"`
 }
 
@@ -40,6 +41,7 @@ type DisableNodeRequest struct {
 
 // CreateLocalNodeRequest - Add local disk storage node
 type CreateLocalNodeRequest struct {
+	Name          string `json:"name"`
 	Path          string `json:"path"`
 	CapacityCapGB int64  `json:"capacity_cap_gb"`
 	Enabled       bool   `json:"enabled"`
@@ -59,6 +61,7 @@ type CreateCloudNodeRequest struct {
 
 // UpdateNodeRequest - Update storage node
 type UpdateNodeRequest struct {
-	CapacityCapGB *int64 `json:"capacity_cap_gb,omitempty"`
-	Enabled       *bool  `json:"enabled,omitempty"`
+	Name          *string `json:"name,omitempty"`
+	CapacityCapGB *int64  `json:"capacity_cap_gb,omitempty"`
+	Enabled       *bool   `json:"enabled,omitempty"`
 }

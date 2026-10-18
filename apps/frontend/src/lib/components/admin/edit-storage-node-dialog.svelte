@@ -18,6 +18,8 @@
 		onUpdated: () => void;
 	} = $props();
 
+	let name = $state('');
+	let nameError = $state('');
 	let capacity = $state(0);
 	let enabled = $state(true);
 	let updating = $state(false);
@@ -25,25 +27,35 @@
 	// Sync form with node when dialog opens
 	$effect(() => {
 		if (open && node) {
+			name = node.name;
+			nameError = '';
 			capacity = node.capacityCapGb || 0;
 			enabled = node.enabled;
 		}
 	});
 
-	const canUpdate = $derived(capacity >= 1);
-
+	const usedGb = $derived(node ? node.usedBytes / 1024 ** 3 : 0);
+	const capacityBelowUsage = $derived(!!node && capacity * 1024 ** 3 < node.usedBytes);
+	const canUpdate = $derived(capacity >= 1 && !capacityBelowUsage);
 	async function handleUpdate() {
 		if (!node || !canUpdate) return;
+		if (!name.trim()) {
+			nameError = 'Nama node wajib diisi';
+			return;
+		}
 
 		updating = true;
+		nameError = '';
 		const resp = await adminAPI.updateNode(node.id, {
+			name: name.trim(),
 			capacity_cap_gb: capacity,
 			enabled
 		});
 		updating = false;
 
 		if (resp.error) {
-			toast.error('Gagal memperbarui node', { description: resp.error });
+			if (/name.*(?:required|already exists)|nama.*(?:wajib|sudah|digunakan)/i.test(resp.error)) nameError = resp.error;
+			else toast.error('Gagal memperbarui node', { description: resp.error });
 		} else {
 			toast.success('Node berhasil diperbarui');
 			open = false;
@@ -69,11 +81,22 @@
 
 		{#if node}
 			<div class="space-y-4">
-				<div class="rounded-lg border border-subtle bg-surfaceAlt p-3">
-					<div class="text-xs text-muted">Node</div>
-					<div class="font-medium text-main">{node.name}</div>
+				<div class="space-y-2">
+					<Label for="edit-node-name">Nama Node</Label>
+					<Input
+						id="edit-node-name"
+						data-testid="input-edit-node-name"
+						bind:value={name}
+						oninput={() => (nameError = '')}
+						disabled={updating}
+						aria-invalid={!!nameError}
+						aria-describedby={nameError ? 'edit-node-name-error' : undefined}
+					/>
+					{#if nameError}
+						<p id="edit-node-name-error" data-testid="error-edit-node-name" class="text-xs text-destructive" role="alert">{nameError}</p>
+					{/if}
 					{#if node.path}
-						<div class="text-xs text-muted">{node.path}</div>
+						<p class="text-xs text-muted">{node.path}</p>
 					{/if}
 				</div>
 
@@ -81,17 +104,20 @@
 					<Label for="edit-capacity">Kapasitas Maksimal (GB)</Label>
 					<Input
 						id="edit-capacity"
+						data-testid="input-edit-node-capacity"
 						type="number"
 						min="1"
 						bind:value={capacity}
 						disabled={updating}
+						aria-describedby={capacityBelowUsage ? 'edit-capacity-error' : undefined}
+						aria-invalid={capacityBelowUsage}
 					/>
 					<p class="text-xs text-muted">
 						Batas kapasitas yang diizinkan untuk node ini (minimal 1 GB).
 					</p>
-					{#if node.totalGb && capacity < node.totalGb - node.freeGb}
-						<p class="text-xs text-destructive">
-							⚠️ Kapasitas tidak boleh lebih kecil dari ruang terpakai ({(node.totalGb - node.freeGb).toFixed(1)} GB)
+					{#if capacityBelowUsage}
+						<p id="edit-capacity-error" data-testid="warning-node-capacity" class="text-xs text-destructive" role="alert">
+							Kapasitas tidak boleh lebih kecil dari pemakaian node ({usedGb.toFixed(1)} GB).
 						</p>
 					{/if}
 				</div>

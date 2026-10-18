@@ -57,6 +57,9 @@ func Open(ctx context.Context, dbPath string) (*bun.DB, error) {
 }
 
 func runMigrations(ctx context.Context, db *bun.DB) error {
+	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)`); err != nil {
+		return fmt.Errorf("create migration table: %w", err)
+	}
 	entries, err := migrationsFS.ReadDir("migrations")
 	if err != nil {
 		return fmt.Errorf("read migrations dir: %w", err)
@@ -71,15 +74,31 @@ func runMigrations(ctx context.Context, db *bun.DB) error {
 	sort.Strings(files)
 
 	for _, name := range files {
+		var applied int
+		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations WHERE version=?`, name).Scan(&applied); err != nil {
+			return fmt.Errorf("check migration %s: %w", name, err)
+		}
+		if applied > 0 {
+			continue
+		}
 		content, err := migrationsFS.ReadFile(filepath.Join("migrations", name))
 		if err != nil {
 			return fmt.Errorf("read migration %s: %w", name, err)
 		}
-
-		if _, err := db.ExecContext(ctx, string(content)); err != nil {
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("begin migration %s: %w", name, err)
+		}
+		if _, err = tx.ExecContext(ctx, string(content)); err == nil {
+			_, err = tx.ExecContext(ctx, `INSERT INTO schema_migrations(version) VALUES(?)`, name)
+		}
+		if err != nil {
+			_ = tx.Rollback()
 			return fmt.Errorf("exec migration %s: %w", name, err)
 		}
+		if err = tx.Commit(); err != nil {
+			return fmt.Errorf("commit migration %s: %w", name, err)
+		}
 	}
-
 	return nil
 }

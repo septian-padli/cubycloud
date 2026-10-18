@@ -24,6 +24,7 @@ type StorageNode struct {
 	bun.BaseModel `bun:"table:storage_nodes,alias:sn"`
 
 	ID                  string    `bun:"id,pk"`
+	Name                string    `bun:"name,notnull,default:''"`
 	Type                string    `bun:"type,notnull"`
 	Path                *string   `bun:"path"`
 	Endpoint            *string   `bun:"endpoint"`
@@ -46,13 +47,14 @@ type Setting struct {
 type MyStorageItem struct {
 	bun.BaseModel `bun:"table:my_storage_items,alias:msi"`
 
-	ID         string     `bun:"id,pk"`
-	OwnerID    string     `bun:"owner_id,notnull"`
-	Name       string     `bun:"name,notnull"`
-	Kind       string     `bun:"kind,notnull"`
-	SizeBytes  int64      `bun:"size_bytes,notnull,default:0"`
-	ParentID   *string    `bun:"parent_id"`
-	DiskKey    *string    `bun:"disk_key"`
-	ModifiedAt time.Time  `bun:"modified_at,notnull"`
-	DeletedAt  *time.Time `bun:"deleted_at"`
+	ID            string     `bun:"id,pk"`
+	OwnerID       string     `bun:"owner_id,notnull"`
+	Name          string     `bun:"name,notnull"`
+	Kind          string     `bun:"kind,notnull"`
+	SizeBytes     int64      `bun:"size_bytes,notnull,default:0"`
+	ParentID      *string    `bun:"parent_id"`
+	DiskKey       *string    `bun:"disk_key"`
+	StorageNodeID *string    `bun:"storage_node_id"`
+	ModifiedAt    time.Time  `bun:"modified_at,notnull"`
+	DeletedAt     *time.Time `bun:"deleted_at"`
 }

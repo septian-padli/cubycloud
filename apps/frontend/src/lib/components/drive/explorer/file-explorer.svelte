@@ -16,7 +16,8 @@
 		isAncestor,
 		nextId
 	} from '$lib/mocks/file-tree.js';
-	import { myStorageAPI } from '$lib/api/my-storage.js';
+	import { myStorageAPI, moveItem, toggleStar } from '$lib/api/my-storage.js';
+	import { cn } from '$lib/utils.js';
 	import { extractDroppedEntries } from '$lib/utils/drag-drop.js';
 	import FileExplorerBreadcrumbs from './file-explorer-breadcrumbs.svelte';
 	import FileExplorerToolbar from './file-explorer-toolbar.svelte';
@@ -35,7 +36,7 @@
 	import FileGridCard from '$lib/components/drive/file-grid-card.svelte';
 	import StorageNodeBadge from './storage-node-badge.svelte';
 	import { driveView } from '$lib/drive-view.svelte.js';
-	import { ChevronDown, ChevronUp, X } from '@lucide/svelte';
+	import { ChevronDown, ChevronUp, Star, X } from '@lucide/svelte';
 
 	let {
 		variant,
@@ -90,6 +91,10 @@
 	let moveOpen = $state(false);
 	let conflictOpen = $state(false);
 	let shareOpen = $state(false);
+
+	let moveConflictOpen = $state(false);
+	let moveConflictEntry = $state<FileEntry | null>(null);
+	let moveConflictTargetFolder = $state<FileEntry | null>(null);
 
 	let actionEntry = $state<FileEntry | null>(null);
 	let pendingUpload = $state<{ name: string; size: number; kind: FileKind } | null>(null);
@@ -520,7 +525,38 @@
 			toast.error('Tidak dapat memindahkan folder ke dirinya sendiri.');
 			return;
 		}
-		if (variant === 'my-storage') { void runMutation({ parent_id: targetFolderId }); return; }
+		if (variant === 'my-storage') {
+			const entryToMove = actionEntry;
+			void (async () => {
+				try {
+					await moveItem(entryToMove.id, targetFolderId);
+					await refreshStorage();
+					toast.success(`“${entryToMove.name}” dipindahkan`);
+				} catch (error) {
+					const conflict = error as Error & { status?: number; suggested_name?: string };
+					if (conflict.status === 409 && conflict.suggested_name) {
+						conflictTitle = 'Nama Sudah Digunakan';
+						conflictDescription = `Nama sudah digunakan. Gunakan nama yang disarankan “${conflict.suggested_name}”?`;
+						conflictAction = async () => {
+							try {
+								await myStorageAPI.mutate(entryToMove.id, { parent_id: targetFolderId, name: conflict.suggested_name });
+								await refreshStorage();
+								toast.success(`“${entryToMove.name}” dipindahkan`);
+							} catch (retryError) {
+								toast.error(retryError instanceof Error ? retryError.message : 'Gagal memindahkan');
+							}
+						};
+						conflictConfirmOpen = true;
+					} else if (conflict.status === 409) {
+						moveConflictEntry = entryToMove;
+						moveConflictOpen = true;
+					} else {
+						toast.error(error instanceof Error ? error.message : 'Gagal memindahkan berkas');
+					}
+				}
+			})();
+			return;
+		}
 		tree = tree.map((e) => e.id === actionEntry!.id ? { ...e, parentId: targetFolderId, modifiedAt: 'Baru saja' } : e);
 		toast.success(`“${actionEntry.name}” dipindahkan`);
 	}
@@ -549,13 +585,28 @@
 		toast.success(`Salinan zero-byte “${name}” dibuat`);
 	}
 
-	function onStar(entry: FileEntry) {
+	async function onStar(entry: FileEntry) {
+		const nextStarred = !entry.starred;
 		if (variant === 'my-storage') {
-			currentItems = currentItems.map((item) => item.id === entry.id ? { ...item, starred: !item.starred } : item);
+			currentItems = currentItems.map((item) =>
+				item.id === entry.id ? { ...item, starred: nextStarred } : item
+			);
+			try {
+				const result = await toggleStar(entry.id);
+				currentItems = currentItems.map((item) =>
+					item.id === entry.id ? { ...item, starred: result.is_starred } : item
+				);
+				toast.success(result.is_starred ? 'Ditandai berbintang' : 'Bintang dihapus');
+			} catch (error) {
+				currentItems = currentItems.map((item) =>
+					item.id === entry.id ? { ...item, starred: !nextStarred } : item
+				);
+				toast.error(error instanceof Error ? error.message : 'Gagal mengubah bintang');
+			}
 		} else {
-			tree = tree.map((item) => item.id === entry.id ? { ...item, starred: !item.starred } : item);
+			tree = tree.map((item) => (item.id === entry.id ? { ...item, starred: nextStarred } : item));
+			toast.success(nextStarred ? 'Ditandai berbintang' : 'Bintang dihapus');
 		}
-		toast.success(entry.starred ? 'Bintang dihapus' : 'Ditandai berbintang');
 	}
 
 	function onDelete(entry: FileEntry) {
@@ -662,21 +713,41 @@
 
 			if (folderWrapper) {
 				const targetFolderId = folderWrapper.getAttribute('data-folder-id');
-				const targetFolder = findEntry(tree, targetFolderId || '');
+				const targetFolder = (variant === 'my-storage' ? currentItems.find((e) => e.id === targetFolderId) : null) ?? findEntry(tree, targetFolderId || '');
 
 				if (targetFolder && targetFolder.kind === 'folder') {
-					const movedEntry = findEntry(tree, draggedEntryId);
+					const movedEntry = (variant === 'my-storage' ? currentItems.find((e) => e.id === draggedEntryId) : null) ?? findEntry(tree, draggedEntryId);
 					if (movedEntry && movedEntry.id !== targetFolder.id) {
 						// Circular move check
 						if (movedEntry.kind === 'folder' && isAncestor(tree, movedEntry.id, targetFolder.id)) {
 							toast.error('Tidak bisa memindahkan folder ke dalam subfolder-nya sendiri');
 						} else if (variant === 'my-storage') {
 							try {
-								await myStorageAPI.mutate(movedEntry.id, { parent_id: targetFolder.id });
+								await moveItem(movedEntry.id, targetFolder.id);
 								await refreshStorage();
-								toast.success(`"${movedEntry.name}" dipindahkan ke "${targetFolder.name}"`);
-							} catch {
-								toast.error('Gagal memindahkan berkas');
+								toast.success(`“${movedEntry.name}” dipindahkan ke “${targetFolder.name}”`);
+							} catch (error) {
+								const conflict = error as Error & { status?: number; suggested_name?: string };
+								if (conflict.status === 409 && conflict.suggested_name) {
+									conflictTitle = 'Nama Sudah Digunakan';
+									conflictDescription = `Nama sudah digunakan. Gunakan nama yang disarankan “${conflict.suggested_name}”?`;
+									conflictAction = async () => {
+										try {
+											await myStorageAPI.mutate(movedEntry.id, { parent_id: targetFolder.id, name: conflict.suggested_name });
+											await refreshStorage();
+											toast.success(`“${movedEntry.name}” dipindahkan ke “${targetFolder.name}”`);
+										} catch (retryError) {
+											toast.error(retryError instanceof Error ? retryError.message : 'Gagal memindahkan');
+										}
+									};
+									conflictConfirmOpen = true;
+								} else if (conflict.status === 409) {
+									moveConflictEntry = movedEntry;
+									moveConflictTargetFolder = targetFolder;
+									moveConflictOpen = true;
+								} else {
+									toast.error(error instanceof Error ? error.message : 'Gagal memindahkan berkas');
+								}
 							}
 						} else {
 							// Complete move
@@ -685,7 +756,7 @@
 									? { ...ent, parentId: targetFolder.id, modifiedAt: 'Baru saja' }
 									: ent
 							);
-							toast.success(`"${movedEntry.name}" dipindahkan ke "${targetFolder.name}"`);
+							toast.success(`“${movedEntry.name}” dipindahkan ke “${targetFolder.name}”`);
 						}
 					}
 				}
@@ -723,7 +794,7 @@
 
 		// 1. Internal item move
 		if (draggedEntryId) {
-			const movedEntry = findEntry(tree, draggedEntryId);
+			const movedEntry = (variant === 'my-storage' ? currentItems.find((e) => e.id === draggedEntryId) : null) ?? findEntry(tree, draggedEntryId);
 			if (!movedEntry || movedEntry.id === targetFolder.id) {
 				draggedEntryId = null;
 				return;
@@ -738,11 +809,31 @@
 
 			if (variant === 'my-storage') {
 				try {
-					await myStorageAPI.mutate(movedEntry.id, { parent_id: targetFolder.id });
+					await moveItem(movedEntry.id, targetFolder.id);
 					await refreshStorage();
-					toast.success(`"${movedEntry.name}" dipindahkan ke "${targetFolder.name}"`);
-				} catch {
-					toast.error('Gagal memindahkan berkas');
+					toast.success(`“${movedEntry.name}” dipindahkan ke “${targetFolder.name}”`);
+				} catch (error) {
+					const conflict = error as Error & { status?: number; suggested_name?: string };
+					if (conflict.status === 409 && conflict.suggested_name) {
+						conflictTitle = 'Nama Sudah Digunakan';
+						conflictDescription = `Nama sudah digunakan. Gunakan nama yang disarankan “${conflict.suggested_name}”?`;
+						conflictAction = async () => {
+							try {
+								await myStorageAPI.mutate(movedEntry.id, { parent_id: targetFolder.id, name: conflict.suggested_name });
+								await refreshStorage();
+								toast.success(`“${movedEntry.name}” dipindahkan ke “${targetFolder.name}”`);
+							} catch (retryError) {
+								toast.error(retryError instanceof Error ? retryError.message : 'Gagal memindahkan');
+							}
+						};
+						conflictConfirmOpen = true;
+					} else if (conflict.status === 409) {
+						moveConflictEntry = movedEntry;
+						moveConflictTargetFolder = targetFolder;
+						moveConflictOpen = true;
+					} else {
+						toast.error(error instanceof Error ? error.message : 'Gagal memindahkan berkas');
+					}
 				}
 			} else {
 				tree = tree.map((ent) =>
@@ -750,7 +841,7 @@
 						? { ...ent, parentId: targetFolder.id, modifiedAt: 'Baru saja' }
 						: ent
 				);
-				toast.success(`"${movedEntry.name}" dipindahkan ke "${targetFolder.name}"`);
+				toast.success(`“${movedEntry.name}” dipindahkan ke "${targetFolder.name}"`);
 			}
 			draggedEntryId = null;
 			return;
@@ -883,7 +974,7 @@
 						ondrop={entry.kind === 'folder' ? (e) => handleFolderDrop(entry, e) : undefined}
 		class={`${entry.id === draggedEntryId ? 'opacity-50 cursor-grabbing' : ''} ${
 			entry.kind === 'folder' && dragOverFolderId === entry.id
-				? 'ring-2 ring-primary/50 rounded-xl'
+				? 'border-primary bg-accent/40 ring-2 ring-primary/50 rounded-xl transition-all'
 				: ''
 		}`}
 					>
@@ -898,6 +989,27 @@
 								onSelect={() => (selectedId = entry.id)}
 								onOpen={() => openEntry(entry)}
 							>
+								{#snippet star()}
+									<button
+										type="button"
+										class="inline-flex size-7 items-center justify-center rounded-lg bg-surface/80 p-1 backdrop-blur-sm transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+										title={entry.starred ? 'Hapus Bintang' : 'Bintang'}
+										aria-label={entry.starred ? 'Hapus Bintang' : 'Bintang'}
+										onclick={(e) => {
+											e.stopPropagation();
+											onStar(entry);
+										}}
+									>
+										<Star
+											class={cn(
+												'size-4 transition-colors',
+												entry.starred
+													? 'fill-amber-400 stroke-amber-500 text-amber-500'
+													: 'stroke-1 text-muted-foreground/40 hover:text-amber-500'
+											)}
+										/>
+									</button>
+								{/snippet}
 								{#snippet menu()}
 									<FileExplorerActionsMenu {entry} {...menuHandlers} />
 								{/snippet}
@@ -935,13 +1047,14 @@
 						ondrop={entry.kind === 'folder' ? (e) => handleFolderDrop(entry, e) : undefined}
 						class={`${entry.id === draggedEntryId ? 'opacity-50 cursor-grabbing' : ''} ${
 							entry.kind === 'folder' && dragOverFolderId === entry.id
-								? 'ring-2 ring-primary/50'
+								? 'border-primary bg-accent/40 ring-2 ring-primary/50 rounded-lg transition-all'
 								: ''
 						}`}
 					>
 						<FileExplorerRow
 							{entry}
 							selected={selectedId === entry.id}
+							isDragOver={entry.kind === 'folder' && dragOverFolderId === entry.id}
 							onOpen={openEntry}
 							onSelect={(e) => (selectedId = e.id)}
 							onDownload={onDownload}
@@ -1047,9 +1160,31 @@
 />
 <MoveDialog
 	bind:open={moveOpen}
-	folders={moveFolders}
+	entry={actionEntry}
+	folders={variant === 'my-storage' ? allFolders : tree}
 	currentParentId={actionEntry?.parentId ?? null}
 	onConfirm={onMove}
+/>
+<ConflictResolutionDialog
+	bind:open={moveConflictOpen}
+	title="Nama Sudah Digunakan"
+	description={moveConflictEntry
+		? `“${moveConflictEntry.name}” sudah ada di folder tujuan. Ganti nama berkas atau batalkan pemindahan?`
+		: ''}
+	fileName={moveConflictEntry?.name ?? ''}
+	canReplace={false}
+	renameText="Ganti nama"
+	cancelText="Batal"
+	onKeepBoth={() => {
+		if (moveConflictEntry) {
+			actionEntry = moveConflictEntry;
+			renameOpen = true;
+		}
+	}}
+	onCancel={() => {
+		moveConflictEntry = null;
+		moveConflictTargetFolder = null;
+	}}
 />
 {#if variant !== 'my-storage'}
 <ConflictResolutionDialog

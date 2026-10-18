@@ -12,6 +12,7 @@
 	let {
 		entry,
 		selected = false,
+		isDragOver = false,
 		onOpen,
 		onSelect,
 		onDownload,
@@ -24,6 +25,7 @@
 	}: {
 		entry: FileEntry;
 		selected?: boolean;
+		isDragOver?: boolean;
 		onOpen: (entry: FileEntry) => void;
 		onSelect: (entry: FileEntry) => void;
 		onDownload: (entry: FileEntry) => void;
@@ -56,7 +58,8 @@
 		aria-selected={selected}
 		class={cn(
 			'flex cursor-pointer items-center justify-between border-b border-subtle px-4 py-3 transition-colors hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 dark:hover:bg-white/5',
-			selected && 'bg-primary/5'
+			selected && 'bg-primary/5',
+			isDragOver && 'border-primary bg-accent/40 ring-2 ring-primary/50'
 		)}
 		onclick={() => onSelect(entry)}
 		ondblclick={() => onOpen(entry)}
@@ -67,15 +70,30 @@
 		<div class="flex min-w-0 items-center gap-3">
 			<FileKindIcon kind={entry.kind} />
 			<div class="min-w-0">
-				<p class="truncate text-sm font-medium text-main">
-					{entry.name}
-					{#if entry.starred}
+				<div class="flex items-center gap-1.5">
+					<p class="truncate text-sm font-medium text-main">
+						{entry.name}
+					</p>
+					<button
+						type="button"
+						class="inline-flex size-6 shrink-0 items-center justify-center rounded p-0.5 text-muted hover:text-amber-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+						title={entry.starred ? 'Hapus Bintang' : 'Bintang'}
+						aria-label={entry.starred ? 'Hapus Bintang' : 'Bintang'}
+						onclick={(e) => {
+							e.stopPropagation();
+							onStar(entry);
+						}}
+					>
 						<Star
-							class="ms-1 inline size-3.5 fill-secondary stroke-2 text-secondary"
-							aria-label="Berbintang"
+							class={cn(
+								'size-3.5 transition-colors',
+								entry.starred
+									? 'fill-amber-400 stroke-amber-500 text-amber-500'
+									: 'stroke-1 text-muted-foreground/40 hover:text-amber-500'
+							)}
 						/>
-					{/if}
-				</p>
+					</button>
+				</div>
 				<p class="text-xs text-muted">
 					{#if entry.kind === 'folder'}
 						Folder · Diubah {entry.modifiedAt}

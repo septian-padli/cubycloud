@@ -254,7 +254,8 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
   - _Detach Node Modal_
   - _Rescan Nodes Modal_
 - **Key components & actions:**
-  - Storage nodes grid (kapasitas, free space, badge 5% critical) — node badges selalu visible di sini
+  - Storage nodes grid menampilkan kapasitas, pemakaian fisik per node, free space, dan badge 5% critical; pemakaian tidak berasal dari host filesystem.
+  - Nama node dapat diedit; nama harus terisi dan unik tanpa membedakan kapitalisasi.
   - **Default User Quota Policy** — input GB atau toggle Unlimited for new users
   - **Audit Log Retention** — dropdown 7 / 14 / 30 / 60 / 90 hari (default: **90**)
   - Worker concurrency (default: **2**)

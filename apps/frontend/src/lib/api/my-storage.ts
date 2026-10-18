@@ -2,14 +2,17 @@ import type { FileEntry } from '$lib/types/drive.js';
 
 const base = '/api/v1/drive/my-storage';
 
-export interface StorageItem {
+export interface VFSNode {
 	id: string;
 	name: string;
 	kind: 'file' | 'folder';
 	size_bytes: number;
 	parent_id: string | null;
 	modified_at: string;
+	is_starred?: boolean;
 }
+
+export type StorageItem = VFSNode;
 
 export interface StorageListing {
 	items: StorageItem[];
@@ -23,6 +26,7 @@ export interface FolderListing {
 function storageErrorMessage(error: string, status?: number): string {
 	if (error === 'USER_QUOTA_EXCEEDED') return 'Kuota My Storage penuh. Hubungi admin.';
 	if (error === 'STORAGE_POOL_FULL') return 'Penyimpanan server penuh.';
+	if (error === 'name already in use') return 'Nama sudah digunakan di folder tujuan.';
 	return error || `HTTP ${status ?? 'error'}`;
 }
 
@@ -45,6 +49,45 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 	}
 	return body as T;
 }
+async function driveRequest<T>(path: string, init?: RequestInit): Promise<T> {
+	const response = await fetch(`/api/v1/drive${path}`, { ...init, credentials: 'include' });
+	const text = await response.text();
+	const body = text ? JSON.parse(text) : undefined;
+	if (!response.ok) {
+		const error = new Error(storageErrorMessage(body?.error, response.status)) as Error & {
+			status: number;
+			suggested_name?: string;
+			existing_id?: string;
+			existing_kind?: string;
+		};
+		error.status = response.status;
+		error.suggested_name = body?.suggested_name;
+		error.existing_id = body?.existing_id;
+		error.existing_kind = body?.existing_kind;
+		throw error;
+	}
+	return body as T;
+}
+
+export async function moveItem(id: string, targetParentId: string | null): Promise<VFSNode> {
+	return driveRequest<VFSNode>(`/items/${encodeURIComponent(id)}/move`, {
+		method: 'PATCH',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ target_parent_id: targetParentId })
+	});
+}
+
+export async function toggleStar(id: string): Promise<{ id: string; is_starred: boolean }> {
+	return driveRequest<{ id: string; is_starred: boolean }>(`/items/${encodeURIComponent(id)}/star`, {
+		method: 'POST'
+	});
+}
+
+export async function getStarredItems(): Promise<VFSNode[]> {
+	const res = await driveRequest<{ items: VFSNode[] }>('/starred');
+	return res.items ?? [];
+}
+
 
 export const myStorageAPI = {
 	list(parentId: string | null): Promise<StorageListing> {
@@ -188,7 +231,12 @@ export const myStorageAPI = {
 			kind: category,
 			sizeBytes: item.size_bytes,
 			parentId: item.parent_id,
-			modifiedAt: item.modified_at
+			modifiedAt: item.modified_at,
+			starred: item.is_starred ?? false
 		};
-	}
+	},
+	moveItem,
+	toggleStar,
+	getStarredItems,
+
 };

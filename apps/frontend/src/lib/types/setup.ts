@@ -11,6 +11,7 @@ export interface StorageNode {
 	kind: 'SSD' | 'HDD';
 	totalGb: number;
 	freeGb: number;
+	usedBytes: number;
 	enabled: boolean;
 	capacityCapGb: number;
 }

@@ -7,23 +7,45 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import { Switch } from '$lib/components/ui/switch/index.js';
-	import { Download, Save } from '@lucide/svelte';
+	import { ConfirmDialog } from '$lib/components/ui/confirm-dialog/index.js';
+	import { Download, Loader2, Save } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 
 	let {
 		settings = $bindable(),
+		saving = false,
+		isDirty = false,
+		canSave = false,
+		isQuotaInvalid = false,
+		isConcurrencyInvalid = false,
 		onSave
 	}: {
 		settings: SystemSettings;
-		onSave: () => void;
+		saving?: boolean;
+		isDirty?: boolean;
+		canSave?: boolean;
+		isQuotaInvalid?: boolean;
+		isConcurrencyInvalid?: boolean;
+		onSave: () => void | Promise<void>;
 	} = $props();
 
 	let downloadingBackup = $state(false);
+	let showBackupConfirm = $state(false);
 
-	const unlimited = $derived(settings.defaultQuota.mode === 'unlimited');
+	let unlimited = $state(false);
 
-	function setUnlimited(checked: boolean) {
-		settings.defaultQuota.mode = checked ? 'unlimited' : 'limited';
+	$effect(() => {
+		unlimited = settings.defaultQuota.mode === 'unlimited';
+	});
+
+	function handleUnlimitedChange(checked: boolean) {
+		unlimited = checked;
+		settings.defaultQuota = {
+			mode: checked ? 'unlimited' : 'limited',
+			gb: !checked && (Number(settings.defaultQuota.gb) < 1 || isNaN(Number(settings.defaultQuota.gb)))
+				? 10
+				: Number(settings.defaultQuota.gb)
+		};
 	}
 
 	function onRetentionChange(event: Event) {
@@ -31,7 +53,15 @@
 		settings.auditRetentionDays = value as AuditRetentionDays;
 	}
 
-	async function downloadBackup() {
+	function handleBackupClick() {
+		if (isDirty) {
+			showBackupConfirm = true;
+		} else {
+			void doDownloadBackup();
+		}
+	}
+
+	async function doDownloadBackup() {
 		downloadingBackup = true;
 		const resp = await adminAPI.downloadBackup();
 		downloadingBackup = false;
@@ -60,7 +90,7 @@
 						Nonaktifkan batas penyimpanan untuk pengguna baru.
 					</p>
 				</div>
-				<Switch checked={unlimited} onCheckedChange={setUnlimited} />
+				<Switch bind:checked={unlimited} onCheckedChange={handleUnlimitedChange} data-testid="switch-unlimited-quota" />
 			</div>
 			{#if !unlimited}
 				<div class="space-y-2">
@@ -73,7 +103,11 @@
 						min="1"
 						bind:value={settings.defaultQuota.gb}
 						class="max-w-xs"
+						data-testid="input-default-quota"
 					/>
+					{#if isQuotaInvalid}
+						<p class="text-xs text-destructive" data-testid="error-quota">Kuota minimal adalah 1 GB.</p>
+					{/if}
 				</div>
 			{/if}
 		</div>
@@ -87,6 +121,7 @@
 				value={settings.auditRetentionDays}
 				onchange={onRetentionChange}
 				class="flex h-10 w-full max-w-xs rounded-lg border border-subtle bg-app px-3 py-2 text-sm text-main ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+				data-testid="select-audit-retention"
 			>
 				{#each AUDIT_RETENTION_OPTIONS as days}
 					<option value={days}>{days} hari</option>
@@ -105,7 +140,11 @@
 				max="10"
 				bind:value={settings.workerConcurrency}
 				class="max-w-xs"
+				data-testid="input-worker-concurrency"
 			/>
+			{#if isConcurrencyInvalid}
+				<p class="text-xs text-destructive" data-testid="error-concurrency">Konkurensi worker harus antara 1 dan 10.</p>
+			{/if}
 		</div>
 
 		<div
@@ -115,16 +154,46 @@
 				<p class="text-sm font-medium text-main">Backup basis data</p>
 				<p class="text-xs text-muted">Unduh file cubycloud.db untuk backup manual.</p>
 			</div>
-			<Button type="button" variant="secondary" class="gap-1.5" onclick={downloadBackup} disabled={downloadingBackup}>
-				<Download class="size-3.5 stroke-2" />
+			<Button
+				type="button"
+				variant="secondary"
+				class="gap-1.5"
+				onclick={handleBackupClick}
+				disabled={downloadingBackup}
+				data-testid="btn-download-backup"
+			>
+				{#if downloadingBackup}
+					<Loader2 class="size-3.5 animate-spin" />
+				{:else}
+					<Download class="size-3.5 stroke-2" />
+				{/if}
 				{downloadingBackup ? 'Mengunduh...' : 'Unduh Backup DB'}
 			</Button>
 		</div>
 	</Card.Content>
 	<Card.Footer class="justify-end border-t border-subtle">
-		<Button type="button" onclick={onSave} class="gap-1.5">
-			<Save class="size-3.5 stroke-2" />
-			Simpan Pengaturan
+		<Button
+			type="button"
+			onclick={onSave}
+			disabled={!canSave || saving}
+			class="gap-1.5"
+			data-testid="btn-save-settings"
+		>
+			{#if saving}
+				<Loader2 class="size-3.5 animate-spin" />
+			{:else}
+				<Save class="size-3.5 stroke-2" />
+			{/if}
+			{saving ? 'Menyimpan...' : 'Simpan Pengaturan'}
 		</Button>
 	</Card.Footer>
 </Card.Root>
+
+<ConfirmDialog
+	bind:open={showBackupConfirm}
+	title="Perubahan Belum Disimpan"
+	description="Anda memiliki perubahan pengaturan yang belum disimpan. Unduh backup sekarang tanpa menyimpan perubahan?"
+	confirmText="Lanjutkan Unduh"
+	cancelText="Batal"
+	onConfirm={doDownloadBackup}
+/>

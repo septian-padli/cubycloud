@@ -27,6 +27,7 @@ export interface StorageNode {
 	total_gb: number;
 	free_gb: number;
 	capacity_cap_gb: number;
+	used_bytes: number;
 	enabled: boolean;
 }
 
@@ -123,6 +124,7 @@ class AdminAPI {
 	}
 
 	async addLocalNode(data: {
+		name: string;
 		path: string;
 		capacity_cap_gb: number;
 		enabled: boolean;
@@ -151,7 +153,7 @@ class AdminAPI {
 
 	async updateNode(
 		nodeId: string,
-		data: { capacity_cap_gb?: number; enabled?: boolean }
+		data: { name?: string; capacity_cap_gb?: number; enabled?: boolean }
 	): Promise<{ data?: { message: string }; error?: string }> {
 		return this.request(`/admin/storage-nodes/${nodeId}`, {
 			method: 'PUT',

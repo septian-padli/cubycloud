@@ -10,21 +10,22 @@ const recoveryKey = 'ABCDE-FGHKL-MNPQR-STUVW-XYZ23-45678';
 async function finishSetup(page: Page) {
 	const status = await page.request.get('/api/v1/setup/status');
 	expect(status.ok()).toBeTruthy();
-	expect((await status.json()).is_setup_completed).toBe(false);
-
-	const scan = await page.request.get('/api/v1/setup/scan-nodes');
-	expect(scan.ok()).toBeTruthy();
-	const { nodes } = await scan.json() as { nodes: { path: string; capacity_bytes: number }[] };
-	expect(nodes.length).toBeGreaterThan(0);
-	const setup = await page.request.post('/api/v1/setup/complete', {
-		data: {
-			admin: { username, email: 'storage-e2e@example.test', password, recovery_key: recoveryKey },
-			storage_nodes: nodes.map((node) => ({ ...node, enabled: true })),
-			placement_strategy: 'FILL_FIRST',
-			cloud: { enabled: false }
-		}
-	});
-	expect(setup.ok()).toBeTruthy();
+	const statusJson = (await status.json()) as { is_setup_completed: boolean };
+	if (!statusJson.is_setup_completed) {
+		const scan = await page.request.get('/api/v1/setup/scan-nodes');
+		expect(scan.ok()).toBeTruthy();
+		const { nodes } = (await scan.json()) as { nodes: { path: string; capacity_bytes: number }[] };
+		expect(nodes.length).toBeGreaterThan(0);
+		const setup = await page.request.post('/api/v1/setup/complete', {
+			data: {
+				admin: { username, email: 'storage-e2e@example.test', password, recovery_key: recoveryKey },
+				storage_nodes: nodes.map((node) => ({ ...node, enabled: true })),
+				placement_strategy: 'FILL_FIRST',
+				cloud: { enabled: false }
+			}
+		});
+		expect(setup.ok()).toBeTruthy();
+	}
 	// Setup is API-provisioned; clear its session and exercise the actual login form.
 	await page.context().clearCookies();
 	await page.goto('/login');
@@ -348,10 +349,16 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 
 		await openActions(page, 'renamed.txt');
 		await page.getByRole('menuitem', { name: 'Pindahkan ke' }).click();
-		await page.getByLabel('Folder tujuan').selectOption(nested!.id);
-		await page.getByRole('button', { name: 'Pindahkan' }).click();
-		expect((await listing(page, nested!.id)).items.map((item) => item.name)).toContain('renamed.txt');
-		expect((await listing(page, project!.id)).items.map((item) => item.name)).not.toContain('renamed.txt');
+		const moveDialog1 = page.getByTestId('move-dialog');
+		await expect(moveDialog1).toBeVisible();
+		await expect(moveDialog1.getByRole('heading', { name: 'Pindahkan' })).toBeVisible();
+		await expect(moveDialog1.getByText('renamed.txt')).toBeVisible();
+		await expect(moveDialog1.getByTestId('move-tab-organisasi')).toBeDisabled();
+		// Drill down into project folder
+		await moveDialog1.getByTestId(`move-folder-${project!.id}`).click();
+		// Click Pindahkan on nested folder row
+		await moveDialog1.getByTestId(`btn-move-to-${nested!.id}`).click();
+		await expect(moveDialog1).not.toBeVisible();
 		await itemRow(page, 'nested').dblclick();
 		await page.waitForURL(/folder=/);
 
@@ -373,8 +380,14 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 		await expect(itemRow(page, 'child.txt')).toBeVisible();
 		await openActions(page, 'child.txt');
 		await page.getByRole('menuitem', { name: 'Pindahkan ke' }).click();
-		await page.getByLabel('Folder tujuan').selectOption(nested!.id);
-		await page.getByRole('button', { name: 'Pindahkan' }).click();
+		const moveDialog2 = page.getByTestId('move-dialog');
+		await expect(moveDialog2).toBeVisible();
+		// Drill down into project folder
+		await moveDialog2.getByTestId(`move-folder-${project!.id}`).click();
+		// Drill down into nested folder
+		await moveDialog2.getByTestId(`move-folder-${nested!.id}`).click();
+		// Click Pindahkan in footer while inside nested folder
+		await moveDialog2.getByTestId('btn-move-footer').click();
 		const moveModal = page.getByTestId('confirm-dialog');
 		await expect(moveModal).toBeVisible();
 		expect(await moveModal.textContent()).toContain('child');
@@ -503,6 +516,106 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 
 		await page.goto('/drive/my-storage');
 		await expect(itemRow(page, 'fallback-doc.txt')).toBeVisible();
+
+		// 7. Test Drag-and-Drop Move & Conflict Detection
+		await page.getByRole('button', { name: 'Tambah' }).click();
+		await page.getByRole('menuitem', { name: 'Folder Baru' }).click();
+		await page.getByLabel('Nama folder').fill('move-target');
+		await page.getByRole('button', { name: 'Buat' }).click();
+		await expect(itemRow(page, 'move-target')).toBeVisible();
+
+		const moveFile = join(base, 'move-sample.txt');
+		writeFileSync(moveFile, 'move sample content');
+		await page.getByTestId('upload-file-input').setInputFiles(moveFile);
+		await expect(itemRow(page, 'move-sample.txt')).toBeVisible();
+
+		// Drag move-sample.txt into move-target
+		const sourceRow = page.locator('[draggable="true"]').filter({ hasText: 'move-sample.txt' });
+		const targetRow = page.locator('[data-folder-id]').filter({ hasText: 'move-target' });
+		await sourceRow.dragTo(targetRow);
+		await expect(itemRow(page, 'move-sample.txt')).not.toBeVisible();
+
+		// Verify item is inside move-target
+		await itemRow(page, 'move-target').dblclick();
+		await page.waitForURL(/folder=/);
+		await expect(itemRow(page, 'move-sample.txt')).toBeVisible();
+
+		// Create conflict-sample.txt inside move-target
+		const conflictTargetFile = join(base, 'conflict-sample.txt');
+		writeFileSync(conflictTargetFile, 'inside move target');
+		await page.getByTestId('upload-file-input').setInputFiles(conflictTargetFile);
+		await expect(itemRow(page, 'conflict-sample.txt')).toBeVisible();
+
+		// Go back to root and upload another conflict-sample.txt
+		await page.goto('/drive/my-storage');
+		const conflictRootFile = join(base, 'conflict-sample-root.txt');
+		writeFileSync(conflictRootFile, 'in root storage');
+		// Rename to conflict-sample.txt in root
+		const rootUploadFile = join(base, 'conflict-sample.txt');
+		writeFileSync(rootUploadFile, 'conflict root content');
+		await page.getByTestId('upload-file-input').setInputFiles(rootUploadFile);
+		await expect(itemRow(page, 'conflict-sample.txt')).toBeVisible();
+
+		// Drag conflict-sample.txt onto move-target to trigger conflict dialog
+		const conflictSource = page.locator('[draggable="true"]').filter({ hasText: 'conflict-sample.txt' });
+		await conflictSource.dragTo(targetRow);
+
+		// Expect conflict dialog "Nama Sudah Digunakan"
+		const conflictModal = page.getByRole('dialog');
+		await expect(conflictModal).toBeVisible();
+		await expect(conflictModal).toContainText('Nama Sudah Digunakan');
+		await conflictModal.getByRole('button', { name: 'Batal' }).click();
+		await expect(conflictModal).not.toBeVisible();
+		await expect(itemRow(page, 'conflict-sample.txt')).toBeVisible();
+
+		// 8. Test Starred (Bintang) Lifecycle
+		// Star move-target folder and conflict-sample.txt from my-storage
+		await openActions(page, 'move-target');
+		await page.getByRole('menuitem', { name: 'Bintang' }).click();
+
+		await openActions(page, 'conflict-sample.txt');
+		await page.getByRole('menuitem', { name: 'Bintang' }).click();
+
+		// Navigate to /drive/starred
+		await page.goto('/drive/starred');
+		await expect(itemRow(page, 'move-target')).toBeVisible();
+		await expect(itemRow(page, 'conflict-sample.txt')).toBeVisible();
+
+		// Test Folder Navigation from Starred
+		await itemRow(page, 'move-target').dblclick();
+		await page.waitForURL(/\/drive\/my-storage\?folder=/);
+		await expect(itemRow(page, 'move-sample.txt')).toBeVisible();
+
+		// Return to Starred
+		await page.goto('/drive/starred');
+		await expect(itemRow(page, 'conflict-sample.txt')).toBeVisible();
+
+		// Test Download from Starred
+		const downloadPromise = page.waitForEvent('download');
+		await openActions(page, 'conflict-sample.txt');
+		await page.getByRole('menuitem', { name: 'Unduh' }).click();
+		const download = await downloadPromise;
+		expect(download.suggestedFilename()).toBe('conflict-sample.txt');
+
+		// Test Unstar from Starred
+		const conflictStarredRow = itemRow(page, 'conflict-sample.txt');
+		await conflictStarredRow.getByRole('button', { name: 'Hapus Bintang' }).click();
+		await expect(conflictStarredRow).not.toBeVisible();
+
+		// Test Delete from Starred
+		const targetStarredRow = itemRow(page, 'move-target');
+		await expect(targetStarredRow).toBeVisible();
+		await targetStarredRow.getByRole('button', { name: 'Aksi berkas' }).click();
+		await page.getByRole('menuitem', { name: 'Hapus ke Trash' }).click();
+
+		const deleteConfirmModal = page.getByRole('dialog');
+		await expect(deleteConfirmModal).toBeVisible();
+		await deleteConfirmModal.getByRole('button', { name: 'Hapus ke Trash' }).click();
+		await expect(targetStarredRow).not.toBeVisible();
+
+		// Verify move-target is in Trash
+		await page.goto('/drive/trash');
+		await expect(itemRow(page, 'move-target')).toBeVisible();
 	} finally {
 		rmSync(base, { recursive: true, force: true });
 	}

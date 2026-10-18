@@ -21,13 +21,14 @@ export const MOCK_ADMIN_STORAGE_NODES: StorageNode[] = [
 		...MOCK_STORAGE_NODES[2],
 		enabled: true,
 		freeGb: 8,
+		usedBytes: (243 - 8) * 1024 ** 3,
 		capacityCapGb: 243
 	}
 ];
 
 export function isNodeCritical(node: StorageNode): boolean {
-	if (node.totalGb <= 0) return false;
-	return node.freeGb / node.totalGb < NODE_CRITICAL_FREE_RATIO;
+	if (node.capacityCapGb <= 0) return false;
+	return node.freeGb / node.capacityCapGb < NODE_CRITICAL_FREE_RATIO;
 }
 
 export function cloneMockSystemSettings(): SystemSettings {

@@ -8,6 +8,7 @@ export const MOCK_STORAGE_NODES: StorageNode[] = [
 		kind: 'SSD',
 		totalGb: 500,
 		freeGb: 412,
+		usedBytes: 88 * 1024 ** 3,
 		enabled: true,
 		capacityCapGb: 475
 	},
@@ -18,6 +19,7 @@ export const MOCK_STORAGE_NODES: StorageNode[] = [
 		kind: 'HDD',
 		totalGb: 2000,
 		freeGb: 1680,
+		usedBytes: 320 * 1024 ** 3,
 		enabled: true,
 		capacityCapGb: 1900
 	},
@@ -28,6 +30,7 @@ export const MOCK_STORAGE_NODES: StorageNode[] = [
 		kind: 'SSD',
 		totalGb: 256,
 		freeGb: 240,
+		usedBytes: 16 * 1024 ** 3,
 		enabled: false,
 		capacityCapGb: 243
 	}

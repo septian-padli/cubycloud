@@ -59,6 +59,7 @@ func setupTestDB(t *testing.T) *bun.DB {
 	_, err = db.ExecContext(ctx, `
 		CREATE TABLE storage_nodes (
 			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL DEFAULT '',
 			type TEXT NOT NULL,
 			path TEXT,
 			endpoint TEXT,

@@ -61,6 +61,10 @@ func setupTestDB(t *testing.T) (*bun.DB, *Service, *mockStorageDriver) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	nodePath := filepath.Join(dataDir, "storage", "default")
+	if _, err = db.Exec(`INSERT INTO storage_nodes(id,name,type,path,capacity_bytes,enabled) VALUES('storage-node','Default','LOCAL',?,1073741824,1)`, nodePath); err != nil {
+		t.Fatal(err)
+	}
 
 	driver := &mockStorageDriver{}
 	service := NewService(db, driver)

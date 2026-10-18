@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -24,8 +25,24 @@ func NewLocalDriver(basePath string) *LocalDriver {
 	return &LocalDriver{basePath: basePath}
 }
 
+func (d *LocalDriver) localPath(nodePath, filename string) string {
+	root := d.basePath
+	if filepath.IsAbs(nodePath) {
+		root = nodePath
+	} else if nodePath != "" {
+		basePath := filepath.Clean(d.basePath)
+		nodePath = filepath.Clean(nodePath)
+		if nodePath == basePath || strings.HasPrefix(nodePath, basePath+string(os.PathSeparator)) {
+			root = nodePath
+		} else {
+			root = filepath.Join(root, nodePath)
+		}
+	}
+	return filepath.Join(root, filename)
+}
+
 func (d *LocalDriver) WriteLocal(ctx context.Context, nodePath, filename string, reader io.Reader) error {
-	fullPath := filepath.Join(d.basePath, nodePath, filename)
+	fullPath := d.localPath(nodePath, filename)
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
 		return err
 	}
@@ -39,21 +56,15 @@ func (d *LocalDriver) WriteLocal(ctx context.Context, nodePath, filename string,
 }
 
 func (d *LocalDriver) ReadLocal(ctx context.Context, nodePath, filename string) (io.ReadCloser, error) {
-	fullPath := filepath.Join(d.basePath, nodePath, filename)
-	return os.Open(fullPath)
+	return os.Open(d.localPath(nodePath, filename))
 }
 
 func (d *LocalDriver) DeleteLocal(ctx context.Context, nodePath, filename string) error {
-	fullPath := filepath.Join(d.basePath, nodePath, filename)
-	return os.Remove(fullPath)
+	return os.Remove(d.localPath(nodePath, filename))
 }
 
 func (d *LocalDriver) StatLocal(ctx context.Context, nodePath string) (capacity, free int64, err error) {
-	// Handle absolute paths (scan) vs relative paths (write operations)
-	fullPath := nodePath
-	if !filepath.IsAbs(nodePath) {
-		fullPath = filepath.Join(d.basePath, nodePath)
-	}
+	fullPath := d.localPath(nodePath, ".")
 	
 	if runtime.GOOS == "windows" {
 		// ponytail: Windows GetDiskFreeSpaceEx — implement when Windows container needed.

@@ -36,6 +36,7 @@
 				totalGb: Math.round(n.capacity_bytes / 1e9),
 				freeGb: Math.round(n.free_bytes / 1e9),
 				enabled: true,
+				usedBytes: 0,
 				capacityCapGb: Math.round(n.capacity_bytes / 1e9)
 			}));
 		} catch {

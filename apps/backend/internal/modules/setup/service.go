@@ -183,14 +183,9 @@ func (s *Service) CompleteSetup(ctx context.Context, req *CompleteSetupRequest) 
 		if !n.Enabled {
 			continue
 		}
-		nodeID := ulid.Make().String()
 		node := database.StorageNode{
-			ID:            nodeID,
-			Type:          "LOCAL",
-			Path:          &n.Path,
-			CapacityBytes: n.CapacityBytes,
-			Enabled:       true,
-			CreatedAt:     time.Now(),
+			ID: ulid.Make().String(), Name: filepath.Base(n.Path), Type: "LOCAL", Path: &n.Path,
+			CapacityBytes: n.CapacityBytes, Enabled: true, CreatedAt: time.Now(),
 		}
 		nodes = append(nodes, node)
 	}
@@ -213,20 +208,34 @@ func (s *Service) CompleteSetup(ctx context.Context, req *CompleteSetupRequest) 
 		}
 
 		node := database.StorageNode{
-			ID:                 nodeID,
-			Type:               "S3",
-			Endpoint:           &endpoint,
-			Bucket:             &bucket,
-			Region:             &region,
-			AccessKeyEncrypted: accessKeyEnc,
-			SecretKeyEncrypted: secretKeyEnc,
-			CapacityBytes:      0, // Cloud: no fixed capacity
-			Enabled:            true,
-			CreatedAt:          time.Now(),
+			ID: nodeID, Name: req.Cloud.Bucket, Type: "S3", Endpoint: &endpoint,
+			Bucket: &bucket, Region: &region, AccessKeyEncrypted: accessKeyEnc,
+			SecretKeyEncrypted: secretKeyEnc, CapacityBytes: 0, Enabled: true, CreatedAt: time.Now(),
 		}
 		nodes = append(nodes, node)
 	}
 
+	for i := range nodes {
+		baseName := strings.TrimSpace(nodes[i].Name)
+		if baseName == "" || baseName == "." {
+			baseName = "Local storage"
+		}
+		name := baseName
+		for suffix := 2; ; suffix++ {
+			duplicate := false
+			for j := range i {
+				if strings.EqualFold(nodes[j].Name, name) {
+					duplicate = true
+					break
+				}
+			}
+			if !duplicate {
+				break
+			}
+			name = fmt.Sprintf("%s (%d)", baseName, suffix)
+		}
+		nodes[i].Name = name
+	}
 	if err := s.repo.CreateStorageNodesTx(ctx, tx, nodes); err != nil {
 		return nil, fmt.Errorf("create storage nodes: %w", err)
 	}

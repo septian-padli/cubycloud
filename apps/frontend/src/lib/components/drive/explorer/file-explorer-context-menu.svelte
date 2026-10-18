@@ -12,6 +12,7 @@
 		Star,
 		Trash2
 	} from '@lucide/svelte';
+	import { cn } from '$lib/utils.js';
 
 	let {
 		entry,
@@ -75,8 +76,8 @@
 			Duplikat
 		</ContextMenu.Item>
 		<ContextMenu.Item class="gap-2" onclick={() => onStar(entry)}>
-			<Star class="size-4 stroke-2" />
-			{entry.starred ? 'Hapus bintang' : 'Bintang'}
+			<Star class={cn("size-4 stroke-2", entry.starred ? "fill-amber-400 stroke-amber-500 text-amber-500" : "")} />
+			{entry.starred ? 'Hapus Bintang' : 'Bintang'}
 		</ContextMenu.Item>
 		<ContextMenu.Item class="gap-2" onclick={() => onShare(entry)}>
 			<Share2 class="size-4 stroke-2" />

@@ -22,9 +22,11 @@
 	let adding = $state(false);
 
 	// Local node form
+	let localName = $state('');
 	let localPath = $state('');
 	let localCapacity = $state(100);
 	let localEnabled = $state(true);
+	let localNameError = $state('');
 
 	// Cloud node form
 	let cloudName = $state('');
@@ -35,24 +37,23 @@
 	let cloudSecretKey = $state('');
 	let cloudCapacity = $state(500);
 	let cloudEnabled = $state(true);
-
-	const canAddLocal = $derived(
-		localPath.trim() !== '' && localCapacity >= 1
-	);
+	let cloudNameError = $state('');
+	const canAddLocal = $derived(localPath.trim() !== '' && localCapacity >= 1);
 
 	const canAddCloud = $derived(
-		cloudName.trim() !== '' &&
 		cloudEndpoint.trim() !== '' &&
-		cloudBucket.trim() !== '' &&
-		cloudAccessKey.trim() !== '' &&
-		cloudSecretKey.trim() !== '' &&
-		cloudCapacity >= 1
+			cloudBucket.trim() !== '' &&
+			cloudAccessKey.trim() !== '' &&
+			cloudSecretKey.trim() !== '' &&
+			cloudCapacity >= 1
 	);
 
 	function resetLocalForm() {
+		localName = '';
 		localPath = '';
 		localCapacity = 100;
 		localEnabled = true;
+		localNameError = '';
 	}
 
 	function resetCloudForm() {
@@ -64,13 +65,20 @@
 		cloudSecretKey = '';
 		cloudCapacity = 500;
 		cloudEnabled = true;
+		cloudNameError = '';
 	}
 
 	async function handleAddLocal() {
 		if (!canAddLocal) return;
+		if (!localName.trim()) {
+			localNameError = 'Nama node wajib diisi';
+			return;
+		}
 
 		adding = true;
+		localNameError = '';
 		const resp = await adminAPI.addLocalNode({
+			name: localName.trim(),
 			path: localPath,
 			capacity_cap_gb: localCapacity,
 			enabled: localEnabled
@@ -78,7 +86,8 @@
 		adding = false;
 
 		if (resp.error) {
-			toast.error('Gagal menambah node lokal', { description: resp.error });
+			if (/name|required|duplicate|already exists/i.test(resp.error)) localNameError = resp.error;
+			else toast.error('Gagal menambah node lokal', { description: resp.error });
 		} else {
 			toast.success('Node lokal berhasil ditambahkan');
 			resetLocalForm();
@@ -89,10 +98,14 @@
 
 	async function handleAddCloud() {
 		if (!canAddCloud) return;
-
+		if (!cloudName.trim()) {
+			cloudNameError = 'Nama node wajib diisi';
+			return;
+		}
 		adding = true;
+		cloudNameError = '';
 		const resp = await adminAPI.addCloudNode({
-			name: cloudName,
+			name: cloudName.trim(),
 			endpoint: cloudEndpoint,
 			bucket: cloudBucket,
 			region: cloudRegion,
@@ -104,7 +117,8 @@
 		adding = false;
 
 		if (resp.error) {
-			toast.error('Gagal menambah node cloud', { description: resp.error });
+			if (/name.*(?:required|already exists)|nama.*(?:wajib|sudah|digunakan)/i.test(resp.error)) cloudNameError = resp.error;
+			else toast.error('Gagal menambah node cloud', { description: resp.error });
 		} else {
 			toast.success('Node cloud berhasil ditambahkan');
 			resetCloudForm();
@@ -147,6 +161,23 @@
 
 			<TabsContent value="local" class="space-y-4 pt-4">
 				<div class="space-y-2">
+					<Label for="local-name">Nama Node</Label>
+					<Input
+						id="local-name"
+						data-testid="input-local-node-name"
+						bind:value={localName}
+						oninput={() => (localNameError = '')}
+						placeholder="Disk Lokal 2"
+						disabled={adding}
+						aria-invalid={!!localNameError}
+						aria-describedby={localNameError ? 'local-name-error' : undefined}
+					/>
+					{#if localNameError}
+						<p id="local-name-error" data-testid="error-local-node-name" class="text-xs text-destructive" role="alert">{localNameError}</p>
+					{/if}
+				</div>
+
+				<div class="space-y-2">
 					<Label for="local-path">Path Direktori</Label>
 					<Input
 						id="local-path"
@@ -187,10 +218,17 @@
 					<Label for="cloud-name">Nama Node</Label>
 					<Input
 						id="cloud-name"
+						data-testid="input-cloud-node-name"
 						bind:value={cloudName}
+						oninput={() => (cloudNameError = '')}
 						placeholder="S3 Production"
 						disabled={adding}
+						aria-invalid={!!cloudNameError}
+						aria-describedby={cloudNameError ? 'cloud-name-error' : undefined}
 					/>
+					{#if cloudNameError}
+						<p id="cloud-name-error" class="text-xs text-destructive" role="alert">{cloudNameError}</p>
+					{/if}
 				</div>
 
 				<div class="space-y-2">

@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
+	import { beforeNavigate, goto } from '$app/navigation';
 	import { adminAPI } from '$lib/api/admin.js';
 	import type { StorageNode } from '$lib/types/setup.js';
 	import type { SystemSettings, AuditRetentionDays } from '$lib/types/admin.js';
@@ -8,6 +10,7 @@
 	import EditStorageNodeDialog from '$lib/components/admin/edit-storage-node-dialog.svelte';
 	import StorageNodesGrid from '$lib/components/admin/storage-nodes-grid.svelte';
 	import AdminSystemSettings from '$lib/components/admin/admin-system-settings.svelte';
+	import { ConfirmDialog } from '$lib/components/ui/confirm-dialog/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Plus } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
@@ -18,11 +21,19 @@
 		auditRetentionDays: 90,
 		workerConcurrency: 2
 	});
+	let initialSettings = $state<SystemSettings | null>(null);
 	let loading = $state(true);
+	let savingSettings = $state(false);
 
 	let showAddNodeDialog = $state(false);
 	let showEditNodeDialog = $state(false);
 	let nodeToEdit = $state<StorageNode | null>(null);
+
+	// Navigation leave confirmation
+	let showLeaveConfirmDialog = $state(false);
+	let pendingNavigationUrl = $state<string | null>(null);
+	let allowLeave = $state(false);
+
 	onMount(async () => {
 		await loadData();
 	});
@@ -35,13 +46,21 @@
 		if (settingsResp.error) {
 			toast.error('Gagal memuat pengaturan sistem', { description: settingsResp.error });
 		} else if (settingsResp.data) {
-			settings = {
+			const loadedSettings: SystemSettings = {
 				defaultQuota: {
 					mode: settingsResp.data.default_quota.mode,
 					gb: settingsResp.data.default_quota.gb
 				},
 				auditRetentionDays: settingsResp.data.audit_retention_days as AuditRetentionDays,
 				workerConcurrency: settingsResp.data.worker_concurrency
+			};
+			settings = {
+				...loadedSettings,
+				defaultQuota: { ...loadedSettings.defaultQuota }
+			};
+			initialSettings = {
+				...loadedSettings,
+				defaultQuota: { ...loadedSettings.defaultQuota }
 			};
 		}
 
@@ -56,8 +75,12 @@
 				name: n.name,
 				path: n.path,
 				kind: (n.kind === 'SSD' || n.kind === 'HDD' ? n.kind : 'HDD') as 'SSD' | 'HDD',
-				totalGb: n.total_gb,
-				freeGb: n.free_gb,
+				totalGb: n.capacity_cap_gb,
+				freeGb: Math.max(
+					(n.capacity_cap_gb * 1024 ** 3 - n.used_bytes) / 1024 ** 3,
+					0
+				),
+				usedBytes: n.used_bytes,
 				capacityCapGb: n.capacity_cap_gb,
 				enabled: n.enabled
 			}));
@@ -76,26 +99,64 @@
 	}
 
 	function handleNodeUpdated() {
-		loadData();
+		void loadData();
 	}
 
+	const isDirty = $derived.by(() => {
+		if (!initialSettings) return false;
+		if (settings.defaultQuota.mode !== initialSettings.defaultQuota.mode) return true;
+		if (
+			settings.defaultQuota.mode === 'limited' &&
+			Number(settings.defaultQuota.gb) !== Number(initialSettings.defaultQuota.gb)
+		) {
+			return true;
+		}
+		if (Number(settings.auditRetentionDays) !== Number(initialSettings.auditRetentionDays)) {
+			return true;
+		}
+		if (Number(settings.workerConcurrency) !== Number(initialSettings.workerConcurrency)) {
+			return true;
+		}
+		return false;
+	});
+
+	const isQuotaInvalid = $derived(
+		settings.defaultQuota.mode === 'limited' &&
+			(isNaN(Number(settings.defaultQuota.gb)) || Number(settings.defaultQuota.gb) < 1)
+	);
+
+	const isConcurrencyInvalid = $derived(
+		isNaN(Number(settings.workerConcurrency)) ||
+			Number(settings.workerConcurrency) < 1 ||
+			Number(settings.workerConcurrency) > 10
+	);
+
+	const isRetentionInvalid = $derived(
+		![7, 14, 30, 60, 90].includes(Number(settings.auditRetentionDays))
+	);
+
+	const isValid = $derived(!isQuotaInvalid && !isConcurrencyInvalid && !isRetentionInvalid);
+	const canSave = $derived(isDirty && isValid && !savingSettings);
 
 	async function saveSettings() {
+		if (!canSave) return;
+		savingSettings = true;
 		const resp = await adminAPI.updateSettings({
 			default_quota: {
 				mode: settings.defaultQuota.mode,
-				gb: settings.defaultQuota.gb
+				gb: Number(settings.defaultQuota.gb)
 			},
-			audit_retention_days: settings.auditRetentionDays,
-			worker_concurrency: settings.workerConcurrency
+			audit_retention_days: Number(settings.auditRetentionDays),
+			worker_concurrency: Number(settings.workerConcurrency)
 		});
+		savingSettings = false;
 
 		if (resp.error) {
 			toast.error('Gagal menyimpan pengaturan', { description: resp.error });
 		} else {
 			toast.success('Pengaturan berhasil disimpan');
 			if (resp.data) {
-				settings = {
+				const synced: SystemSettings = {
 					defaultQuota: {
 						mode: resp.data.default_quota.mode,
 						gb: resp.data.default_quota.gb
@@ -103,9 +164,46 @@
 					auditRetentionDays: resp.data.audit_retention_days as AuditRetentionDays,
 					workerConcurrency: resp.data.worker_concurrency
 				};
+				settings = { ...synced, defaultQuota: { ...synced.defaultQuota } };
+				initialSettings = { ...synced, defaultQuota: { ...synced.defaultQuota } };
 			}
 		}
 	}
+
+	beforeNavigate(({ cancel, to }) => {
+		if (isDirty && !allowLeave) {
+			cancel();
+			pendingNavigationUrl = to?.url.pathname || to?.url.href || null;
+			showLeaveConfirmDialog = true;
+		}
+	});
+
+	async function handleConfirmLeave() {
+		allowLeave = true;
+		showLeaveConfirmDialog = false;
+		if (pendingNavigationUrl) {
+			await goto(pendingNavigationUrl);
+		}
+	}
+
+	function handleCancelLeave() {
+		showLeaveConfirmDialog = false;
+		pendingNavigationUrl = null;
+	}
+
+	$effect(() => {
+		if (!browser) return;
+		const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+			if (isDirty) {
+				e.preventDefault();
+				e.returnValue = '';
+			}
+		};
+		window.addEventListener('beforeunload', handleBeforeUnload);
+		return () => {
+			window.removeEventListener('beforeunload', handleBeforeUnload);
+		};
+	});
 </script>
 
 <svelte:head>
@@ -137,6 +235,7 @@
 					variant="secondary"
 					class="shrink-0 gap-1.5"
 					onclick={handleAddNode}
+					data-testid="btn-add-storage-node"
 				>
 					<Plus class="size-3.5 stroke-2" />
 					Tambah Node
@@ -146,11 +245,28 @@
 		</section>
 
 		<section>
-			<AdminSystemSettings bind:settings onSave={saveSettings} />
+			<AdminSystemSettings
+				bind:settings
+				saving={savingSettings}
+				{isDirty}
+				{canSave}
+				{isQuotaInvalid}
+				{isConcurrencyInvalid}
+				onSave={saveSettings}
+			/>
 		</section>
 	{/if}
 </div>
 
-
 <AddStorageNodeDialog bind:open={showAddNodeDialog} onAdded={handleNodeUpdated} />
 <EditStorageNodeDialog bind:open={showEditNodeDialog} node={nodeToEdit} onUpdated={handleNodeUpdated} />
+
+<ConfirmDialog
+	bind:open={showLeaveConfirmDialog}
+	title="Tinggalkan Halaman?"
+	description="Pengaturan yang Anda ubah belum disimpan. Perubahan akan hilang jika Anda meninggalkan halaman ini."
+	confirmText="Tinggalkan"
+	cancelText="Tetap di Sini"
+	onConfirm={handleConfirmLeave}
+	onCancel={handleCancelLeave}
+/>

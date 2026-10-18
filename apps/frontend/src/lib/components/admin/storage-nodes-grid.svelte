@@ -16,8 +16,7 @@
 
 	function usedPercent(node: StorageNode) {
 		if (node.capacityCapGb <= 0) return 0;
-		const usedGb = node.capacityCapGb - node.freeGb;
-		return (usedGb / node.capacityCapGb) * 100;
+		return (node.usedBytes / (node.capacityCapGb * 1024 ** 3)) * 100;
 	}
 </script>
 
@@ -68,8 +67,8 @@
 
 					<div class="space-y-2">
 						<div class="flex justify-between text-xs text-muted">
-							<span>{node.freeGb} GB bebas</span>
-							<span>{node.capacityCapGb} GB kapasitas</span>
+							<span>{node.freeGb.toFixed(1)} GB bebas</span>
+							<span>{(node.usedBytes / 1024 ** 3).toFixed(1)} / {node.capacityCapGb} GB</span>
 						</div>
 						<Progress
 							value={used}
@@ -77,7 +76,7 @@
 							indicatorClass={critical ? 'bg-danger' : 'bg-primary'}
 						/>
 						<p class="text-xs text-muted">
-							Terpakai {Math.round(used)}%
+							Terpakai {(node.usedBytes / 1024 ** 3).toFixed(1)} GB ({Math.round(used)}%)
 						</p>
 					</div>
 

@@ -3,6 +3,8 @@ package admin
 import (
 	"context"
 	"database/sql"
+	"path/filepath"
+	"strings"
 
 	"github.com/cubycloud/backend/internal/database"
 	"github.com/uptrace/bun"
@@ -43,13 +45,16 @@ func (r *Repository) SetSetting(ctx context.Context, key, value string) error {
 	return err
 }
 
+// Checkpoint runs WAL checkpoint truncate
+func (r *Repository) Checkpoint(ctx context.Context) error {
+	_, err := r.db.ExecContext(ctx, "PRAGMA wal_checkpoint(TRUNCATE)")
+	return err
+}
+
 // GetAllStorageNodes retrieves all storage nodes
 func (r *Repository) GetAllStorageNodes(ctx context.Context) ([]database.StorageNode, error) {
 	var nodes []database.StorageNode
-	err := r.db.NewSelect().
-		Model(&nodes).
-		Order("created_at ASC").
-		Scan(ctx)
+	err := r.db.NewSelect().Model(&nodes).Order("created_at ASC").Order("id ASC").Scan(ctx)
 	return nodes, err
 }
 
@@ -84,6 +89,7 @@ func (r *Repository) UpsertStorageNode(ctx context.Context, node *database.Stora
 	_, err := r.db.NewInsert().
 		Model(node).
 		On("CONFLICT (id) DO UPDATE").
+		Set("name = EXCLUDED.name").
 		Set("capacity_bytes = EXCLUDED.capacity_bytes").
 		Set("enabled = EXCLUDED.enabled").
 		Exec(ctx)
@@ -131,4 +137,40 @@ func (r *Repository) UpdateNode(ctx context.Context, node *database.StorageNode)
 		WherePK().
 		Exec(ctx)
 	return err
+}
+func (r *Repository) HasStorageNodeName(ctx context.Context, name, excludeID string) (bool, error) {
+	nodes, err := r.GetAllStorageNodes(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, node := range nodes {
+		if node.ID == excludeID {
+			continue
+		}
+		nodeName := node.Name
+		if nodeName == "" {
+			if node.Type == "LOCAL" && node.Path != nil {
+				nodeName = filepath.Base(*node.Path)
+			} else if node.Bucket != nil {
+				nodeName = *node.Bucket
+			}
+		}
+		if strings.EqualFold(strings.TrimSpace(nodeName), strings.TrimSpace(name)) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (r *Repository) StorageNodeUsedBytes(ctx context.Context, nodeID, legacyNodeID string) (int64, error) {
+	var used int64
+	err := r.db.NewRaw(`
+		SELECT COALESCE(SUM(size_bytes), 0) FROM (
+			SELECT disk_key, MAX(size_bytes) AS size_bytes
+			FROM my_storage_items
+			WHERE kind = 'file' AND disk_key IS NOT NULL
+				AND (storage_node_id = ? OR (storage_node_id IS NULL AND ? = ?))
+			GROUP BY disk_key
+		)`, nodeID, nodeID, legacyNodeID).Scan(ctx, &used)
+	return used, err
 }

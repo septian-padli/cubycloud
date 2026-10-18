@@ -113,6 +113,7 @@ func (h *Handler) RescanStorageNodes(c echo.Context) error {
 
 // DownloadBackup streams database backup
 func (h *Handler) DownloadBackup(c echo.Context) error {
+	_ = h.service.Checkpoint(c.Request().Context())
 	dbFile, err := os.Open(h.dbPath)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{
@@ -154,14 +155,14 @@ func (h *Handler) CreateLocalNode(c echo.Context) error {
 		if strings.Contains(err.Error(), "already exists") {
 			return echo.NewHTTPError(http.StatusConflict, map[string]string{"error": err.Error()})
 		}
-		if strings.Contains(err.Error(), "does not exist") {
+		if strings.Contains(err.Error(), "does not exist") || strings.Contains(err.Error(), "name is required") {
 			return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": err.Error()})
 		}
 		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{"error": "failed to create node"})
 	}
-
 	return c.JSON(http.StatusCreated, node)
 }
+
 
 // CreateCloudNode adds a new S3-compatible cloud storage node
 func (h *Handler) CreateCloudNode(c echo.Context) error {
@@ -175,9 +176,11 @@ func (h *Handler) CreateCloudNode(c echo.Context) error {
 		if strings.Contains(err.Error(), "already exists") {
 			return echo.NewHTTPError(http.StatusConflict, map[string]string{"error": err.Error()})
 		}
+		if strings.Contains(err.Error(), "name is required") {
+			return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
 		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{"error": "failed to create node"})
 	}
-
 	return c.JSON(http.StatusCreated, node)
 }
 
@@ -197,12 +200,14 @@ func (h *Handler) UpdateNode(c echo.Context) error {
 		if strings.Contains(err.Error(), "not found") {
 			return echo.NewHTTPError(http.StatusNotFound, map[string]string{"error": "node not found"})
 		}
-		if strings.Contains(err.Error(), "capacity") {
+		if strings.Contains(err.Error(), "already exists") {
+			return echo.NewHTTPError(http.StatusConflict, map[string]string{"error": err.Error()})
+		}
+		if strings.Contains(err.Error(), "capacity") || strings.Contains(err.Error(), "name is required") {
 			return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": err.Error()})
 		}
 		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{"error": "failed to update node"})
 	}
-
 	return c.JSON(http.StatusOK, map[string]string{"message": "node updated successfully"})
 }
 

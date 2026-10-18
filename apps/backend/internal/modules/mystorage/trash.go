@@ -178,11 +178,11 @@ func (s *Service) PurgeItem(ctx context.Context, owner, id string) error {
 
 	rows, err := tx.QueryContext(
 		ctx,
-		`WITH RECURSIVE descendants(id, kind, disk_key) AS (
-			SELECT id, kind, disk_key FROM my_storage_items WHERE id=? AND owner_id=?
+		`WITH RECURSIVE descendants(id, kind, disk_key, node_path) AS (
+			SELECT id, kind, disk_key, COALESCE((SELECT path FROM storage_nodes WHERE id=storage_node_id), '') FROM my_storage_items WHERE id=? AND owner_id=?
 			UNION ALL
-			SELECT m.id, m.kind, m.disk_key FROM my_storage_items m JOIN descendants d ON m.parent_id=d.id WHERE m.owner_id=?
-		) SELECT id, kind, disk_key FROM descendants`,
+			SELECT m.id, m.kind, m.disk_key, COALESCE((SELECT path FROM storage_nodes WHERE id=m.storage_node_id), '') FROM my_storage_items m JOIN descendants d ON m.parent_id=d.id WHERE m.owner_id=?
+		) SELECT id, kind, disk_key, node_path FROM descendants`,
 		id, owner, owner,
 	)
 	if err != nil {
@@ -191,15 +191,14 @@ func (s *Service) PurgeItem(ctx context.Context, owner, id string) error {
 	defer rows.Close()
 
 	type toPurge struct {
-		id      string
-		kind    string
+		id, kind, nodePath string
 		diskKey *string
 	}
 	var items []toPurge
 	var ids []any
 	for rows.Next() {
 		var p toPurge
-		if err := rows.Scan(&p.id, &p.kind, &p.diskKey); err != nil {
+		if err := rows.Scan(&p.id, &p.kind, &p.diskKey, &p.nodePath); err != nil {
 			return err
 		}
 		items = append(items, p)
@@ -213,12 +212,14 @@ func (s *Service) PurgeItem(ctx context.Context, owner, id string) error {
 
 	placeholders := strings.Repeat("?,", len(ids))
 	placeholders = placeholders[:len(placeholders)-1]
+	_, _ = tx.ExecContext(ctx, fmt.Sprintf(`DELETE FROM vfs_starred WHERE node_id IN (%s)`, placeholders), ids...)
 	_, err = tx.ExecContext(ctx, fmt.Sprintf(`DELETE FROM my_storage_items WHERE id IN (%s)`, placeholders), ids...)
 	if err != nil {
 		return err
 	}
 
-	var diskKeysToDelete []string
+	type blobToDelete struct{ key, nodePath string }
+	var diskKeysToDelete []blobToDelete
 	for _, p := range items {
 		if p.kind == "file" && p.diskKey != nil && *p.diskKey != "" {
 			var count int
@@ -227,7 +228,7 @@ func (s *Service) PurgeItem(ctx context.Context, owner, id string) error {
 				return err
 			}
 			if count == 0 {
-				diskKeysToDelete = append(diskKeysToDelete, *p.diskKey)
+				diskKeysToDelete = append(diskKeysToDelete, blobToDelete{*p.diskKey, p.nodePath})
 			}
 		}
 	}
@@ -236,8 +237,8 @@ func (s *Service) PurgeItem(ctx context.Context, owner, id string) error {
 		return err
 	}
 
-	for _, key := range diskKeysToDelete {
-		_ = s.storage.DeleteLocal(ctx, "", key)
+	for _, blob := range diskKeysToDelete {
+		_ = s.storage.DeleteLocal(ctx, blob.nodePath, blob.key)
 	}
 
 	return nil
@@ -252,7 +253,7 @@ func (s *Service) PurgeAll(ctx context.Context, owner string) error {
 
 	rows, err := tx.QueryContext(
 		ctx,
-		`SELECT disk_key FROM my_storage_items WHERE owner_id=? AND deleted_at IS NOT NULL AND kind='file' AND disk_key IS NOT NULL`,
+		`SELECT disk_key, COALESCE((SELECT path FROM storage_nodes WHERE id=storage_node_id), '') FROM my_storage_items WHERE owner_id=? AND deleted_at IS NOT NULL AND kind='file' AND disk_key IS NOT NULL`,
 		owner,
 	)
 	if err != nil {
@@ -260,30 +261,32 @@ func (s *Service) PurgeAll(ctx context.Context, owner string) error {
 	}
 	defer rows.Close()
 
-	var diskKeys []string
+	type blobToDelete struct{ key, nodePath string }
+	var diskKeys []blobToDelete
 	for rows.Next() {
-		var key string
-		if err := rows.Scan(&key); err != nil {
+		var blob blobToDelete
+		if err := rows.Scan(&blob.key, &blob.nodePath); err != nil {
 			return err
 		}
-		diskKeys = append(diskKeys, key)
+		diskKeys = append(diskKeys, blob)
 	}
 	_ = rows.Close()
 
+	_, _ = tx.ExecContext(ctx, `DELETE FROM vfs_starred WHERE node_id IN (SELECT id FROM my_storage_items WHERE owner_id=? AND deleted_at IS NOT NULL)`, owner)
 	_, err = tx.ExecContext(ctx, `DELETE FROM my_storage_items WHERE owner_id=? AND deleted_at IS NOT NULL`, owner)
 	if err != nil {
 		return err
 	}
 
-	var diskKeysToDelete []string
-	for _, key := range diskKeys {
+	var diskKeysToDelete []blobToDelete
+	for _, blob := range diskKeys {
 		var count int
-		err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM my_storage_items WHERE disk_key=?`, key).Scan(&count)
+		err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM my_storage_items WHERE disk_key=?`, blob.key).Scan(&count)
 		if err != nil {
 			return err
 		}
 		if count == 0 {
-			diskKeysToDelete = append(diskKeysToDelete, key)
+			diskKeysToDelete = append(diskKeysToDelete, blob)
 		}
 	}
 
@@ -291,8 +294,8 @@ func (s *Service) PurgeAll(ctx context.Context, owner string) error {
 		return err
 	}
 
-	for _, key := range diskKeysToDelete {
-		_ = s.storage.DeleteLocal(ctx, "", key)
+	for _, blob := range diskKeysToDelete {
+		_ = s.storage.DeleteLocal(ctx, blob.nodePath, blob.key)
 	}
 
 	return nil
@@ -309,28 +312,26 @@ func (s *Service) PurgeExpired(ctx context.Context, olderThan time.Duration) (in
 
 	rows, err := tx.QueryContext(
 		ctx,
-		`WITH RECURSIVE expired(id, kind, disk_key) AS (
-			SELECT id, kind, disk_key FROM my_storage_items WHERE deleted_at IS NOT NULL AND deleted_at <= ?
+		`WITH RECURSIVE expired(id, kind, disk_key, node_path) AS (
+			SELECT id, kind, disk_key, COALESCE((SELECT path FROM storage_nodes WHERE id=storage_node_id), '') FROM my_storage_items WHERE deleted_at IS NOT NULL AND deleted_at <= ?
 			UNION
-			SELECT m.id, m.kind, m.disk_key FROM my_storage_items m JOIN expired e ON m.parent_id=e.id
-		) SELECT id, kind, disk_key FROM expired`,
+			SELECT m.id, m.kind, m.disk_key, COALESCE((SELECT path FROM storage_nodes WHERE id=m.storage_node_id), '') FROM my_storage_items m JOIN expired e ON m.parent_id=e.id
+		) SELECT id, kind, disk_key, node_path FROM expired`,
 		cutoff,
 	)
 	if err != nil {
 		return 0, err
 	}
 	defer rows.Close()
-
 	type itemInfo struct {
-		id      string
-		kind    string
+		id, kind, nodePath string
 		diskKey *string
 	}
 	var items []itemInfo
 	var ids []any
 	for rows.Next() {
 		var info itemInfo
-		if err := rows.Scan(&info.id, &info.kind, &info.diskKey); err != nil {
+		if err := rows.Scan(&info.id, &info.kind, &info.diskKey, &info.nodePath); err != nil {
 			return 0, err
 		}
 		items = append(items, info)
@@ -344,12 +345,13 @@ func (s *Service) PurgeExpired(ctx context.Context, olderThan time.Duration) (in
 
 	placeholders := strings.Repeat("?,", len(ids))
 	placeholders = placeholders[:len(placeholders)-1]
+	_, _ = tx.ExecContext(ctx, fmt.Sprintf(`DELETE FROM vfs_starred WHERE node_id IN (%s)`, placeholders), ids...)
 	_, err = tx.ExecContext(ctx, fmt.Sprintf(`DELETE FROM my_storage_items WHERE id IN (%s)`, placeholders), ids...)
 	if err != nil {
 		return 0, err
 	}
-
-	var diskKeysToDelete []string
+	type blobToDelete struct{ key, nodePath string }
+	var diskKeysToDelete []blobToDelete
 	for _, item := range items {
 		if item.kind == "file" && item.diskKey != nil && *item.diskKey != "" {
 			var count int
@@ -358,7 +360,7 @@ func (s *Service) PurgeExpired(ctx context.Context, olderThan time.Duration) (in
 				return 0, err
 			}
 			if count == 0 {
-				diskKeysToDelete = append(diskKeysToDelete, *item.diskKey)
+				diskKeysToDelete = append(diskKeysToDelete, blobToDelete{*item.diskKey, item.nodePath})
 			}
 		}
 	}
@@ -367,8 +369,8 @@ func (s *Service) PurgeExpired(ctx context.Context, olderThan time.Duration) (in
 		return 0, err
 	}
 
-	for _, key := range diskKeysToDelete {
-		_ = s.storage.DeleteLocal(ctx, "", key)
+	for _, blob := range diskKeysToDelete {
+		_ = s.storage.DeleteLocal(ctx, blob.nodePath, blob.key)
 	}
 
 	return int64(len(ids)), nil

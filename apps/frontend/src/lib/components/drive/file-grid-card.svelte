@@ -22,7 +22,8 @@
 		onSelect,
 		onOpen,
 		badges,
-		menu
+		menu,
+		star
 	}: {
 		kind: FileKind;
 		name: string;
@@ -32,6 +33,7 @@
 		onOpen?: () => void;
 		badges?: Snippet;
 		menu?: Snippet;
+		star?: Snippet;
 	} = $props();
 
 	const icons: Record<FileKind, Component> = {
@@ -65,6 +67,16 @@
 		)}
 	>
 		<Card.Content class="flex flex-col gap-3">
+				{#if star}
+					<div
+						role="presentation"
+						class="absolute start-2 top-2 z-10"
+						onclick={(e) => e.stopPropagation()}
+						onkeydown={(e) => e.stopPropagation()}
+					>
+						{@render star()}
+					</div>
+				{/if}
 				{#if menu}
 					<div
 						role="presentation"

@@ -80,8 +80,12 @@ func main() {
 	auth.RegisterRoutes(e, db, cfg.JWTSecret, jwtAuth)
 
 	// My Storage VFS endpoints (authenticated per-user file operations & trash).
-	mystorage.RegisterRoutes(e, db, driver, jwtAuth)
-
+	myStorageHandler := mystorage.RegisterRoutes(e, db, driver, jwtAuth)
+	driveGroup := e.Group("/api/v1/drive", jwtAuth)
+	driveGroup.PATCH("/items/:id/move", myStorageHandler.MoveItem)
+	driveGroup.POST("/items/:id/star", myStorageHandler.ToggleStar)
+	driveGroup.PUT("/items/:id/star", myStorageHandler.ToggleStar)
+	driveGroup.GET("/starred", myStorageHandler.ListStarred)
 	// Background cron worker for 30-day trash auto-purge
 	trashPurgeJob := jobs.StartTrashPurgeJob(context.Background(), db, driver, 1*time.Hour, 30*24*time.Hour)
 	defer trashPurgeJob.Stop()
