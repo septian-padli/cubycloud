@@ -342,7 +342,7 @@ func respond(c echo.Context, err error) error {
 		return echo.NewHTTPError(413, map[string]string{"error": "STORAGE_POOL_FULL"})
 	case errors.Is(err, errConflict):
 		return echo.NewHTTPError(409, map[string]string{"error": "name_conflict"})
-	case errors.Is(err, errInvalidName), errors.Is(err, errBadParent), errors.Is(err, errMoveCycle):
+	case errors.Is(err, errInvalidName), errors.Is(err, errInvalidSize), errors.Is(err, errBadParent), errors.Is(err, errMoveCycle):
 		return echo.NewHTTPError(400, err.Error())
 	default:
 		return echo.NewHTTPError(500, "internal server error")
@@ -409,7 +409,15 @@ func (h *Handler) batchDownloadZip(c echo.Context) error {
 	var req struct {
 		IDs []string `json:"ids"`
 	}
-	if err := c.Bind(&req); err != nil || len(req.IDs) == 0 {
+	if strings.HasPrefix(c.Request().Header.Get(echo.HeaderContentType), echo.MIMEApplicationForm) {
+		if err := c.Request().ParseForm(); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request"})
+		}
+		req.IDs = c.Request().PostForm["ids"]
+	} else if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request"})
+	}
+	if len(req.IDs) == 0 {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "ids is required"})
 	}
 	r, err := h.service.BatchDownloadZip(c.Request().Context(), owner(c), req.IDs)

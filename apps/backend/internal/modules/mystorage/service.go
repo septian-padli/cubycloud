@@ -1575,13 +1575,14 @@ func (s *Service) UploadIntent(ctx context.Context, owner, filename string, size
 	}
 
 	uploadID := ulid.Make().String()
-	expiry := 15 * time.Minute
-	putURL, err := cloud.PresignUpload(ctx, placement.ID, uploadID, expiry)
+	urlExpiry := 15 * time.Minute
+	putURL, err := cloud.PresignUpload(ctx, placement.ID, uploadID, urlExpiry)
 	if err != nil {
 		return nil, fmt.Errorf("presign upload: %w", err)
 	}
 
-	expiresAt := time.Now().UTC().Add(expiry)
+	now := time.Now().UTC()
+	expiresAt := now.Add(24 * time.Hour)
 	var parentVal any
 	if parent != nil && *parent != "" {
 		parentVal = *parent
@@ -1600,7 +1601,7 @@ func (s *Service) UploadIntent(ctx context.Context, owner, filename string, size
 		UploadID:  uploadID,
 		URL:       putURL,
 		Method:    "PUT",
-		ExpiresAt: expiresAt.Format(time.RFC3339),
+		ExpiresAt: now.Add(urlExpiry).Format(time.RFC3339),
 	}, nil
 }
 
@@ -1643,41 +1644,66 @@ func (s *Service) SyncCloud(ctx context.Context, owner, uploadID string) (Item, 
 	if pending == 0 {
 		return Item{}, errNotFound
 	}
-	requestedSize := sizeBytes
+	if !expiresAt.After(time.Now().UTC()) {
+		return Item{}, errNotFound
+	}
 	actualSize, err := cloud.HeadObject(ctx, storageNodeID, uploadID)
 	if err != nil {
 		return Item{}, fmt.Errorf("cloud object verification failed: %w", err)
 	}
-	if actualSize < 0 {
-		return Item{}, errors.New("cloud object has invalid size")
+	if actualSize < 0 || actualSize != sizeBytes {
+		return Item{}, errInvalidSize
 	}
-	sizeBytes = actualSize
-
-
-
-	committed := false
-	defer func() {
-		if !committed {
-			_ = cloud.DeleteObject(context.Background(), storageNodeID, uploadID)
+	// AvailableOnNode clamps an overcommitted node to zero; reject even when
+	// adding this upload's own reservation would otherwise make it look free.
+	var capacity int64
+	if err = s.db.QueryRowContext(ctx, `SELECT capacity_bytes FROM storage_nodes WHERE id=?`, storageNodeID).Scan(&capacity); err != nil {
+		return Item{}, errStorageFull
+	}
+	if capacity <= 0 {
+		capacity = 1000 * 1024 * 1024 * 1024
+	} else {
+		reserve := capacity / 20
+		if capacity%20 != 0 {
+			reserve++
 		}
-	}()
+		capacity -= reserve
+	}
+	used, err := storage.NodeUsedBytes(ctx, s.db.DB, storageNodeID)
+	if err != nil {
+		return Item{}, errStorageFull
+	}
+	if used > capacity-storage.GetNodeReserved(storageNodeID) {
+		return Item{}, errStorageFull
+	}
 
 	available, err := storage.AvailableOnNode(ctx, s.db, s.storage, storageNodeID)
 	if err != nil {
 		return Item{}, errStorageFull
 	}
-	if expiresAt.After(time.Now().UTC()) && requestedSize > 0 {
-		available += requestedSize
+	if sizeBytes > 0 {
+		available += sizeBytes
 	}
 	if actualSize > available {
 		return Item{}, errStorageFull
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
+	// Keep the SQLite connection after a failed COMMIT so deferred constraint
+	// errors can be rolled back before database/sql returns it to the pool.
+	tx, err := s.db.DB.Conn(ctx)
 	if err != nil {
 		return Item{}, err
 	}
-	defer tx.Rollback()
+	defer tx.Close()
+	if _, err = tx.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
+		return Item{}, err
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_, _ = tx.ExecContext(context.Background(), `ROLLBACK`)
+		}
+	}()
 
 	if err = s.checkQuota(ctx, tx, owner, actualSize); err != nil {
 		return Item{}, err
@@ -1730,9 +1756,11 @@ func (s *Service) SyncCloud(ctx context.Context, owner, uploadID string) (Item, 
 	}
 
 	_ = database.RecordActivity(ctx, tx, owner, "upload", uploadID, candidate, "file", "my-storage")
-	_, _ = tx.ExecContext(ctx, `DELETE FROM pending_cloud_uploads WHERE id = ?`, uploadID)
+	if _, err = tx.ExecContext(ctx, `DELETE FROM pending_cloud_uploads WHERE id = ? AND owner_id = ?`, uploadID, owner); err != nil {
+		return Item{}, err
+	}
 
-	if err = tx.Commit(); err != nil {
+	if _, err = tx.ExecContext(ctx, `COMMIT`); err != nil {
 		return Item{}, err
 	}
 	committed = true
@@ -1745,6 +1773,23 @@ func (s *Service) SyncCloud(ctx context.Context, owner, uploadID string) (Item, 
 		ParentID:   parent,
 		ModifiedAt: now,
 	}, nil
+}
+
+// Keep a blob that is still referenced by either drive; only orphan uploads
+// belong to the pending intent's cancellation/expiry cleanup.
+func (s *Service) deleteUnreferencedCloudUpload(ctx context.Context, cloud storage.CloudStorageDriver, nodeID, uploadID string) error {
+	var referenced bool
+	err := s.db.QueryRowContext(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM my_storage_items WHERE disk_key=? AND storage_node_id=?
+			UNION ALL
+			SELECT 1 FROM organization_items WHERE disk_key=? AND storage_node_id=?
+		)
+	`, uploadID, nodeID, uploadID, nodeID).Scan(&referenced)
+	if err != nil || referenced {
+		return err
+	}
+	return cloud.DeleteObject(ctx, nodeID, uploadID)
 }
 func (s *Service) CancelUploadIntent(ctx context.Context, owner, uploadID string) (bool, error) {
 	cloudUploadMu.Lock()
@@ -1762,7 +1807,7 @@ func (s *Service) CancelUploadIntent(ctx context.Context, owner, uploadID string
 	if !ok {
 		return false, errors.New("cloud driver unavailable")
 	}
-	if err = cloud.DeleteObject(ctx, nodeID, uploadID); err != nil {
+	if err = s.deleteUnreferencedCloudUpload(ctx, cloud, nodeID, uploadID); err != nil {
 		return false, fmt.Errorf("delete cloud upload object: %w", err)
 	}
 	result, err := s.db.ExecContext(ctx, `DELETE FROM pending_cloud_uploads WHERE id=? AND owner_id=?`, uploadID, owner)
@@ -1805,7 +1850,7 @@ func (s *Service) CleanupExpiredPendingCloudUploads(ctx context.Context) (int64,
 	var deleted int64
 	var firstErr error
 	for _, upload := range uploads {
-		if err = cloud.DeleteObject(ctx, upload.nodeID, upload.id); err != nil {
+		if err = s.deleteUnreferencedCloudUpload(ctx, cloud, upload.nodeID, upload.id); err != nil {
 			if firstErr == nil {
 				firstErr = fmt.Errorf("delete expired cloud upload %s: %w", upload.id, err)
 			}

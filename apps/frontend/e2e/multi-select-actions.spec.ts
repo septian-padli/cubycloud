@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -138,23 +138,27 @@ test('Multi-select actions in List & Grid view with bulk bar, move, delete, zip,
 		await expect(itemRow(page, 'doc-alpha.txt')).toBeVisible();
 		await expect(itemRow(page, 'doc-beta.txt')).toBeVisible();
 
-		// 6. Test Bulk Download as ZIP with progress task in top-right queue
+		// Native form POST streams the ZIP into browser Downloads without buffering JS chunks.
 		await page.getByRole('button', { name: 'Pilih doc-alpha.txt' }).click();
 		await page.getByRole('button', { name: 'Pilih doc-beta.txt' }).click();
 
 		await page.getByTestId('bulk-actions-menu-trigger').click();
+		const zipRequest = page.waitForRequest((request) =>
+			request.url().endsWith('/api/v1/drive/my-storage/batch/download-zip') && request.method() === 'POST'
+		);
+		const downloadPromise = page.waitForEvent('download');
 		await page.getByTestId('bulk-action-download').click();
+		const request = await zipRequest;
+		expect(request.headers()['content-type']).toContain('application/x-www-form-urlencoded');
+		expect(new URLSearchParams(request.postData() ?? '').getAll('ids')).toHaveLength(2);
+		const downloadedZip = await downloadPromise;
+		const zipPath = join(baseDir, 'bulk.zip');
+		await downloadedZip.saveAs(zipPath);
+		expect(readFileSync(zipPath).subarray(0, 2).toString()).toBe('PK');
 
-		// Progress task queue appears in top-right
 		const uploadQueue = page.getByTestId('upload-queue');
 		await expect(uploadQueue).toBeVisible();
-		await expect(uploadQueue.getByText(/Men-zip-kan 2 item/)).toBeVisible();
-
-		// Task finishes with done
-		await expect.poll(async () => {
-			return await uploadQueue.textContent();
-		}, { timeout: 15000 }).toContain('Men-zip-kan 2 item Selesai');
-
+		await expect(uploadQueue.getByText(/Men-zip-kan 2 item Dimulai/)).toBeVisible();
 		// 7. Test Bulk Delete to Trash with confirmation dialog
 		await page.getByTestId('bulk-actions-menu-trigger').click();
 		await page.getByTestId('bulk-action-delete').click();

@@ -61,19 +61,20 @@
 	let currentItems = $state<FileEntry[]>([]);
 	let apiBreadcrumbs = $state<{ id: string; name: string }[]>([]);
 	let allFolders = $state<FileEntry[]>([]);
-	let uploadQueue = $state<{ name: string; size: number; progress: number; state: 'queued' | 'uploading' | 'done' | 'failed'; error?: string }[]>([]);
+	let uploadQueue = $state<{ name: string; size: number; progress: number; state: 'queued' | 'uploading' | 'started' | 'done' | 'failed'; error?: string }[]>([]);
 	let queueOpen = $state(false);
 	let queueDismissed = $state(false);
 	const uploadProgress = $derived.by(() => {
 		let totalWeight = 0;
 		let transferredWeight = 0;
 		for (const item of uploadQueue) {
+			if (item.state === 'started') continue;
 			const weight = Math.max(item.size, 1);
 			totalWeight += weight;
 			transferredWeight += weight * item.progress;
 		}
 		if (!totalWeight) return 0;
-		return uploadQueue.every((item) => item.state === 'done')
+		return uploadQueue.every((item) => item.state === 'done' || item.state === 'started')
 			? 100
 			: Math.min(Math.floor(transferredWeight / totalWeight), 99);
 	});
@@ -181,21 +182,19 @@
 		queueOpen = true;
 
 		try {
-			await api.downloadBatchZip(
-				selected.map((e) => e.id),
-				(percent) => {
-					uploadQueue[queueIndex] = {
-						...uploadQueue[queueIndex],
-						progress: Math.min(percent, 99)
-					};
-				}
-			);
+			api.downloadBatchZip(selected.map((e) => e.id), (message) => {
+				uploadQueue[queueIndex] = {
+					...uploadQueue[queueIndex],
+					state: 'failed',
+					error: message
+				};
+				toast.error(message);
+			});
 			uploadQueue[queueIndex] = {
 				...uploadQueue[queueIndex],
-				progress: 100,
-				state: 'done'
+				state: 'started'
 			};
-			toast.success('Pengunduhan berkas ZIP selesai');
+			toast.info('Pengunduhan berkas ZIP dimulai');
 		} catch (error) {
 			uploadQueue[queueIndex] = {
 				...uploadQueue[queueIndex],
@@ -375,7 +374,7 @@
 			return;
 		}
 
-		if (queueDismissed && uploadQueue.every((item) => item.state === 'done' || item.state === 'failed')) {
+		if (queueDismissed && uploadQueue.every((item) => item.state === 'done' || item.state === 'started' || item.state === 'failed')) {
 			uploadQueue = [];
 			queueOpen = false;
 		}
@@ -1433,7 +1432,7 @@
 				aria-expanded={queueOpen}
 				onclick={() => (queueOpen = !queueOpen)}
 			>
-				{uploadQueue.some((item) => item.state === 'uploading') ? (uploadQueue.some((item) => item.name.toLowerCase().includes('zip')) ? 'Memproses' : 'Mengunggah') : 'Selesai'} · {uploadQueue.filter((item) => item.state === 'done').length}/{uploadQueue.length}
+				{uploadQueue.some((item) => item.state === 'uploading') ? (uploadQueue.some((item) => item.name.toLowerCase().includes('zip')) ? 'Memproses' : 'Mengunggah') : uploadQueue.some((item) => item.state === 'started') ? 'Unduhan dimulai' : 'Selesai'} · {uploadQueue.filter((item) => item.state === 'done' || item.state === 'started').length}/{uploadQueue.length}
 			</button>
 			<div class="flex items-center gap-1 shrink-0">
 				<button
@@ -1448,7 +1447,7 @@
 						<ChevronDown class="size-4" />
 					{/if}
 				</button>
-				{#if uploadQueue.every((item) => item.state === 'done' || item.state === 'failed')}
+				{#if uploadQueue.every((item) => item.state === 'done' || item.state === 'started' || item.state === 'failed')}
 					<button
 						type="button"
 						class="inline-flex size-6 items-center justify-center rounded-md text-muted hover:bg-muted/20 hover:text-main transition-colors"
@@ -1461,9 +1460,11 @@
 				{/if}
 			</div>
 		</div>
-		<div class="mt-2 h-1.5 overflow-hidden rounded-full bg-muted/30" role="progressbar" aria-label="Progress unggahan" aria-valuenow={uploadProgress} aria-valuemin="0" aria-valuemax="100">
-			<div class="h-full bg-primary transition-all" style={`width:${uploadProgress}%`}></div>
-</div>
+		{#if uploadQueue.some((item) => item.state === 'uploading' || item.state === 'queued' || item.state === 'done')}
+			<div class="mt-2 h-1.5 overflow-hidden rounded-full bg-muted/30" role="progressbar" aria-label="Progress unggahan" aria-valuenow={uploadProgress} aria-valuemin="0" aria-valuemax="100">
+				<div class="h-full bg-primary transition-all" style={`width:${uploadProgress}%`}></div>
+			</div>
+		{/if}
 		{#if queueOpen}
 			<ul class="mt-3 max-h-56 space-y-2.5 overflow-y-auto text-xs">
 				{#each uploadQueue as item, index (index)}
@@ -1474,7 +1475,7 @@
 							</span>
 							{#if item.state !== 'failed'}
 								<span class="shrink-0 text-muted">
-									{item.state === 'done' ? 'Selesai' : `${item.progress}%`}
+									{item.state === 'done' ? 'Selesai' : item.state === 'started' ? 'Dimulai' : `${item.progress}%`}
 								</span>
 							{/if}
 						</div>

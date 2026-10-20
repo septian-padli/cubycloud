@@ -1,5 +1,5 @@
 import type { FileEntry, LargestFileItem } from '$lib/types/drive.js';
-import { downloadObject, putPresigned, type UploadIntent } from '$lib/api/cloud-transfer.js';
+import { downloadBatchZip, downloadObject, putPresigned, type UploadIntent } from '$lib/api/cloud-transfer.js';
 
 const base = '/api/v1/drive/my-storage';
 export interface VFSNode {
@@ -191,10 +191,11 @@ async function uploadTus(
 	}
 
 	let lastPatchRes: { status: number; ok: boolean; headers: { get(name: string): string | null }; text: string } | null = null;
+	let finalized = false;
 	const MAX_RETRIES = 3;
 
-	while (offset < total || (total === 0 && !lastPatchRes)) {
-		const chunk = total === 0 ? new Blob([]) : file.slice(offset, Math.min(offset + CHUNK_SIZE, total));
+	while (offset < total || !finalized) {
+		const chunk = offset >= total ? new Blob([]) : file.slice(offset, Math.min(offset + CHUNK_SIZE, total));
 		let success = false;
 		let attempts = 0;
 
@@ -240,48 +241,34 @@ async function uploadTus(
 					} else {
 						offset += chunk.size;
 					}
+					finalized = offset === total;
 					success = true;
 					if (total > 0) {
 						progress(Math.min(100, Math.round((offset / total) * 100)));
 					}
 					break;
 				}
-
-				if (patchRes.status === 409 || patchRes.status >= 500) {
-					const headRes = await fetch(uploadUrl, {
-						method: 'HEAD',
-						headers: { 'Tus-Resumable': '1.0.0' },
-						credentials: 'include'
-					});
-					if (headRes.ok) {
-						const remoteOffset = Number(headRes.headers.get('Upload-Offset'));
-						if (!isNaN(remoteOffset)) {
-							offset = remoteOffset;
-							if (total > 0) {
-								progress(Math.min(100, Math.round((offset / total) * 100)));
-							}
-							break;
-						}
+				if (!patchRes.ok) {
+					if (patchRes.status >= 400 && patchRes.status < 500 && patchRes.status !== 409) {
+						let body: { error?: string } = {};
+						try {
+							body = JSON.parse(patchRes.text);
+						} catch {}
+						const err = new Error(storageErrorMessage(body.error ?? '', patchRes.status)) as Error & {
+							status?: number;
+							code?: string;
+						};
+						err.status = patchRes.status;
+						err.code = body.error;
+						throw err;
 					}
-				}
-
-				if (patchRes.status >= 400 && patchRes.status < 500 && patchRes.status !== 409) {
-					let body: { error?: string } = {};
-					try {
-						body = JSON.parse(patchRes.text);
-					} catch {}
-					const err = new Error(storageErrorMessage(body.error ?? '', patchRes.status)) as Error & {
-						status?: number;
-						code?: string;
-					};
-					err.status = patchRes.status;
-					err.code = body.error;
-					throw err;
+					throw new Error(`PATCH request failed with status ${patchRes.status}`);
 				}
 			} catch (err: unknown) {
-				if (attempts >= MAX_RETRIES) {
+				if (err && typeof err === 'object' && 'status' in err && typeof err.status === 'number') {
 					throw err;
 				}
+				let advanced = false;
 				try {
 					const headRes = await fetch(uploadUrl, {
 						method: 'HEAD',
@@ -289,16 +276,25 @@ async function uploadTus(
 						credentials: 'include'
 					});
 					if (headRes.ok) {
-						const remoteOffset = Number(headRes.headers.get('Upload-Offset'));
-						if (!isNaN(remoteOffset)) {
+						const header = headRes.headers.get('Upload-Offset');
+						const remoteOffset = header === null ? NaN : Number(header);
+						if (Number.isInteger(remoteOffset) && remoteOffset >= 0 && remoteOffset <= total) {
+							advanced = remoteOffset !== offset;
 							offset = remoteOffset;
 							if (total > 0) {
-								progress(Math.min(100, Math.round((offset / total) * 100)));
+								progress(Math.min(99, Math.round((offset / total) * 100)));
 							}
-							break;
+							if (advanced) {
+								success = true;
+								break;
+							}
 						}
 					}
-				} catch {
+				} catch {}
+				if (!advanced) {
+					if (attempts >= MAX_RETRIES) {
+						throw err;
+					}
 					const { promise: delayPromise, resolve: delayResolve } = Promise.withResolvers<void>();
 					setTimeout(delayResolve, 500 * attempts);
 					await delayPromise;
@@ -306,7 +302,7 @@ async function uploadTus(
 			}
 		}
 
-		if (!success && offset < total) {
+		if (!success) {
 			throw new Error('Gagal melanjutkan upload TUS setelah beberapa percobaan');
 		}
 	}
@@ -458,74 +454,23 @@ export const myStorageAPI = {
 			if (!intent.url || !intent.upload_id) throw new Error('Respons cloud upload tidak lengkap');
 			try {
 				await putPresigned(intent.url, intent.headers ?? {}, file, progress);
-				return await driveRequest<StorageItem>('/sync-cloud', {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ upload_id: intent.upload_id })
-				});
 			} catch (error) {
 				await request(`/upload-intent/${encodeURIComponent(intent.upload_id)}`, { method: 'DELETE' }).catch(() => {});
 				throw error;
 			}
+			return driveRequest<StorageItem>('/sync-cloud', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ upload_id: intent.upload_id })
+			});
 		}
 		return uploadTus(file, parentId, progress);
 	},
 	async download(id: string, name: string, folder = false): Promise<void> {
 		await downloadObject(base, id, name, folder);
 	},
-	async downloadBatchZip(ids: string[], onProgress?: (percent: number) => void): Promise<void> {
-		const res = await fetch(`${base}/batch/download-zip`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			credentials: 'include',
-			body: JSON.stringify({ ids })
-		});
-		if (!res.ok) {
-			throw new Error('Gagal mengunduh berkas ZIP');
-		}
-		const contentLength = Number(res.headers.get('Content-Length') || 0);
-		if (!res.body) {
-			const blob = await res.blob();
-			const url = URL.createObjectURL(blob);
-			const anchor = document.createElement('a');
-			anchor.href = url;
-			anchor.download = 'cubycloud-archive.zip';
-			document.body.append(anchor);
-			anchor.click();
-			anchor.remove();
-			URL.revokeObjectURL(url);
-			onProgress?.(100);
-			return;
-		}
-
-		const reader = res.body.getReader();
-		const chunks: Uint8Array[] = [];
-		let receivedBytes = 0;
-
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			if (value) {
-				chunks.push(value);
-				receivedBytes += value.length;
-				if (contentLength > 0 && onProgress) {
-					onProgress(Math.min(Math.round((receivedBytes / contentLength) * 100), 99));
-				} else if (onProgress) {
-					onProgress(Math.min(Math.round((receivedBytes / (1024 * 1024)) * 10), 90));
-				}
-			}
-		}
-
-		const blob = new Blob(chunks as BlobPart[], { type: 'application/zip' });
-		const url = URL.createObjectURL(blob);
-		const anchor = document.createElement('a');
-		anchor.href = url;
-		anchor.download = 'cubycloud-archive.zip';
-		document.body.append(anchor);
-		anchor.click();
-		anchor.remove();
-		URL.revokeObjectURL(url);
-		onProgress?.(100);
+	downloadBatchZip(ids: string[], onError?: (message: string) => void): 'started' {
+		return downloadBatchZip(base, ids, onError);
 	},
 	toEntry(item: StorageItem): FileEntry {
 		const extension = item.name.split('.').pop()?.toLowerCase() ?? '';

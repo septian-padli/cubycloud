@@ -10,8 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
-
+	"time"
 	"github.com/cubycloud/backend/internal/database"
 	"github.com/labstack/echo/v4"
 )
@@ -290,4 +292,381 @@ func TestTusDelete(t *testing.T) {
 	if headRec.Code != http.StatusNotFound {
 		t.Fatalf("HEAD after DELETE expected 404 Not Found, got %d", headRec.Code)
 	}
+}
+
+type gatedTusReader struct {
+	started chan struct{}
+	release chan struct{}
+	data    *bytes.Reader
+	once    sync.Once
+}
+
+func (r *gatedTusReader) Read(p []byte) (int, error) {
+	r.once.Do(func() {
+		if r.started != nil {
+			close(r.started)
+			<-r.release
+		}
+	})
+	return r.data.Read(p)
+}
+
+func (r *gatedTusReader) Close() error { return nil }
+
+func tusCreateForTest(t *testing.T, e *echo.Echo, length int) string {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/drive/my-storage/upload-tus", nil)
+	req.Header.Set("Tus-Resumable", "1.0.0")
+	req.Header.Set("Upload-Length", fmt.Sprint(length))
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create upload: %d %s", rec.Code, rec.Body.String())
+	}
+	return rec.Header().Get("Location")
+}
+
+func tusPatchForTest(e *echo.Echo, location, offset string, body *gatedTusReader) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPatch, location, body)
+	req.Header.Set("Tus-Resumable", "1.0.0")
+	req.Header.Set("Upload-Offset", offset)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestTusIndependentUploadsDoNotBlockDuringChunkWrite(t *testing.T) {
+	_, e, _ := setupTusTestEnvironment(t, 10000)
+	slow := tusCreateForTest(t, e, 2)
+	fast := tusCreateForTest(t, e, 2)
+	body := &gatedTusReader{started: make(chan struct{}), release: make(chan struct{}), data: bytes.NewReader([]byte("a"))}
+	defer func() {
+		select {
+		case <-body.release:
+		default:
+			close(body.release)
+		}
+	}()
+	slowDone := make(chan *httptest.ResponseRecorder, 1)
+	go func() { slowDone <- tusPatchForTest(e, slow, "0", body) }()
+	select {
+	case <-body.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("first PATCH did not begin reading its chunk")
+	}
+	fastDone := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		fastDone <- tusPatchForTest(e, fast, "0", &gatedTusReader{data: bytes.NewReader([]byte("b"))})
+	}()
+	select {
+	case rec := <-fastDone:
+		if rec.Code != http.StatusNoContent || rec.Header().Get("Upload-Offset") != "1" {
+			t.Fatalf("independent PATCH: %d offset=%q body=%s", rec.Code, rec.Header().Get("Upload-Offset"), rec.Body.String())
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("independent PATCH blocked behind another upload's chunk")
+	}
+	close(body.release)
+	if rec := <-slowDone; rec.Code != http.StatusNoContent {
+		t.Fatalf("first PATCH: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestTusSameUploadPatchAndDeleteWaitForChunk(t *testing.T) {
+	_, e, dir := setupTusTestEnvironment(t, 10000)
+	location := tusCreateForTest(t, e, 4)
+	body := &gatedTusReader{started: make(chan struct{}), release: make(chan struct{}), data: bytes.NewReader([]byte("ab"))}
+	defer func() {
+		select {
+		case <-body.release:
+		default:
+			close(body.release)
+		}
+	}()
+	firstDone := make(chan *httptest.ResponseRecorder, 1)
+	go func() { firstDone <- tusPatchForTest(e, location, "0", body) }()
+	select {
+	case <-body.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("first PATCH did not begin reading its chunk")
+	}
+	secondDone := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		secondDone <- tusPatchForTest(e, location, "0", &gatedTusReader{data: bytes.NewReader([]byte("xy"))})
+	}()
+	select {
+	case rec := <-secondDone:
+		t.Fatalf("same-upload PATCH completed while first chunk in flight: %d", rec.Code)
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(body.release)
+	if rec := <-firstDone; rec.Code != http.StatusNoContent {
+		t.Fatalf("first PATCH: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := <-secondDone; rec.Code != http.StatusConflict || rec.Header().Get("Upload-Offset") != "2" {
+		t.Fatalf("stale PATCH: %d offset=%q", rec.Code, rec.Header().Get("Upload-Offset"))
+	}
+
+	body = &gatedTusReader{started: make(chan struct{}), release: make(chan struct{}), data: bytes.NewReader([]byte("c"))}
+	go func() { firstDone <- tusPatchForTest(e, location, "2", body) }()
+	select {
+	case <-body.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("next PATCH did not begin reading its chunk")
+	}
+	deleteDone := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		req := httptest.NewRequest(http.MethodDelete, location, nil)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		deleteDone <- rec
+	}()
+	select {
+	case rec := <-deleteDone:
+		t.Fatalf("DELETE completed during PATCH: %d", rec.Code)
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(body.release)
+	if rec := <-firstDone; rec.Code != http.StatusNoContent {
+		t.Fatalf("second chunk: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec := <-deleteDone; rec.Code != http.StatusNoContent {
+		t.Fatalf("DELETE: %d %s", rec.Code, rec.Body.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, filepath.Base(location)+".part")); !os.IsNotExist(err) {
+		t.Fatalf("deleted upload still has a part file: %v", err)
+	}
+}
+
+func TestTusDefaultDirectoryResumesAfterHandlerRestart(t *testing.T) {
+	handler, e, oldDir := setupTusTestEnvironment(t, 10000)
+	dataDir := filepath.Dir(oldDir)
+	t.Setenv("TEMP_TUS_PATH", "")
+	t.Setenv("TUS_TEMP_PATH", "")
+	t.Setenv("DATA_DIR_PATH", dataDir)
+	location := tusCreateForTest(t, e, 4)
+	expectedDir := filepath.Join(dataDir, "temp", "tus")
+	if _, err := os.Stat(filepath.Join(expectedDir, filepath.Base(location)+".info")); err != nil {
+		t.Fatalf("TUS metadata must be on retained data volume: %v", err)
+	}
+	rec := tusPatchForTest(e, location, "0", &gatedTusReader{data: bytes.NewReader([]byte("ab"))})
+	if rec.Code != http.StatusNoContent || rec.Header().Get("Upload-Offset") != "2" {
+		t.Fatalf("initial PATCH: %d offset=%q", rec.Code, rec.Header().Get("Upload-Offset"))
+	}
+	// A fresh handler must recover the offset from files on the retained volume.
+	restarted := echo.New()
+	g := restarted.Group("/api/v1/drive/my-storage")
+	g.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			c.Set("user_id", "test-user")
+			return next(c)
+		}
+	})
+	// Reconnect to the database on the retained volume, as a restarted process does.
+	if err := handler.service.db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err := database.Connect(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	h := NewHandler(NewService(db, &uploadLimitDriver{capacity: 1000000, free: 900000}))
+	h.RegisterTusRoutes(g)
+	head := httptest.NewRecorder()
+	restarted.ServeHTTP(head, httptest.NewRequest(http.MethodHead, location, nil))
+	if head.Code != http.StatusOK || head.Header().Get("Upload-Offset") != "2" {
+		t.Fatalf("restart HEAD: %d offset=%q", head.Code, head.Header().Get("Upload-Offset"))
+	}
+	rec = tusPatchForTest(restarted, location, "2", &gatedTusReader{data: bytes.NewReader([]byte("cd"))})
+	if rec.Code != http.StatusNoContent || rec.Header().Get("Upload-Offset") != "4" {
+		t.Fatalf("resume PATCH: %d offset=%q body=%s", rec.Code, rec.Header().Get("Upload-Offset"), rec.Body.String())
+	}
+}
+
+func TestTusLockRefcountAndNoMemoryLeak(t *testing.T) {
+	const numUploads = 5
+	const workersPerUpload = 30
+
+	type uploadTracker struct {
+		active int
+	}
+	trackers := make(map[string]*uploadTracker)
+	for i := range numUploads {
+		trackers[fmt.Sprintf("leak-test-upload-%d", i)] = &uploadTracker{}
+	}
+
+	var wg sync.WaitGroup
+	var violated int32
+
+	for id, tr := range trackers {
+		for range workersPerUpload {
+			wg.Add(1)
+			go func(uploadID string, tracker *uploadTracker) {
+				defer wg.Done()
+				lock := lockTusUpload(uploadID)
+				defer unlockTusUpload(uploadID, lock)
+
+				tracker.active++
+				if tracker.active != 1 {
+					atomic.AddInt32(&violated, 1)
+				}
+				time.Sleep(50 * time.Microsecond)
+				tracker.active--
+			}(id, tr)
+		}
+	}
+
+	wg.Wait()
+
+	if atomic.LoadInt32(&violated) > 0 {
+		t.Fatalf("mutual exclusion violated %d times across concurrent workers", violated)
+	}
+
+	tusLocks.mu.Lock()
+	remainingLocks := len(tusLocks.byID)
+	tusLocks.mu.Unlock()
+
+	if remainingLocks != 0 {
+		t.Fatalf("expected 0 remaining locks in tusLocks.byID, got %d (memory leak detected)", remainingLocks)
+	}
+}
+
+func TestTusConcurrentIndependentUploadsMultiple(t *testing.T) {
+	_, e, _ := setupTusTestEnvironment(t, 50000)
+	const numUploads = 5
+	locations := make([]string, numUploads)
+	readers := make([]*gatedTusReader, numUploads)
+	doneChans := make([]chan *httptest.ResponseRecorder, numUploads)
+
+	for i := range numUploads {
+		locations[i] = tusCreateForTest(t, e, 10)
+		readers[i] = &gatedTusReader{
+			started: make(chan struct{}),
+			release: make(chan struct{}),
+			data:    bytes.NewReader([]byte("chunk")),
+		}
+		doneChans[i] = make(chan *httptest.ResponseRecorder, 1)
+	}
+
+	defer func() {
+		for _, r := range readers {
+			select {
+			case <-r.release:
+			default:
+				close(r.release)
+			}
+		}
+	}()
+
+	// Start all chunk writes concurrently
+	for i := range numUploads {
+		go func(idx int) {
+			doneChans[idx] <- tusPatchForTest(e, locations[idx], "0", readers[idx])
+		}(i)
+	}
+
+	// All numUploads MUST reach their Read() simultaneously without waiting for others
+	for i := range numUploads {
+		select {
+		case <-readers[i].started:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("upload %d chunk write blocked or timed out; global lock detected", i)
+		}
+	}
+
+	// Release all readers to complete writes
+	for i := range numUploads {
+		close(readers[i].release)
+	}
+
+	// All uploads should complete with 204 No Content and offset 5
+	for i := range numUploads {
+		select {
+		case rec := <-doneChans[i]:
+			if rec.Code != http.StatusNoContent || rec.Header().Get("Upload-Offset") != "5" {
+				t.Fatalf("upload %d: code=%d offset=%s", i, rec.Code, rec.Header().Get("Upload-Offset"))
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("upload %d did not complete", i)
+		}
+	}
+
+	// Verify no memory leak in tusLocks
+	tusLocks.mu.Lock()
+	count := len(tusLocks.byID)
+	tusLocks.mu.Unlock()
+	if count != 0 {
+		t.Fatalf("expected 0 remaining locks, got %d", count)
+	}
+}
+
+func TestTusLocksCleanedUpAfterLifecycle(t *testing.T) {
+	_, e, _ := setupTusTestEnvironment(t, 10000)
+
+	// 1. Full upload lifecycle: POST -> PATCH (part) -> PATCH (final)
+	loc := tusCreateForTest(t, e, 4)
+	uploadID := filepath.Base(loc)
+
+	tusLocks.mu.Lock()
+	if _, ok := tusLocks.byID[uploadID]; ok {
+		t.Errorf("lock for %s should not exist while idle", uploadID)
+	}
+	tusLocks.mu.Unlock()
+
+	rec := tusPatchForTest(e, loc, "0", &gatedTusReader{data: bytes.NewReader([]byte("ab"))})
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("patch 1: %d", rec.Code)
+	}
+
+	tusLocks.mu.Lock()
+	if _, ok := tusLocks.byID[uploadID]; ok {
+		t.Errorf("lock for %s should not exist after patch 1 completes", uploadID)
+	}
+	tusLocks.mu.Unlock()
+
+	rec = tusPatchForTest(e, loc, "2", &gatedTusReader{data: bytes.NewReader([]byte("cd"))})
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("patch 2: %d", rec.Code)
+	}
+
+	tusLocks.mu.Lock()
+	if _, ok := tusLocks.byID[uploadID]; ok {
+		t.Errorf("lock for %s should not exist after upload finalized", uploadID)
+	}
+	tusLocks.mu.Unlock()
+
+	// 2. Delete flow: POST -> DELETE
+	locDel := tusCreateForTest(t, e, 4)
+	uploadIDDel := filepath.Base(locDel)
+
+	delReq := httptest.NewRequest(http.MethodDelete, locDel, nil)
+	delReq.Header.Set("Tus-Resumable", "1.0.0")
+	delRec := httptest.NewRecorder()
+	e.ServeHTTP(delRec, delReq)
+	if delRec.Code != http.StatusNoContent {
+		t.Fatalf("delete: %d", delRec.Code)
+	}
+
+	tusLocks.mu.Lock()
+	if _, ok := tusLocks.byID[uploadIDDel]; ok {
+		t.Errorf("lock for %s should not exist after DELETE", uploadIDDel)
+	}
+	tusLocks.mu.Unlock()
+
+	// 3. Non-existent upload requests
+	nonExistentLoc := "/api/v1/drive/my-storage/upload-tus/non-existent-id"
+	headReq := httptest.NewRequest(http.MethodHead, nonExistentLoc, nil)
+	headReq.Header.Set("Tus-Resumable", "1.0.0")
+	headRec := httptest.NewRecorder()
+	e.ServeHTTP(headRec, headReq)
+	if headRec.Code != http.StatusNotFound {
+		t.Fatalf("head non-existent: %d", headRec.Code)
+	}
+
+	tusLocks.mu.Lock()
+	if _, ok := tusLocks.byID["non-existent-id"]; ok {
+		t.Errorf("lock for non-existent-id should not remain after 404")
+	}
+	tusLocks.mu.Unlock()
 }
