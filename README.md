@@ -1,174 +1,129 @@
 # CubyCloud
 
-Self-hosted modular cloud storage — lightweight alternative to Nextcloud and Google Drive, built for homelab and small teams.
+**Your files. Your server. Your rules.**
 
-> **Vision:** Google Drive you own. Ultra-light on legacy hardware, zero-CLI setup, unified local + S3/R2 storage.
+CubyCloud is a self-hosted file drive for people who want a familiar way to organize and share files while choosing where those files live. It combines a Go API, a SvelteKit web app, SQLite, local storage, and optional S3-compatible storage.
 
-**Target launch:** 1 October 2026 (v1.0)
+[![Go 1.25](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)](https://go.dev/)
+[![Svelte 5](https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white)](https://svelte.dev/)
+![Self-hosted](https://img.shields.io/badge/self--hosted-yes-61764B)
 
----
+![CubyCloud Drive home showing quick access, recent activity, and storage summary](docs/assets/drive-home.png)
 
-## Status
+## Why CubyCloud?
 
-| Area | Status |
-|------|--------|
-| Product spec | [`docs/prd.md`](docs/prd.md) — v1.0 scope locked |
-| Frontend | SvelteKit SPA (UI mock) at [`apps/frontend`](apps/frontend) |
-| Backend (Go) | Scaffolded — Echo + `GET /health` (no features yet) |
+- **Keep control of your data.** Store files on disks you manage or connect an S3-compatible service you choose.
+- **Start in a browser.** The first-run wizard creates the initial administrator and configures storage.
+- **Keep the stack simple.** The application uses a Go server and SQLite; it does not require a separate database or message broker.
+- **Separate personal and shared workspaces.** My Storage and Organization are distinct drives with different quota behavior.
+- **Self-host on your terms.** Choose the host, storage location, backup process, and network exposure.
 
----
+## Features
 
-## What is CubyCloud?
+- **File management:** folders, uploads, rename, move, duplicate, trash, restore, and starred items.
+- **Resumable uploads:** browser uploads to My Storage use TUS chunking.
+- **File previews:** images, video, PDF, and text/code files can be previewed in the browser.
+- **Sharing:** share files and folders with registered users using Viewer or Editor permissions, or create public links with optional password protection.
+- **Organization drive:** a shared workspace for registered users, separate from personal My Storage quota accounting.
+- **Flexible storage:** local disk and S3-compatible storage, with a MinIO-backed Playwright scenario.
+- **Administration:** manage storage nodes, user quotas, system settings, and storage usage.
+- **Capacity controls:** My Storage and Organization uploads are checked against the capacity of the physical storage nodes they share.
 
-CubyCloud is a **single-container** app: Go backend + embedded SvelteKit SPA. v1.0 focuses on:
+## Screenshots
 
-- Zero-CLI web setup wizard
-- Multi-node virtual storage (local disks + S3 / Cloudflare R2)
-- Drive workspace (home, my-storage, organization, shared, starred, trash, stats)
-- Per-user My Storage quotas (admin default + per-user override)
-- Resumable uploads, sharing, trash lifecycle, bundled add-ons (ZIP, image convert, optional PDF preview)
+### File manager
 
-AI Workspace & MCP RAG (Ollama) are **roadmap** items, not v1.0.
+![My Storage file manager showing a folder and a text file](docs/assets/my-storage.png)
 
-See the full PRD for architecture, NFRs, and stack decisions: [`docs/prd.md`](docs/prd.md).
+### First-run setup
 
----
+![CubyCloud first-run setup wizard](docs/assets/setup-wizard.png)
 
-## Repository structure
+### Storage administration
 
-```text
-cubycloud/
-├── Makefile          # Monorepo build, dev, and test orchestration
-├── Dockerfile        # Production multi-stage single container image
-├── apps/
-│   ├── backend/      # Go 1.22+ backend (Echo, SQLite WAL, Clean Architecture)
-│   └── frontend/     # SvelteKit SPA (adapter-static build → go:embed)
-├── docs/
-│   ├── prd.md        # Product requirements & business rules
-│   └── architecture.md # Architecture & system design
-├── scripts/          # Helper scripts (dev runner, setup reset)
-└── README.md
-```
+![Admin Settings page showing a storage node and system settings](docs/assets/admin-settings.png)
 
----
+The screenshots were captured from the running application using synthetic local data. The interface currently shown in these captures is Indonesian.
 
-## Quick start (Development)
+## Quick start
 
-**Requirements:**
-- [Go](https://go.dev) 1.22+
-- [Bun](https://bun.sh) 1.x
-- [Air](https://github.com/air-verse/air) (backend hot reload)
+### Run from source
 
-### Run Full Stack (Backend + Frontend)
+Requirements: **Go 1.25 or newer**, **Bun 1.x**, and OpenSSL to generate a random development secret. Run the backend and frontend in separate terminals from a local checkout.
+
+**Terminal 1 — backend**
 
 ```bash
-make dev
-```
-Or run directly via script: `./scripts/dev.sh`.
-- Frontend: [http://localhost:5188](http://localhost:5188)
-- Backend API: [http://localhost:8383](http://localhost:8383)
-
-### Local S3-Compatible Storage (MinIO)
-
-Run a loopback-only MinIO instance for development:
-
-```bash
-docker compose -f compose.minio.yaml up -d
-curl -fsS http://localhost:19000/minio/health/ready
-```
-
-The stack creates a private `cubycloud-dev` bucket and a separate application account scoped to that bucket with object read/write/delete permissions. The CubyCloud backend and frontend support connecting to this MinIO instance as an S3-compatible node via the Super Admin UI (`/admin/settings`) with PBKDF2/AES-256-GCM encrypted credentials, presigned direct transfers, backend stream fallback, and persistent restart support. Anonymous object access is disabled. Images use digest-pinned Chainguard builds because MinIO upstream no longer publishes community container images.
-MinIO's global S3 CORS allowlist permits browser transfers from the default Vite (`localhost`/`127.0.0.1:5188`) and Playwright (`localhost`/`127.0.0.1:15188`) origins. This only enables browser cross-origin requests; the bucket remains private and application credentials remain scoped by the MinIO policy. Update `MINIO_API_CORS_ALLOW_ORIGIN` in the Compose file if using a different development origin.
-
-| Purpose | Endpoint / value |
-|---------|------------------|
-| S3 API | `http://localhost:19000` |
-| MinIO Console | `http://localhost:19001` |
-| Bucket / region | `cubycloud-dev` / `us-east-1` |
-| Admin login | `cubycloud-admin` / `cubycloud-admin-local-only-2026` |
-| Application access key | `cubycloud-app` |
-| Application secret key | `cubycloud-app-local-only-2026` |
-
-This separate development stack is not part of the production image or deployment. `docker compose -f compose.minio.yaml down` preserves its data volume; avoid `down -v` unless intentionally deleting that data.
-
-
-### Run Backend Only (Go)
-
-```bash
-# From repository root
-make dev-backend
-
-# Or from apps/backend directory
 cd apps/backend
+PORT=8383 \
+DATA_DIR_PATH="$HOME/cubycloud-data" \
+JWT_SECRET="$(openssl rand -hex 32)" \
 go run ./cmd/server/main.go
 ```
-The backend automatically creates `./data` for SQLite database and storage nodes with sensible development defaults.
 
-### Run Frontend Only (SvelteKit)
+**Terminal 2 — frontend**
 
 ```bash
-# From repository root
-make dev-frontend
-
-# Or from apps/frontend directory
 cd apps/frontend
 bun install
-bun run dev
+VITE_API_PROXY_TARGET=http://localhost:8383 \
+bun run dev --host 127.0.0.1 --port 5188
 ```
 
----
+Open [http://localhost:5188/setup](http://localhost:5188/setup), create the first administrator, and complete the setup wizard. Save the recovery key somewhere safe. Application data is written under the `DATA_DIR_PATH` you selected; keep that directory backed up.
 
-## Building Single Executable (Production)
+### Container build status
+
+> **The Docker image does not currently build from this checkout.** The backend module requires Go 1.25.0, while `Dockerfile` uses `golang:1.24-alpine`. A local `docker build` was attempted and fails at `go mod download` with `go.mod requires go >= 1.25.0`. The Docker instructions are intentionally not presented as a working installation until that version mismatch is resolved.
+
+## System requirements
+
+- **Source development:** Go 1.25 or newer and Bun 1.x. Air is only needed for the `make dev` convenience script.
+- **Storage:** a writable persistent data directory for the SQLite database, file data, and temporary upload chunks. S3-compatible storage is optional.
+- **Operating systems:** no official OS compatibility matrix is published. Use a Go/Bun toolchain available for your development host.
+- **CPU and memory:** no measured minimum requirements or performance benchmarks are published. Plan capacity for your workload and monitor the host.
+
+## Architecture and tech stack
+
+| Area           | Implementation                                           |
+| -------------- | -------------------------------------------------------- |
+| Backend        | Go 1.25, Echo, Bun ORM                                   |
+| Database       | SQLite in WAL mode with embedded SQL migrations          |
+| Frontend       | SvelteKit 2, Svelte 5, TypeScript, Tailwind CSS 4        |
+| Local storage  | Filesystem storage nodes                                 |
+| Object storage | S3-compatible services through the AWS SDK for Go v2     |
+| Packaging      | Static frontend assets embedded into the Go server build |
+
+The intended production package is a single Go service serving both the API and the built frontend. The current Docker build limitation is documented above; the stack description is not a claim that the image currently builds.
+
+## Development and testing
+
+For the full development setup, configuration, and test details, see [Development](docs/development.md) and [Testing](docs/testing.md).
 
 ```bash
-make build
-```
-This builds the SvelteKit frontend, synchronizes the static build to `apps/backend/web/dist/`, and compiles a single self-contained Go binary with embedded frontend at `apps/backend/bin/cubycloud`.
-
-```bash
-./apps/backend/bin/cubycloud
+make test
 ```
 
----
+`make test` runs backend Go tests and the frontend Svelte check. Playwright end-to-end tests are run separately; the S3 integration test requires the optional MinIO development service.
 
-## Testing
+## Documentation
 
-```bash
-make test          # Run all backend + frontend tests
-make test-backend  # Run Go backend tests
-make test-frontend # Run SvelteKit type check
-```
+- [Architecture and runtime model](docs/architecture.md)
+- [Development setup](docs/development.md)
+- [Testing guide](docs/testing.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security policy and reporting](SECURITY.md)
 
----
+## Security and privacy
 
-## Tech stack (planned / in use)
+CubyCloud runs on infrastructure you control and stores application data beneath its configured data directory. Implemented safeguards include bcrypt password hashing, HTTP-only `SameSite=Lax` session cookies, rate limiting for login and public-share unlock requests, and encryption of saved S3-compatible storage credentials.
 
-| Layer | Technology |
-|-------|------------|
-| Backend | Go 1.22+, Echo, Bun ORM (`uptrace/bun`), SQLite (WAL) |
-| Frontend | SvelteKit 2, Svelte 5, Tailwind CSS v4, shadcn-svelte |
-| Deploy | Single Docker image (< 150 MB target) |
-| Cloud I/O | AWS SDK v2 presigned URLs (S3 / R2) |
+These safeguards do not replace TLS, host security, or backups. CubyCloud does not claim end-to-end encryption for uploaded file contents. See [SECURITY.md](SECURITY.md) for the current vulnerability-reporting guidance; a dedicated private contact channel is not published yet.
 
----
+## Contributing and community
 
-## Performance targets (v1.0)
-
-| Metric | Target |
-|--------|--------|
-| Idle RAM | < 200 MB |
-| Active RAM (transfer peak) | < 600 MB |
-| Page navigation (LAN) | < 1.0 s |
-| Minimum hardware | Intel Celeron 2-core, 2 GB RAM |
-
----
-
-## Design
-
-UI design system (Flat Earthy, Montserrat, Tailwind v4 tokens) is defined in [`apps/frontend/DESIGN.md`](apps/frontend/DESIGN.md) and referenced by the PRD. The coming soon page implements this spec.
-
----
+Bug reports, reproducible examples, and focused pull requests are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before preparing a change. Do not include secrets, recovery keys, or real user data in issues, logs, screenshots, or test fixtures.
 
 ## License
 
-TBD.
+There is currently no license file in this repository. No license has been selected or granted; do not assume that copying, modifying, or redistributing this project is permitted.
