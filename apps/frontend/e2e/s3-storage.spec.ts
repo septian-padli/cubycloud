@@ -1,5 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, rmSync, truncateSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { restartControlDir } from './restart-control.js';
 
@@ -9,6 +11,11 @@ const recoveryKey = 'ABCDE-FGHKL-MNPQR-STUVW-XYZ23-45678';
 const restartDir = restartControlDir;
 const restartRequestPath = join(restartDir, 'restart-request.json');
 const restartResultPath = join(restartDir, 'restart-result.json');
+let multipartTempPath: string | undefined;
+
+test.afterEach(() => {
+	if (multipartTempPath) rmSync(multipartTempPath, { force: true });
+});
 
 function writeJSONAtomically(path: string, value: unknown) {
 	const temporaryPath = `${path}.${process.pid}.tmp`;
@@ -24,7 +31,9 @@ async function ensureAdminLoggedIn(page: Page) {
 		if (!json.is_setup_completed) {
 			const scan = await page.request.get('/api/v1/setup/scan-nodes');
 			expect(scan.ok()).toBeTruthy();
-			const { nodes } = (await scan.json()) as { nodes: { path: string; capacity_bytes: number }[] };
+			const { nodes } = (await scan.json()) as {
+				nodes: { path: string; capacity_bytes: number }[];
+			};
 			const setup = await page.request.post('/api/v1/setup/complete', {
 				data: {
 					admin: { username, email: 's3-admin@example.test', password, recovery_key: recoveryKey },
@@ -45,8 +54,14 @@ async function ensureAdminLoggedIn(page: Page) {
 	await page.waitForURL('**/drive/home');
 }
 
-test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, persists across backend restart, and deletes', async ({ page }) => {
+test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, persists across backend restart, and deletes', async ({
+	page
+}) => {
 	test.setTimeout(180_000);
+	expect(
+		existsSync(restartResultPath),
+		`Missing initial supervisor result at ${restartResultPath}`
+	).toBeTruthy();
 	await ensureAdminLoggedIn(page);
 
 	// 1. Navigate to /admin/settings and open Add Storage Node modal
@@ -91,9 +106,7 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 	};
 	expect(storageNodes.nodes.some((node) => node.kind === 'S3' && node.enabled)).toBeTruthy();
 	for (const node of storageNodes.nodes.filter((node) => node.kind !== 'S3' && node.enabled)) {
-		const disableNodeRes = await page.request.put(
-			`/api/v1/admin/storage-nodes/${node.id}/disable`
-		);
+		const disableNodeRes = await page.request.put(`/api/v1/admin/storage-nodes/${node.id}/disable`);
 		expect(disableNodeRes.ok()).toBeTruthy();
 	}
 	const enabledNodesRes = await page.request.get('/api/v1/admin/storage-nodes');
@@ -101,9 +114,7 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 	const enabledNodes = (await enabledNodesRes.json()) as {
 		nodes: { kind: string; enabled: boolean }[];
 	};
-	const nonS3EnabledNodes = enabledNodes.nodes.filter(
-		(node) => node.enabled && node.kind !== 'S3'
-	);
+	const nonS3EnabledNodes = enabledNodes.nodes.filter((node) => node.enabled && node.kind !== 'S3');
 	expect(nonS3EnabledNodes).toHaveLength(0);
 
 	// Verify persistence via reload
@@ -124,7 +135,7 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 	// Exercise the real browser upload path, including the cross-origin S3 PUT and metadata sync.
 	const intentResponsePromise = page.waitForResponse(
 		(response) =>
-			response.url().endsWith('/api/v1/drive/my-storage/upload-intent') &&
+			response.url().endsWith('/api/v1/drive/my-storage/multipart-intent') &&
 			response.request().method() === 'POST'
 	);
 	const s3PutResponsePromise = page.waitForResponse(
@@ -135,7 +146,7 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 	);
 	const syncResponsePromise = page.waitForResponse(
 		(response) =>
-			response.url().endsWith('/api/v1/drive/sync-cloud') &&
+			response.url().endsWith('/api/v1/drive/my-storage/sync-cloud') &&
 			response.request().method() === 'POST',
 		{ timeout: 15_000 }
 	);
@@ -149,11 +160,13 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 	expect(intentRes.ok()).toBeTruthy();
 	const intent = (await intentRes.json()) as {
 		placement: string;
+		mode: string;
 		upload_id: string;
 		url: string;
 		method: string;
 	};
 	expect(intent.placement).toBe('s3');
+	expect(intent.mode).toBe('single_put');
 	expect(intent.url).toContain('127.0.0.1:19000/cubycloud-dev');
 	expect(intent.upload_id).toBeTruthy();
 
@@ -163,7 +176,115 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 	expect(syncRes.ok()).toBeTruthy();
 	const createdItem = (await syncRes.json()) as { id: string; name: string };
 	expect(createdItem.id).toBe(intent.upload_id);
+	const multipartSize = 100 * 1024 * 1024;
+	const multipartFilename = `cubycloud-s3-multipart-${randomUUID()}.bin`;
+	const multipartPath = join(tmpdir(), multipartFilename);
+	multipartTempPath = multipartPath;
+	writeFileSync(multipartPath, '');
+	truncateSync(multipartPath, multipartSize);
 
+	const multipartIntentResponsePromise = page.waitForResponse(
+		(response) =>
+			response.url().endsWith('/api/v1/drive/my-storage/multipart-intent') &&
+			response.request().method() === 'POST'
+	);
+	const multipartPartResponsePromise = page.waitForResponse(
+		(response) => {
+			const url = new URL(response.url());
+			return (
+				response.request().method() === 'PUT' &&
+				url.origin === 'http://127.0.0.1:19000' &&
+				url.searchParams.has('partNumber') &&
+				url.searchParams.has('uploadId')
+			);
+		},
+		{ timeout: 60_000 }
+	);
+	const multipartCompleteResponsePromise = page.waitForResponse(
+		(response) =>
+			response.url().includes('/api/v1/drive/my-storage/multipart/') &&
+			response.url().endsWith('/complete') &&
+			response.request().method() === 'POST',
+		{ timeout: 60_000 }
+	);
+	await page.getByTestId('upload-file-input').setInputFiles(multipartPath);
+
+	const multipartIntentResponse = await multipartIntentResponsePromise;
+	expect(multipartIntentResponse.ok()).toBeTruthy();
+	const multipartIntent = await multipartIntentResponse.json();
+	expect(multipartIntent).toMatchObject({
+		placement: 's3',
+		mode: 'multipart',
+		upload_id: expect.any(String),
+		part_count: expect.any(Number)
+	});
+	expect(multipartIntent.part_count).toBeGreaterThan(1);
+	const multipartPartResponse = await multipartPartResponsePromise;
+	expect(multipartPartResponse.ok()).toBeTruthy();
+	expect(multipartPartResponse.headers()['etag']).toBeTruthy();
+	const multipartCompleteResponse = await multipartCompleteResponsePromise;
+	expect(multipartCompleteResponse.status()).toBe(201);
+	const multipartItem = await multipartCompleteResponse.json();
+	expect(multipartItem).toMatchObject({
+		id: expect.any(String),
+		name: multipartFilename,
+		size_bytes: multipartSize
+	});
+	await expect(page.getByRole('option').filter({ hasText: multipartFilename })).toBeVisible();
+
+	// Exercise the same S3 multipart path through the Organization drive.
+	await page.goto('/drive/organization');
+	await expect(page.getByRole('heading', { name: 'Organization' })).toBeVisible();
+	const orgIntentResponsePromise = page.waitForResponse(
+		(response) =>
+			response.url().endsWith('/api/v1/drive/organization/multipart-intent') &&
+			response.request().method() === 'POST'
+	);
+	const orgPartResponsePromise = page.waitForResponse(
+		(response) => {
+			const url = new URL(response.url());
+			return (
+				response.request().method() === 'PUT' &&
+				url.origin === 'http://127.0.0.1:19000' &&
+				url.searchParams.has('partNumber') &&
+				url.searchParams.has('uploadId')
+			);
+		},
+		{ timeout: 60_000 }
+	);
+	const orgCompleteResponsePromise = page.waitForResponse(
+		(response) =>
+			response.url().includes('/api/v1/drive/organization/multipart/') &&
+			response.url().endsWith('/complete') &&
+			response.request().method() === 'POST',
+		{ timeout: 60_000 }
+	);
+	await page.getByTestId('upload-file-input').setInputFiles(multipartPath);
+	const orgIntentResponse = await orgIntentResponsePromise;
+	expect(orgIntentResponse.ok()).toBeTruthy();
+	const orgIntent = await orgIntentResponse.json();
+	expect(orgIntent).toMatchObject({
+		placement: 's3',
+		mode: 'multipart',
+		upload_id: expect.any(String),
+		part_count: expect.any(Number)
+	});
+	expect(orgIntent.part_count).toBeGreaterThan(1);
+	expect((await orgPartResponsePromise).ok()).toBeTruthy();
+	const orgCompleteResponse = await orgCompleteResponsePromise;
+	expect(orgCompleteResponse.status()).toBe(201);
+	const orgItem = await orgCompleteResponse.json();
+	expect(orgItem).toMatchObject({
+		id: expect.any(String),
+		name: multipartFilename,
+		size_bytes: multipartSize
+	});
+	const orgListingResponse = await page.request.get('/api/v1/drive/organization');
+	expect(orgListingResponse.ok()).toBeTruthy();
+	const orgListing = await orgListingResponse.json();
+	expect(orgListing).toMatchObject({
+		items: expect.arrayContaining([expect.objectContaining({ id: orgItem.id })])
+	});
 	// Ask the Playwright-owned supervisor to stop its backend child and start a fresh process.
 	await expect.poll(() => existsSync(restartResultPath), { timeout: 120_000 }).toBeTruthy();
 	const previousBackend = JSON.parse(readFileSync(restartResultPath, 'utf8')) as {
@@ -173,14 +294,17 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 	const requestId = `restart-${Date.now()}`;
 	writeJSONAtomically(restartRequestPath, { requestId });
 	await expect
-		.poll(() => {
-			const result = JSON.parse(readFileSync(restartResultPath, 'utf8')) as {
-				requestId: string | null;
-				generation: number;
-				pid: number;
-			};
-			return result.requestId === requestId ? result : null;
-		}, { timeout: 120_000 })
+		.poll(
+			() => {
+				const result = JSON.parse(readFileSync(restartResultPath, 'utf8')) as {
+					requestId: string | null;
+					generation: number;
+					pid: number;
+				};
+				return result.requestId === requestId ? result : null;
+			},
+			{ timeout: 120_000 }
+		)
 		.toMatchObject({
 			requestId,
 			generation: previousBackend.generation + 1
@@ -191,10 +315,15 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 		pid: number;
 	};
 	expect(restartedBackend.pid).not.toBe(previousBackend.pid);
-	await expect.poll(async () => {
-		const response = await page.request.get('/api/v1/setup/status');
-		return response.ok();
-	}, { timeout: 120_000 }).toBeTruthy();
+	await expect
+		.poll(
+			async () => {
+				const response = await page.request.get('/api/v1/setup/status');
+				return response.ok();
+			},
+			{ timeout: 120_000 }
+		)
+		.toBeTruthy();
 
 	// Reload persisted S3 node settings from the restarted process.
 	await page.goto('/admin/settings');
@@ -205,6 +334,13 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 	// Reload My Storage through the fresh backend and verify its metadata and stored bytes.
 	await page.goto('/drive/my-storage');
 	const persistedItem = page.getByRole('option').filter({ hasText: filename });
+	await expect(page.getByRole('option').filter({ hasText: multipartFilename })).toBeVisible();
+	const persistedOrgListingResponse = await page.request.get('/api/v1/drive/organization');
+	expect(persistedOrgListingResponse.ok()).toBeTruthy();
+	const persistedOrgListing = await persistedOrgListingResponse.json();
+	expect(persistedOrgListing).toMatchObject({
+		items: expect.arrayContaining([expect.objectContaining({ id: orgItem.id })])
+	});
 	await expect(persistedItem).toBeVisible();
 	const persistedDownloadUrlRes = await page.request.get(
 		`/api/v1/drive/my-storage/${createdItem.id}/download-url`
@@ -224,7 +360,9 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 	await expect(page.getByRole('option').filter({ hasText: filename })).toBeVisible();
 
 	// Verify both the signed direct download and backend stream path preserve the exact payload.
-	const downloadUrlRes = await page.request.get(`/api/v1/drive/my-storage/${createdItem.id}/download-url`);
+	const downloadUrlRes = await page.request.get(
+		`/api/v1/drive/my-storage/${createdItem.id}/download-url`
+	);
 	expect(downloadUrlRes.ok()).toBeTruthy();
 	const downloadData = (await downloadUrlRes.json()) as { url: string; filename: string };
 	expect(downloadData.url).toContain('127.0.0.1:19000/cubycloud-dev');
@@ -233,7 +371,9 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 	expect(downloadedContentRes.ok()).toBeTruthy();
 	expect(await downloadedContentRes.text()).toBe(testContent);
 
-	const streamDownloadRes = await page.request.get(`/api/v1/drive/my-storage/${createdItem.id}/download`);
+	const streamDownloadRes = await page.request.get(
+		`/api/v1/drive/my-storage/${createdItem.id}/download`
+	);
 	expect(streamDownloadRes.ok()).toBeTruthy();
 	expect(await streamDownloadRes.text()).toBe(testContent);
 
@@ -261,6 +401,16 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 	expect(purgeRes.ok()).toBeTruthy();
 	await page.reload();
 	await expect(page.getByText(filename)).not.toBeVisible();
+	const deleteMultipartRes = await page.request.delete(
+		`/api/v1/drive/my-storage/${multipartItem.id}`
+	);
+	expect(deleteMultipartRes.ok()).toBeTruthy();
+	const purgeMultipartRes = await page.request.delete(`/api/v1/drive/trash/${multipartItem.id}`);
+	expect(purgeMultipartRes.ok()).toBeTruthy();
+	const deleteOrgRes = await page.request.delete(`/api/v1/drive/organization/${orgItem.id}`);
+	expect(deleteOrgRes.ok()).toBeTruthy();
+	const purgeOrgRes = await page.request.delete(`/api/v1/drive/trash/${orgItem.id}`);
+	expect(purgeOrgRes.ok()).toBeTruthy();
 
 	// Reset placement strategy to default FILL_FIRST.
 	const resetStrategyRes = await page.request.put('/api/v1/admin/settings', {

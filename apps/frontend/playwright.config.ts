@@ -1,16 +1,16 @@
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { restartControlDir } from './e2e/restart-control.js';
 import { defineConfig } from '@playwright/test';
+import {
+	e2eDataDir,
+	restartControlDir as defaultRestartControlDir
+} from './e2e/restart-control.js';
 
 const backendPort = Number(process.env.MY_STORAGE_E2E_BACKEND_PORT ?? 18383);
 const frontendPort = Number(process.env.MY_STORAGE_E2E_FRONTEND_PORT ?? 15188);
-const dataDir = mkdtempSync(resolve(tmpdir(), 'cubycloud-my-storage-e2e-'));
-mkdirSync(resolve(dataDir, 'storage', 'default'), { recursive: true });
-rmSync(restartControlDir, { recursive: true, force: true });
-mkdirSync(restartControlDir, { recursive: true });
+const dataDir = e2eDataDir;
+const restartControlDir = defaultRestartControlDir;
 process.env.MY_STORAGE_E2E_DATA_DIR = dataDir;
+process.env.MY_STORAGE_E2E_RESTART_DIR = restartControlDir;
 process.env.MY_STORAGE_E2E_BACKEND_PORT = String(backendPort);
 
 const backendURL = `http://127.0.0.1:${backendPort}`;
@@ -36,7 +36,9 @@ export default defineConfig({
 			env: {
 				PORT: String(backendPort),
 				DATA_DIR_PATH: dataDir,
-				JWT_SECRET: 'my-storage-e2e-secret'
+				JWT_SECRET: 'my-storage-e2e-secret',
+				MY_STORAGE_E2E_DATA_DIR: dataDir,
+				MY_STORAGE_E2E_RESTART_DIR: restartControlDir
 			},
 			url: `${backendURL}/api/v1/setup/status`,
 			reuseExistingServer: false,

@@ -102,6 +102,14 @@ func TestAvailableOnNodeDeduplicatesAcrossStorageTables(t *testing.T) {
 	}
 	defer tx.Rollback()
 
+	availableInTx, err := AvailableOnNodeTx(ctx, tx, nil, "node")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if availableInTx != 8550 {
+		t.Fatalf("available in transaction = %d, want 8550", availableInTx)
+	}
+
 	// Remaining capacity: 1000 - 50 (5% reserve) - 900 (used) = 50 bytes.
 	if err := CheckNodeCapacityTx(ctx, tx, nil, "local-node", 40); err != nil {
 		t.Fatalf("expected CheckNodeCapacityTx(40) to succeed, got %v", err)

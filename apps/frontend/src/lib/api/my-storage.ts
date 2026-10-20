@@ -1,5 +1,11 @@
 import type { FileEntry, LargestFileItem } from '$lib/types/drive.js';
-import { downloadBatchZip, downloadObject, putPresigned, type UploadIntent } from '$lib/api/cloud-transfer.js';
+import {
+	downloadBatchZip,
+	downloadObject,
+	putPresigned,
+	type UploadIntent
+} from '$lib/api/cloud-transfer.js';
+import { createResumableUploadDriver } from '$lib/api/resumable-upload.js';
 
 const base = '/api/v1/drive/my-storage';
 export interface VFSNode {
@@ -180,7 +186,11 @@ async function uploadTus(
 	if (!location) {
 		throw new Error('Header Location tidak ditemukan pada respon TUS');
 	}
-	const uploadUrl = location.startsWith('http') ? location : location.startsWith('/') ? location : `${base}/${location}`;
+	const uploadUrl = location.startsWith('http')
+		? location
+		: location.startsWith('/')
+			? location
+			: `${base}/${location}`;
 
 	const CHUNK_SIZE = 2 * 1024 * 1024;
 	let offset = 0;
@@ -190,19 +200,29 @@ async function uploadTus(
 		progress(100);
 	}
 
-	let lastPatchRes: { status: number; ok: boolean; headers: { get(name: string): string | null }; text: string } | null = null;
+	let lastPatchRes: {
+		status: number;
+		ok: boolean;
+		headers: { get(name: string): string | null };
+		text: string;
+	} | null = null;
 	let finalized = false;
 	const MAX_RETRIES = 3;
 
 	while (offset < total || !finalized) {
-		const chunk = offset >= total ? new Blob([]) : file.slice(offset, Math.min(offset + CHUNK_SIZE, total));
+		const chunk =
+			offset >= total ? new Blob([]) : file.slice(offset, Math.min(offset + CHUNK_SIZE, total));
 		let success = false;
 		let attempts = 0;
 
 		while (!success && attempts < MAX_RETRIES) {
 			attempts++;
 			try {
-				const { promise: patchPromise, resolve: patchResolve, reject: patchReject } = Promise.withResolvers<{
+				const {
+					promise: patchPromise,
+					resolve: patchResolve,
+					reject: patchReject
+				} = Promise.withResolvers<{
 					status: number;
 					ok: boolean;
 					headers: { get(name: string): string | null };
@@ -254,7 +274,9 @@ async function uploadTus(
 						try {
 							body = JSON.parse(patchRes.text);
 						} catch {}
-						const err = new Error(storageErrorMessage(body.error ?? '', patchRes.status)) as Error & {
+						const err = new Error(
+							storageErrorMessage(body.error ?? '', patchRes.status)
+						) as Error & {
 							status?: number;
 							code?: string;
 						};
@@ -341,6 +363,8 @@ async function uploadTus(
 		modified_at: new Date().toISOString()
 	};
 }
+
+const resumableUpload = createResumableUploadDriver(base, 'my-storage');
 
 export const myStorageAPI = {
 	list(parentId: string | null): Promise<StorageListing> {
@@ -448,14 +472,21 @@ export const myStorageAPI = {
 		const intent = await request<UploadIntent>('/upload-intent', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ filename: file.name, size: file.size, parent_id: parentId, unique_name: true })
+			body: JSON.stringify({
+				filename: file.name,
+				size: file.size,
+				parent_id: parentId,
+				unique_name: true
+			})
 		});
 		if (intent.placement === 's3') {
 			if (!intent.url || !intent.upload_id) throw new Error('Respons cloud upload tidak lengkap');
 			try {
 				await putPresigned(intent.url, intent.headers ?? {}, file, progress);
 			} catch (error) {
-				await request(`/upload-intent/${encodeURIComponent(intent.upload_id)}`, { method: 'DELETE' }).catch(() => {});
+				await request(`/upload-intent/${encodeURIComponent(intent.upload_id)}`, {
+					method: 'DELETE'
+				}).catch(() => {});
 				throw error;
 			}
 			return driveRequest<StorageItem>('/sync-cloud', {
@@ -466,6 +497,9 @@ export const myStorageAPI = {
 		}
 		return uploadTus(file, parentId, progress);
 	},
+	uploadResumable: resumableUpload.driver,
+	cancelResumable: resumableUpload.cancel,
+
 	async download(id: string, name: string, folder = false): Promise<void> {
 		await downloadObject(base, id, name, folder);
 	},

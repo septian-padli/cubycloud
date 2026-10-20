@@ -156,12 +156,12 @@ CubyCloud ditujukan untuk ekosistem pengguna _self-hosted_ dan tim skala kecil/m
 
 ### 2.3 User Frustrations & Competitive Pain Point Matrix
 
-| Dimensi Evaluasi        | Google Drive (Public Cloud)                 | Nextcloud (Self-Hosted Traditional)                          | **CubyCloud (Solusi Kita)**                                    |
-| ----------------------- | ------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------- |
-| **Biaya & Kuota**       | Berlangganan bulanan mahal; kuota terbatas. | Gratis (Self-hosted), namun butuh server mahal agar lancar.  | **Gratis & Hemat:** Optimal di PC tua Celeron 2 GB RAM.        |
-| **Penggunaan Resource** | N/A (Cloud Vendor)                          | **Sangat Berat:** RAM idle > 1-2 GB, sering _lag_ di LAN.    | **Ultra-Ringan:** RAM idle **< 200 MB**, respon LAN **< 1s**.  |
-| **Kompleksitas Setup**  | Tanpa Setup (Instan).                       | **Sangat Rumit:** Membutuhkan instalasi PHP, DB, Redis, CLI. | **Zero-CLI Wizard:** 1 Command Docker -> Web Wizard GUI.       |
-| **Manajemen Storage**   | Terkunci pada kuota vendor.                 | Terbatas pada konfigurasi mount titik awal Linux.            | **Unified Directory:** Gabung SSD 1, SSD 2, & Cloud R2/S3.     |
+| Dimensi Evaluasi        | Google Drive (Public Cloud)                 | Nextcloud (Self-Hosted Traditional)                          | **CubyCloud (Solusi Kita)**                                                                    |
+| ----------------------- | ------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| **Biaya & Kuota**       | Berlangganan bulanan mahal; kuota terbatas. | Gratis (Self-hosted), namun butuh server mahal agar lancar.  | **Gratis & Hemat:** Optimal di PC tua Celeron 2 GB RAM.                                        |
+| **Penggunaan Resource** | N/A (Cloud Vendor)                          | **Sangat Berat:** RAM idle > 1-2 GB, sering _lag_ di LAN.    | **Ultra-Ringan:** RAM idle **< 200 MB**, respon LAN **< 1s**.                                  |
+| **Kompleksitas Setup**  | Tanpa Setup (Instan).                       | **Sangat Rumit:** Membutuhkan instalasi PHP, DB, Redis, CLI. | **Zero-CLI Wizard:** 1 Command Docker -> Web Wizard GUI.                                       |
+| **Manajemen Storage**   | Terkunci pada kuota vendor.                 | Terbatas pada konfigurasi mount titik awal Linux.            | **Unified Directory:** Gabung SSD 1, SSD 2, & Cloud R2/S3.                                     |
 | **Privasi Data**        | Risiko pemrosesan data oleh vendor cloud.   | Self-hosted, namun setup & resource berat.                   | **Self-hosted ringan:** Data di server milikmu; AI Workspace (RAG/Ollama) di roadmap Fase 2/3. |
 
 ---
@@ -489,7 +489,6 @@ Antarmuka file pribadi berbasis **SvelteKit SPA** dengan **Flat Earthy Design Sy
 
 4. **Search & Quick Category Filters:**
 
-
 - **Fuzzy Text Search:** Pencarian instan berdasarkan nama file/folder.
 - **Category Filter Chips:** Filter cepat berdasarkan tipe file:
 - 🖼️ _Gambar_ (PNG, JPG, WebP, GIF, SVG)
@@ -506,7 +505,10 @@ Antarmuka file pribadi berbasis **SvelteKit SPA** dengan **Flat Earthy Design Sy
 
 6. **Network Resiliency & Resumable Transfer:**
 
-- Menggunakan _chunked upload_ untuk disk lokal dan _multipart presigned transfer_ untuk S3/R2. Jika jaringan pengguna terputus saat upload/download, indikator _Progress Bar_ akan memposting status _Paused_ dan otomatis melanjutkan (_resume_) saat koneksi terhubung kembali.
+- **Upload (My Storage dan Organization):** Gunakan TUS untuk upload lokal; pertahankan single PUT untuk file di bawah 100 MiB dan gunakan S3/R2 presigned multipart untuk file mulai 100 MiB. Multipart memakai ukuran part default 16 MiB dan maksimal 3 part bersamaan. Backend menjadi sumber kebenaran untuk offset TUS dan rekonsiliasi multipart melalui `ListParts`; URL part bersifat sementara dan diperbarui saat diperlukan.
+- **Pemulihan sesi:** Simpan metadata sesi dan antrean di IndexedDB, bukan bytes file atau kredensial. Sesi backend bertahan 24 jam dan dibersihkan dengan aman setelah kedaluwarsa. Setelah refresh, browser ditutup, atau backend restart, sesi dapat dipulihkan dengan memilih ulang file yang sama dan memverifikasi SHA-256 seluruh file secara bertahap dengan memori terbatas. Sesi kedaluwarsa, tidak dapat dipulihkan, atau file yang tidak cocok harus menampilkan error yang jelas dan memerlukan tindakan eksplisit untuk memulai dari nol; jangan diam-diam mengulang atau membuat file duplikat.
+- **Antrean transfer:** Tampilkan status Uploading, Retrying, Paused, Waiting for File, Verifying, Committing, Completed, Failed, dan Expired. Sediakan Pause, Resume, dan Cancel serta lanjut otomatis ketika jaringan pulih. Cegah transfer yang sama berjalan bersamaan di beberapa tab; pertahankan pemeriksaan izin, user quota My Storage, dan kapasitas node.
+- **Download:** Unduhan file lokal reguler di My Storage dan Organization mendukung HTTP Range/HEAD (`200`, `206`, `416`, `Content-Range`, `Content-Length`, `Accept-Ranges`, `ETag`, dan `If-Range`) tanpa mengganti unduhan native browser. S3/R2 tetap menggunakan presigned GET langsung; ZIP tetap streaming dan tidak mendukung resume ZIP.
 
 ---
 
@@ -665,6 +667,7 @@ Fitur pengarsipan dan kompresi (termasuk Download as ZIP) merupakan kapabilitas 
 
 - 📥 **Download as ZIP:** Mengunduh beberapa file/folder sekaligus yang di-stream secara langsung sebagai berkas `.zip` (fitur core bawaan).
 - 🗜️ **Compress to ZIP:** Membuat arsip `.zip` dari beberapa file/folder terpilih di dalam storage.
+
 2. **Configurable Worker Concurrency Limit:**
 
 - Di halaman `/admin/settings`, Admin dapat mengatur jumlah maksimal proses konversi/kompresi berat yang boleh berjalan bersamaan (_Concurrent Worker Limit_).
@@ -682,18 +685,18 @@ Fitur pengarsipan dan kompresi (termasuk Download as ZIP) merupakan kapabilitas 
 
 ### Summary of Data Entity & Access Rules Matrix
 
-| Fitur / Modul | Role Pengguna | Hak Akses Utama |
-| ------------- | ------------- | --------------- |
-| **Setup Wizard (`/setup`)** | Unauthenticated (First-Boot Only) | Membuat Admin, Pindai Disk, Ekspor Recovery Key |
-| **Auth (`/login`, `/recovery`)** | Unauthenticated | Login JWT; reset Super Admin via Recovery Key |
-| **Beranda (`/drive/home`)** | Regular User & Super Admin | Quick access, activity, quota summary |
-| **My Storage (`/drive/my-storage`)** | Regular User & Super Admin | CRUD pribadi; node badge **hidden** untuk Regular User |
-| **Organization (`/drive/organization`)** | All Registered Users | Full Access; **no user quota** |
-| **Starred / Shared / Trash / Stats** | Authenticated | Sesuai izin sumber; stats = own usage |
-| **User-to-User Share** | Target User | `Viewer` atau `Editor` (owner pays quota) |
-| **Share Link (`/s/:token`)** | Public / Restricted Guest | Viewer + Password & Expiration |
-| **Admin Settings (`/admin/settings`)** | Super Admin Only | Nodes, workers, **default user quota**, DB backup |
-| **Admin Users (`/admin/users`)** | Super Admin Only | Create users, **per-user quota override** |
+| Fitur / Modul                            | Role Pengguna                     | Hak Akses Utama                                        |
+| ---------------------------------------- | --------------------------------- | ------------------------------------------------------ |
+| **Setup Wizard (`/setup`)**              | Unauthenticated (First-Boot Only) | Membuat Admin, Pindai Disk, Ekspor Recovery Key        |
+| **Auth (`/login`, `/recovery`)**         | Unauthenticated                   | Login JWT; reset Super Admin via Recovery Key          |
+| **Beranda (`/drive/home`)**              | Regular User & Super Admin        | Quick access, activity, quota summary                  |
+| **My Storage (`/drive/my-storage`)**     | Regular User & Super Admin        | CRUD pribadi; node badge **hidden** untuk Regular User |
+| **Organization (`/drive/organization`)** | All Registered Users              | Full Access; **no user quota**                         |
+| **Starred / Shared / Trash / Stats**     | Authenticated                     | Sesuai izin sumber; stats = own usage                  |
+| **User-to-User Share**                   | Target User                       | `Viewer` atau `Editor` (owner pays quota)              |
+| **Share Link (`/s/:token`)**             | Public / Restricted Guest         | Viewer + Password & Expiration                         |
+| **Admin Settings (`/admin/settings`)**   | Super Admin Only                  | Nodes, workers, **default user quota**, DB backup      |
+| **Admin Users (`/admin/users`)**         | Super Admin Only                  | Create users, **per-user quota override**              |
 
 ---
 
@@ -820,16 +823,16 @@ Dokumen ini mengunci seluruh _technology stack_, dependensi pustaka (_libraries_
 
 Backend dikembangkan menggunakan **Go (Golang)** dengan gaya arsitektur _Clean Architecture / Domain-Driven Design (DDD)_ yang dikompilasi menjadi _Single Binary Executable_.
 
-| Komponen / Layer           | Teknologi / Pustaka           | Versi Target | Alasan Pemilihan & Fungsi                                                                                                               |
-| -------------------------- | ----------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| **Programming Language**   | **Go (Golang)**               | `v1.22+`     | Performa _native_, konkurensi Goroutine matang, alokasi RAM sangat kecil, dan kemampuan `go:embed`.                                     |
-| **Web Framework**          | **Echo** (`labstack/echo/v4`) | `v4.12+`     | Minimalis, alokasi memori sangat hemat, kompatibel dengan standard `net/http`, dan memiliki native `StaticFS` untuk `go:embed`.         |
-| **Database Engine**        | **SQLite** (WAL Mode)         | `v3.45+`     | Embedded RDBMS tanpa _overhead_ service terpisah. Mode WAL (_Write-Ahead Logging_) menjamin performa I/O tinggi & ACID _compliance_.    |
-| **ORM & Data Access**      | **Bun ORM** (`github.com/uptrace/bun`) | `v1.2+` | SQL-first di atas `database/sql` (bukan codegen). Struct Go + tag `bun`; skema kanonik tetap file SQL di `migrations/`. **Bukan** Bun runtime JavaScript (`bun.sh`) yang dipakai frontend. |
-| **SQLite Driver**          | **`glebarez/go-sqlite`**      | `v1.2+`      | Driver SQLite _Pure Go_ (CGO-Free). Memungkinkan _cross-compilation_ tanpa GCC dan menjaga ukuran Docker Image tetap kecil.             |
-| **Object Storage SDK**     | **AWS SDK for Go v2**         | `v1.30+`     | Penerbitan _Presigned Upload/Download URLs_ untuk Cloudflare R2 dan AWS S3 secara aman & hemat memori.                                  |
-| **Authentication & Token** | **`golang-jwt/jwt/v5`**       | `v5.2+`      | Penanganan token JWT (_JSON Web Token_) untuk _stateless session management_.                                                           |
-| **Password Hashing**       | **`golang.org/x/crypto`**     | `latest`     | Pengolahan kata sandi menggunakan **bcrypt** (_cost factor_ = 10).                                                                      |
+| Komponen / Layer           | Teknologi / Pustaka                    | Versi Target | Alasan Pemilihan & Fungsi                                                                                                                                                                  |
+| -------------------------- | -------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Programming Language**   | **Go (Golang)**                        | `v1.22+`     | Performa _native_, konkurensi Goroutine matang, alokasi RAM sangat kecil, dan kemampuan `go:embed`.                                                                                        |
+| **Web Framework**          | **Echo** (`labstack/echo/v4`)          | `v4.12+`     | Minimalis, alokasi memori sangat hemat, kompatibel dengan standard `net/http`, dan memiliki native `StaticFS` untuk `go:embed`.                                                            |
+| **Database Engine**        | **SQLite** (WAL Mode)                  | `v3.45+`     | Embedded RDBMS tanpa _overhead_ service terpisah. Mode WAL (_Write-Ahead Logging_) menjamin performa I/O tinggi & ACID _compliance_.                                                       |
+| **ORM & Data Access**      | **Bun ORM** (`github.com/uptrace/bun`) | `v1.2+`      | SQL-first di atas `database/sql` (bukan codegen). Struct Go + tag `bun`; skema kanonik tetap file SQL di `migrations/`. **Bukan** Bun runtime JavaScript (`bun.sh`) yang dipakai frontend. |
+| **SQLite Driver**          | **`glebarez/go-sqlite`**               | `v1.2+`      | Driver SQLite _Pure Go_ (CGO-Free). Memungkinkan _cross-compilation_ tanpa GCC dan menjaga ukuran Docker Image tetap kecil.                                                                |
+| **Object Storage SDK**     | **AWS SDK for Go v2**                  | `v1.30+`     | Penerbitan _Presigned Upload/Download URLs_ untuk Cloudflare R2 dan AWS S3 secara aman & hemat memori.                                                                                     |
+| **Authentication & Token** | **`golang-jwt/jwt/v5`**                | `v5.2+`      | Penanganan token JWT (_JSON Web Token_) untuk _stateless session management_.                                                                                                              |
+| **Password Hashing**       | **`golang.org/x/crypto`**              | `latest`     | Pengolahan kata sandi menggunakan **bcrypt** (_cost factor_ = 10).                                                                                                                         |
 
 ---
 
@@ -837,16 +840,16 @@ Backend dikembangkan menggunakan **Go (Golang)** dengan gaya arsitektur _Clean A
 
 Frontend dikembangkan sebagai **Single Page Application (SPA)** yang di-build menjadi aset statis (HTML/JS/CSS) dan di-_embed_ langsung ke dalam biner Go.
 
-| Komponen / Layer       | Teknologi / Pustaka                 | Versi Target | Alasan Pemilihan & Fungsi                                                                                                          |
-| ---------------------- | ----------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| **Frontend Framework** | **SvelteKit**                       | `v2.0+`      | Framework reaktif, _bundle size_ JS sangat kecil; state lokal via **Svelte 5 Runes** (`$state`, `$derived`, `$effect`).                               |
-| **Build Adapter**      | **`@sveltejs/adapter-static`**      | `v3.0+`      | Mengompilasi aplikasi SvelteKit menjadi SPA statis murni tanpa membutuhkan Node.js runtime di server produksi.                     |
+| Komponen / Layer       | Teknologi / Pustaka                 | Versi Target | Alasan Pemilihan & Fungsi                                                                                                                 |
+| ---------------------- | ----------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **Frontend Framework** | **SvelteKit**                       | `v2.0+`      | Framework reaktif, _bundle size_ JS sangat kecil; state lokal via **Svelte 5 Runes** (`$state`, `$derived`, `$effect`).                   |
+| **Build Adapter**      | **`@sveltejs/adapter-static`**      | `v3.0+`      | Mengompilasi aplikasi SvelteKit menjadi SPA statis murni tanpa membutuhkan Node.js runtime di server produksi.                            |
 | **Styling Engine**     | **Tailwind CSS**                    | `v4.x`       | Utility-first CSS v4 dengan token `@theme inline` di `layout.css`; tema **Flat Earthy** sesuai [`DESIGN.md`](../apps/frontend/DESIGN.md). |
 | **Typography**         | **Montserrat** (Google Fonts)       | —            | Satu-satunya _font family_ UI; skala hierarki didefinisikan di DESIGN.md §3.                                                              |
-| **UI Components**      | **shadcn-svelte**                   | `latest`     | Komponen _headless & accessible_ berbasis `bits-ui`; di-_theme_ dengan token CubyCloud (primary moss, danger rose).                        |
-| **Icons Library**      | **Lucide Svelte** (`lucide-svelte`) | `v0.400+`    | Set ikon SVG geometris yang ringan dan konsisten.                                                                                  |
-| **Resumable Upload**   | **TUS Client / Fetch Chunking**     | `latest`     | Menangani _chunked upload_ untuk menjamin unggahan file besar dapat di-_resume_ saat koneksi jaringan terputus.                    |
-| **Package Manager**    | **Bun** (`bun.sh`)                  | `1.x`        | Runtime/PM JavaScript untuk frontend (`bun install`, `bun run build`). Bukan Bun ORM Go. |
+| **UI Components**      | **shadcn-svelte**                   | `latest`     | Komponen _headless & accessible_ berbasis `bits-ui`; di-_theme_ dengan token CubyCloud (primary moss, danger rose).                       |
+| **Icons Library**      | **Lucide Svelte** (`lucide-svelte`) | `v0.400+`    | Set ikon SVG geometris yang ringan dan konsisten.                                                                                         |
+| **Resumable Upload**   | **TUS Client / Fetch Chunking**     | `latest`     | Menangani _chunked upload_ untuk menjamin unggahan file besar dapat di-_resume_ saat koneksi jaringan terputus.                           |
+| **Package Manager**    | **Bun** (`bun.sh`)                  | `1.x`        | Runtime/PM JavaScript untuk frontend (`bun install`, `bun run build`). Bukan Bun ORM Go.                                                  |
 
 ---
 
@@ -889,11 +892,11 @@ Untuk menjaga konsumsi sumber daya tetap hemat, CubyCloud **tidak menggunakan Re
 
 Tooling yang digunakan untuk mempermudah proses alur kerja pengembangan (_developer experience_) dan otomatisasi _release build_.
 
-| Tool                                   | Penggunaan & Fungsi                                                                                                                                                    |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`Makefile`**                         | Alat otomatisasi _build pipeline_: kompilasi frontend SvelteKit, penyalinan asset statis, kompilasi biner Go, hingga pengemasan Docker Image. |
-| **`Air`** (`cosmtrek/air`)             | Tool _live-reload_ untuk Go Backend selama fase pengembangan lokal. Otomatis mengompilasi ulang biner Go saat ada perubahan kode `.go`.                                |
-| **Docker Multi-Stage Build**           | Pengemasan kontainer produksi:                                                                                                                                         |
+| Tool                         | Penggunaan & Fungsi                                                                                                                           |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`Makefile`**               | Alat otomatisasi _build pipeline_: kompilasi frontend SvelteKit, penyalinan asset statis, kompilasi biner Go, hingga pengemasan Docker Image. |
+| **`Air`** (`cosmtrek/air`)   | Tool _live-reload_ untuk Go Backend selama fase pengembangan lokal. Otomatis mengompilasi ulang biner Go saat ada perubahan kode `.go`.       |
+| **Docker Multi-Stage Build** | Pengemasan kontainer produksi:                                                                                                                |
 
 - _Stage 1 (Bun Build):_ Compile SvelteKit SPA (`bun run build` di `apps/frontend/`).
 - _Stage 2 (Go Build):_ Compile biner Go + Embed static assets.

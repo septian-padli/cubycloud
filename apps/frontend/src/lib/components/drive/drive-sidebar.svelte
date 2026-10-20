@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { authAPI } from '$lib/api/auth.js';
 	import { setMockLoggedIn } from '$lib/mocks/auth-session.js';
+	import { pauseUserTransfers } from '$lib/transfer-queue.svelte.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { MoreVertical, LogOut } from '@lucide/svelte';
@@ -25,6 +26,11 @@
 	const isSuperAdmin = $derived(user.role === 'super_admin');
 
 	async function handleLogout() {
+		try {
+			await pauseUserTransfers(user.id);
+		} catch (error) {
+			console.warn('Gagal menjeda antrean transfer saat logout:', error);
+		}
 		await authAPI.logout();
 		setMockLoggedIn(false);
 		await goto('/login');
@@ -71,10 +77,15 @@
 						</Button>
 					{/snippet}
 				</DropdownMenu.Trigger>
-				<DropdownMenu.Content side="top" align="end" sideOffset={8} class="w-[calc(16rem-1.5rem)] p-1.5">
+				<DropdownMenu.Content
+					side="top"
+					align="end"
+					sideOffset={8}
+					class="w-[calc(16rem-1.5rem)] p-1.5"
+				>
 					<DropdownMenu.Item
 						variant="destructive"
-						class="w-full gap-2.5 cursor-pointer rounded-lg px-3 py-2 text-sm font-medium text-danger hover:bg-danger/10 hover:text-danger focus:bg-danger/10 focus:text-danger data-[highlighted]:bg-danger/10 data-[highlighted]:text-danger [&_svg]:text-danger"
+						class="w-full cursor-pointer gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-danger hover:bg-danger/10 hover:text-danger focus:bg-danger/10 focus:text-danger data-[highlighted]:bg-danger/10 data-[highlighted]:text-danger [&_svg]:text-danger"
 						onclick={handleLogout}
 					>
 						<LogOut class="size-4 stroke-2 text-danger" />

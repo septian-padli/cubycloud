@@ -96,8 +96,8 @@ func (d *syncCloudTestDriver) HeadObject(context.Context, string, string) (int64
 	return d.actualSize, nil
 }
 
-func (*syncCloudTestDriver) PresignUpload(context.Context, string, string, time.Duration) (string, error) {
-	return "", nil
+func (d *syncCloudTestDriver) PresignUpload(_ context.Context, _ string, key string, _ time.Duration) (string, error) {
+	return "https://upload.example.test/" + key, nil
 }
 
 func (*syncCloudTestDriver) PresignDownload(context.Context, string, string, string, time.Duration) (string, error) {
@@ -335,8 +335,20 @@ func TestUploadIntentOutlivesPresignedURLAndExpires(t *testing.T) {
 	if _, err := db.Exec(`UPDATE pending_cloud_uploads SET created_at=datetime('now','-1 hour') WHERE id=?`, intent.UploadID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.SyncCloud(context.Background(), "owner", intent.UploadID); err != nil {
+	renewed, err := service.RenewUploadIntentURL(context.Background(), "owner", intent.UploadID)
+	if err != nil || renewed.UploadID != intent.UploadID || renewed.Method != "PUT" || renewed.URL != "https://upload.example.test/"+intent.UploadID {
+		t.Fatalf("renewed intent = %#v, %v", renewed, err)
+	}
+	if _, err = service.RenewUploadIntentURL(context.Background(), "other", intent.UploadID); !errors.Is(err, errNotFound) {
+		t.Fatalf("renew intent for another owner = %v, want %v", err, errNotFound)
+	}
+	synced, err := service.SyncCloud(context.Background(), "owner", intent.UploadID)
+	if err != nil {
 		t.Fatalf("sync active intent after URL lifetime: %v", err)
+	}
+	recovered, err := service.SyncCloud(context.Background(), "owner", intent.UploadID)
+	if err != nil || recovered.ID != synced.ID {
+		t.Fatalf("retry sync cloud = %#v, %v; want the same item %q", recovered, err, synced.ID)
 	}
 	intent, err = service.UploadIntent(context.Background(), "owner", "later.bin", 1, nil, false)
 	if err != nil {

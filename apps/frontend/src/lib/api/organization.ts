@@ -1,5 +1,6 @@
 import type { FileEntry } from '$lib/types/drive.js';
 import { downloadBatchZip } from '$lib/api/cloud-transfer.js';
+import { createResumableUploadDriver } from '$lib/api/resumable-upload.js';
 
 const base = '/api/v1/drive/organization';
 
@@ -52,7 +53,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 	return body as T;
 }
 
-export async function moveOrganizationItem(id: string, targetParentId: string | null): Promise<VFSNode> {
+export async function moveOrganizationItem(
+	id: string,
+	targetParentId: string | null
+): Promise<VFSNode> {
 	return request<VFSNode>(`/items/${encodeURIComponent(id)}/move`, {
 		method: 'PATCH',
 		headers: { 'Content-Type': 'application/json' },
@@ -60,11 +64,15 @@ export async function moveOrganizationItem(id: string, targetParentId: string | 
 	});
 }
 
-export async function toggleOrganizationStar(id: string): Promise<{ id: string; is_starred: boolean }> {
+export async function toggleOrganizationStar(
+	id: string
+): Promise<{ id: string; is_starred: boolean }> {
 	return request<{ id: string; is_starred: boolean }>(`/items/${encodeURIComponent(id)}/star`, {
 		method: 'POST'
 	});
 }
+
+const resumableUpload = createResumableUploadDriver(base, 'organization');
 
 export const organizationAPI = {
 	list(parentId: string | null): Promise<StorageListing> {
@@ -80,13 +88,22 @@ export const organizationAPI = {
 		return request('/folders', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ name, parent_id: parentId, ...(uniqueName ? { unique_name: true } : {}) })
+			body: JSON.stringify({
+				name,
+				parent_id: parentId,
+				...(uniqueName ? { unique_name: true } : {})
+			})
 		});
 	},
 	async findOrCreateFolder(
 		name: string,
 		parentId: string | null,
-		knownFolders?: Array<{ id: string; name: string; parent_id?: string | null; parentId?: string | null }>
+		knownFolders?: Array<{
+			id: string;
+			name: string;
+			parent_id?: string | null;
+			parentId?: string | null;
+		}>
 	): Promise<StorageItem> {
 		if (knownFolders) {
 			const targetParent = parentId ?? null;
@@ -187,7 +204,10 @@ export const organizationAPI = {
 				} catch {
 					/* response may be empty */
 				}
-				const err = new Error(storageErrorMessage(body.error ?? '', xhr.status)) as Error & { status?: number; code?: string };
+				const err = new Error(storageErrorMessage(body.error ?? '', xhr.status)) as Error & {
+					status?: number;
+					code?: string;
+				};
 				err.status = xhr.status;
 				err.code = body.error;
 				reject(err);
@@ -199,6 +219,9 @@ export const organizationAPI = {
 		xhr.send(form);
 		return promise;
 	},
+	uploadResumable: resumableUpload.driver,
+	cancelResumable: resumableUpload.cancel,
+
 	async download(id: string, name: string): Promise<void> {
 		const anchor = document.createElement('a');
 		anchor.href = `${base}/${encodeURIComponent(id)}/download`;
@@ -212,12 +235,20 @@ export const organizationAPI = {
 	},
 	toEntry(item: StorageItem): FileEntry {
 		const extension = item.name.split('.').pop()?.toLowerCase() ?? '';
-		const category: FileEntry['kind'] = item.kind === 'folder' ? 'folder'
-			: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'heic'].includes(extension) ? 'image'
-			: ['mp4', 'webm', 'mov', 'mkv'].includes(extension) ? 'video'
-			: ['mp3', 'wav', 'ogg', 'm4a'].includes(extension) ? 'audio'
-			: ['zip', 'rar', '7z', 'tar', 'gz'].includes(extension) ? 'archive'
-			: ['txt', 'csv', 'json', 'sql'].includes(extension) ? 'text' : 'document';
+		const category: FileEntry['kind'] =
+			item.kind === 'folder'
+				? 'folder'
+				: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'heic'].includes(extension)
+					? 'image'
+					: ['mp4', 'webm', 'mov', 'mkv'].includes(extension)
+						? 'video'
+						: ['mp3', 'wav', 'ogg', 'm4a'].includes(extension)
+							? 'audio'
+							: ['zip', 'rar', '7z', 'tar', 'gz'].includes(extension)
+								? 'archive'
+								: ['txt', 'csv', 'json', 'sql'].includes(extension)
+									? 'text'
+									: 'document';
 		return {
 			id: item.id,
 			name: item.name,

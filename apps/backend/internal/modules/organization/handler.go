@@ -30,7 +30,10 @@ func RegisterRoutes(e *echo.Echo, db *bun.DB, driver storage.StorageDriver, jwtA
 	g.GET("/folders", h.folders)
 	g.POST("/folders", h.createFolder)
 	g.POST("/upload", h.upload)
+	h.RegisterTusRoutes(g)
+	h.RegisterMultipartRoutes(g)
 	g.GET("/:id/download", h.download)
+	g.HEAD("/:id/download", h.download)
 	g.POST("/batch/download-zip", h.batchDownloadZip)
 	g.PATCH("/:id", h.update)
 	g.POST("/:id/duplicate", h.duplicate)
@@ -169,10 +172,15 @@ func (h *Handler) download(c echo.Context) error {
 	if err != nil {
 		return respond(c, err)
 	}
-	_ = h.service.RecordAccess(c.Request().Context(), currentUserID(c), item.ID)
+	if c.Request().Method != http.MethodHead {
+		_ = h.service.RecordAccess(c.Request().Context(), currentUserID(c), item.ID)
+	}
 	defer r.Close()
 	if item.Kind == "file" {
 		if served, err := mystorage.ServePreview(c, item.Name, r); served {
+			return err
+		}
+		if served, err := mystorage.ServeFileDownload(c, item.ID, item.Name, item.SizeBytes, item.ModifiedAt, r); served {
 			return err
 		}
 	}

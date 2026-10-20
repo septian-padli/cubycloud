@@ -1,15 +1,24 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { restartControlDir } from './restart-control.js';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const backendDir = resolve(import.meta.dirname, '../../backend');
 const controlDir = restartControlDir;
+const dataDir = process.env.DATA_DIR_PATH;
+if (!dataDir) throw new Error('DATA_DIR_PATH is required for the E2E backend supervisor');
+rmSync(dataDir, { recursive: true, force: true });
+mkdirSync(join(dataDir, 'storage', 'default'), { recursive: true });
+rmSync(controlDir, { recursive: true, force: true });
+mkdirSync(controlDir, { recursive: true });
 const binaryPath = join(controlDir, 'backend-server');
 const requestPath = join(controlDir, 'restart-request.json');
 const resultPath = join(controlDir, 'restart-result.json');
-execFileSync('go', ['build', '-o', binaryPath, './cmd/server'], { cwd: backendDir, stdio: 'inherit' });
+execFileSync('go', ['build', '-o', binaryPath, './cmd/server'], {
+	cwd: backendDir,
+	stdio: 'inherit'
+});
 
 let backend: ChildProcess | undefined;
 let generation = 0;
@@ -19,7 +28,11 @@ let stopPromise: Promise<void> | undefined;
 let shutdownPromise: Promise<void> | undefined;
 let requestedExitCode = 0;
 
-function writeResult(result: { requestId: string | null; generation: number; pid: number | undefined }) {
+function writeResult(result: {
+	requestId: string | null;
+	generation: number;
+	pid: number | undefined;
+}) {
 	const temporaryPath = `${resultPath}.${process.pid}.tmp`;
 	writeFileSync(temporaryPath, JSON.stringify(result));
 	renameSync(temporaryPath, resultPath);

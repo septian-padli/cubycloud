@@ -1605,6 +1605,42 @@ func (s *Service) UploadIntent(ctx context.Context, owner, filename string, size
 	}, nil
 }
 
+func (s *Service) RenewUploadIntentURL(ctx context.Context, owner, uploadID string) (*UploadIntentResult, error) {
+	if uploadID == "" {
+		return nil, errNotFound
+	}
+	var nodeID string
+	var expiresAt time.Time
+	err := s.db.QueryRowContext(ctx, `
+		SELECT storage_node_id, expires_at
+		FROM pending_cloud_uploads
+		WHERE id = ? AND owner_id = ?
+	`, uploadID, owner).Scan(&nodeID, &expiresAt)
+	if errors.Is(err, sql.ErrNoRows) || (!expiresAt.IsZero() && !expiresAt.After(time.Now().UTC())) {
+		return nil, errNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	cloud, ok := s.storage.(storage.CloudStorageDriver)
+	if !ok {
+		return nil, errors.New("cloud driver unavailable")
+	}
+	const urlExpiry = 15 * time.Minute
+	putURL, err := cloud.PresignUpload(ctx, nodeID, uploadID, urlExpiry)
+	if err != nil {
+		return nil, fmt.Errorf("presign upload: %w", err)
+	}
+	return &UploadIntentResult{
+		Placement: "s3",
+		UploadID:  uploadID,
+		URL:       putURL,
+		Method:    "PUT",
+		ExpiresAt: time.Now().UTC().Add(urlExpiry).Format(time.RFC3339),
+	}, nil
+}
+
+
 func (s *Service) SyncCloud(ctx context.Context, owner, uploadID string) (Item, error) {
 	var storageNodeID, filename string
 	var sizeBytes int64
@@ -1618,7 +1654,7 @@ func (s *Service) SyncCloud(ctx context.Context, owner, uploadID string) (Item, 
 		WHERE id = ? AND owner_id = ?
 	`, uploadID, owner).Scan(&storageNodeID, &filename, &sizeBytes, &parentID, &uniqueNameRequested, &expiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Item{}, errNotFound
+		return s.syncedCloudItem(ctx, owner, uploadID)
 	}
 	if err != nil {
 		return Item{}, err
@@ -1642,11 +1678,12 @@ func (s *Service) SyncCloud(ctx context.Context, owner, uploadID string) (Item, 
 		return Item{}, err
 	}
 	if pending == 0 {
-		return Item{}, errNotFound
+		return s.syncedCloudItem(ctx, owner, uploadID)
 	}
 	if !expiresAt.After(time.Now().UTC()) {
 		return Item{}, errNotFound
 	}
+
 	actualSize, err := cloud.HeadObject(ctx, storageNodeID, uploadID)
 	if err != nil {
 		return Item{}, fmt.Errorf("cloud object verification failed: %w", err)
@@ -1773,6 +1810,26 @@ func (s *Service) SyncCloud(ctx context.Context, owner, uploadID string) (Item, 
 		ParentID:   parent,
 		ModifiedAt: now,
 	}, nil
+}
+
+func (s *Service) syncedCloudItem(ctx context.Context, owner, uploadID string) (Item, error) {
+	var item Item
+	var parentID sql.NullString
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id, name, kind, size_bytes, parent_id, modified_at
+		FROM my_storage_items
+		WHERE id = ? AND owner_id = ? AND deleted_at IS NULL
+	`, uploadID, owner).Scan(&item.ID, &item.Name, &item.Kind, &item.SizeBytes, &parentID, &item.ModifiedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Item{}, errNotFound
+	}
+	if err != nil {
+		return Item{}, err
+	}
+	if parentID.Valid && parentID.String != "" {
+		item.ParentID = &parentID.String
+	}
+	return item, nil
 }
 
 // Keep a blob that is still referenced by either drive; only orphan uploads

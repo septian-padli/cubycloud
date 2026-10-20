@@ -23,7 +23,9 @@ async function ensureSetup(page: Page) {
 		if (!json.is_setup_completed) {
 			const scan = await page.request.get('/api/v1/setup/scan-nodes');
 			expect(scan.ok()).toBeTruthy();
-			const { nodes } = (await scan.json()) as { nodes: { path: string; capacity_bytes: number }[] };
+			const { nodes } = (await scan.json()) as {
+				nodes: { path: string; capacity_bytes: number }[];
+			};
 			const setup = await page.request.post('/api/v1/setup/complete', {
 				data: {
 					admin: {
@@ -104,6 +106,12 @@ test('Organization shared drive provides multi-user collaboration and isolates p
 		buffer: Buffer.from('Spesifikasi bersama tim CubyCloud dibuat oleh Alice.')
 	});
 	await expect(page.getByText('shared-spec.txt', { exact: true })).toBeVisible();
+	const uploadQueue = page.getByTestId('upload-queue');
+	await expect(uploadQueue).toBeVisible();
+	await uploadQueue.getByRole('button', { name: 'Buka antrean unggahan' }).click();
+	await expect(
+		uploadQueue.getByTestId('upload-queue-item').filter({ hasText: 'shared-spec.txt' })
+	).toHaveAttribute('data-state', 'completed');
 
 	// 6. Alice goes to My Storage to verify isolation
 	await page.goto('/drive/my-storage');

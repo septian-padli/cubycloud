@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Handler struct {
@@ -30,9 +31,12 @@ func RegisterRoutes(e *echo.Echo, db *bun.DB, driver storage.StorageDriver, jwtA
 	g.POST("/upload", h.upload)
 	g.POST("/upload-intent", h.uploadIntent)
 	h.registerTusRoutes(g)
+	h.RegisterMultipartRoutes(g)
 	g.POST("/sync-cloud", h.syncCloud)
 	g.DELETE("/upload-intent/:id", h.cancelUploadIntent)
+	g.POST("/upload-intent/:id/renew-url", h.renewUploadIntentURL)
 	g.GET("/:id/download", h.download)
+	g.HEAD("/:id/download", h.download)
 	g.GET("/:id/download-url", h.downloadURL)
 	g.POST("/batch/download-zip", h.batchDownloadZip)
 	g.PATCH("/:id", h.update)
@@ -117,10 +121,15 @@ func (h *Handler) download(c echo.Context) error {
 	if err != nil {
 		return respond(c, err)
 	}
-	_ = h.service.RecordAccess(c.Request().Context(), owner(c), item.ID, "my-storage")
+	if c.Request().Method != http.MethodHead {
+		_ = h.service.RecordAccess(c.Request().Context(), owner(c), item.ID, "my-storage")
+	}
 	defer r.Close()
 	if item.Kind == "file" {
 		if served, err := ServePreview(c, item.Name, r); served {
+			return err
+		}
+		if served, err := ServeFileDownload(c, item.ID, item.Name, item.SizeBytes, item.ModifiedAt, r); served {
 			return err
 		}
 	}
@@ -136,6 +145,25 @@ func (h *Handler) download(c echo.Context) error {
 		mime.FormatMediaType("attachment", map[string]string{"filename": name}),
 	)
 	return c.Stream(http.StatusOK, c.Response().Header().Get(echo.HeaderContentType), r)
+}
+
+// ServeFileDownload adds byte ranges to seekable file downloads without
+// buffering; non-seekable storage readers keep the existing streaming fallback.
+func ServeFileDownload(c echo.Context, id, name string, size int64, modified time.Time, reader io.Reader) (bool, error) {
+	seeker, ok := reader.(io.ReadSeeker)
+	if !ok {
+		return false, nil
+	}
+	etag := `"` + id + "-" + strconv.FormatInt(size, 10) + "-" + strconv.FormatInt(modified.UnixNano(), 10) + `"`
+	header := c.Response().Header()
+	header.Set(echo.HeaderContentType, echo.MIMEOctetStream)
+	header.Set(
+		echo.HeaderContentDisposition,
+		mime.FormatMediaType("attachment", map[string]string{"filename": name}),
+	)
+	header.Set("ETag", etag)
+	http.ServeContent(c.Response(), c.Request(), "", modified, seeker)
+	return true, nil
 }
 
 func (h *Handler) folders(c echo.Context) error {
@@ -450,6 +478,14 @@ func (h *Handler) uploadIntent(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, res)
 }
+func (h *Handler) renewUploadIntentURL(c echo.Context) error {
+	res, err := h.service.RenewUploadIntentURL(c.Request().Context(), owner(c), c.Param("id"))
+	if err != nil {
+		return respond(c, err)
+	}
+	return c.JSON(http.StatusOK, res)
+}
+
 
 func (h *Handler) cancelUploadIntent(c echo.Context) error {
 	deleted, err := h.service.CancelUploadIntent(c.Request().Context(), owner(c), c.Param("id"))

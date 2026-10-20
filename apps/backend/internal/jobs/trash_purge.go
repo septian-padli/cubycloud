@@ -6,13 +6,15 @@ import (
 	"time"
 
 	"github.com/cubycloud/backend/internal/modules/mystorage"
+	"github.com/cubycloud/backend/internal/modules/organization"
 	"github.com/cubycloud/backend/internal/storage"
 	"github.com/uptrace/bun"
 )
 
 type TrashPurgeRunner struct {
-	service *mystorage.Service
-	cancel  context.CancelFunc
+	service       *mystorage.Service
+	organization *organization.Service
+	cancel        context.CancelFunc
 }
 
 // StartTrashPurgeJob initializes and starts a periodic background worker
@@ -28,8 +30,9 @@ func StartTrashPurgeJob(parentCtx context.Context, db *bun.DB, store storage.Sto
 	service := mystorage.NewService(db, store)
 
 	runner := &TrashPurgeRunner{
-		service: service,
-		cancel:  cancel,
+		service:       service,
+		organization: organization.NewService(db, store),
+		cancel:        cancel,
 	}
 
 	go func() {
@@ -40,6 +43,7 @@ func StartTrashPurgeJob(parentCtx context.Context, db *bun.DB, store storage.Sto
 		case <-time.After(3 * time.Second):
 			runner.purge(ctx, retention)
 			runner.cleanupExpiredPendingCloudUploads(ctx)
+			runner.cleanupExpiredTransferSessions(ctx)
 		}
 
 		ticker := time.NewTicker(interval)
@@ -52,6 +56,7 @@ func StartTrashPurgeJob(parentCtx context.Context, db *bun.DB, store storage.Sto
 			case <-ticker.C:
 				runner.purge(ctx, retention)
 				runner.cleanupExpiredPendingCloudUploads(ctx)
+				runner.cleanupExpiredTransferSessions(ctx)
 			}
 		}
 	}()
@@ -75,6 +80,25 @@ func (r *TrashPurgeRunner) cleanupExpiredPendingCloudUploads(ctx context.Context
 	}
 	if deleted > 0 {
 		log.Printf("[CLOUD_UPLOAD_CLEANUP_JOB] Deleted %d expired upload intents", deleted)
+	}
+}
+
+func (r *TrashPurgeRunner) cleanupExpiredTransferSessions(ctx context.Context) {
+	if err := mystorage.CleanupExpiredTusUploads(); err != nil {
+		log.Printf("[TUS_CLEANUP_JOB] Error cleaning My Storage uploads: %v", err)
+	}
+	if err := organization.CleanupExpiredTusUploads(); err != nil {
+		log.Printf("[TUS_CLEANUP_JOB] Error cleaning Organization uploads: %v", err)
+	}
+	if removed, err := r.service.CleanupExpiredMultipartSessions(ctx); err != nil {
+		log.Printf("[MULTIPART_CLEANUP_JOB] Error cleaning My Storage sessions: %v", err)
+	} else if removed > 0 {
+		log.Printf("[MULTIPART_CLEANUP_JOB] Removed %d My Storage sessions", removed)
+	}
+	if removed, err := r.organization.CleanupExpiredMultipartSessions(ctx); err != nil {
+		log.Printf("[MULTIPART_CLEANUP_JOB] Error cleaning Organization sessions: %v", err)
+	} else if removed > 0 {
+		log.Printf("[MULTIPART_CLEANUP_JOB] Removed %d Organization sessions", removed)
 	}
 }
 

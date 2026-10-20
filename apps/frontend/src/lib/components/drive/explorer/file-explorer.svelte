@@ -19,6 +19,23 @@
 	import { myStorageAPI } from '$lib/api/my-storage.js';
 	import { organizationAPI } from '$lib/api/organization.js';
 	import { recordItemAccess } from '$lib/api/drive-home.js';
+	import {
+		cancelTransfer,
+		enqueueTransfers,
+		failPendingTransfers,
+		getInMemoryTransferFile,
+		isTransferQuotaError,
+		loadTransferQueue,
+		pauseTransfer,
+		restartTransfer,
+		resumeFailedTransfer,
+		runTransfer,
+		transferQueueState,
+		type TransferCancelDriver,
+		type TransferDriver,
+		type TransferRecord,
+		type TransferState
+	} from '$lib/transfer-queue.svelte.js';
 	import { cn } from '$lib/utils.js';
 	import { extractDroppedEntries } from '$lib/utils/drag-drop.js';
 	import FileExplorerBreadcrumbs from './file-explorer-breadcrumbs.svelte';
@@ -38,11 +55,38 @@
 	import DriveFileGrid from '$lib/components/drive/drive-file-grid.svelte';
 	import FileGridCard from '$lib/components/drive/file-grid-card.svelte';
 	import { driveView } from '$lib/drive-view.svelte.js';
-	import { ChevronDown, ChevronUp, Download, FolderInput, MoreVertical, Star, Trash2, X } from '@lucide/svelte';
+	import {
+		ChevronDown,
+		ChevronUp,
+		Download,
+		FolderInput,
+		MoreVertical,
+		Star,
+		Trash2,
+		X
+	} from '@lucide/svelte';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Checkbox } from '$lib/components/ui/checkbox/index.js';
 
+	type DownloadQueueItem = {
+		name: string;
+		size: number;
+		progress: number;
+		state: 'uploading' | 'started' | 'failed';
+		error?: string;
+	};
+
+	type QueueDisplayItem = {
+		id: string;
+		kind: 'upload' | 'download';
+		name: string;
+		size: number;
+		progress: number;
+		state: TransferState | 'done' | 'started';
+		error?: string;
+		transfer?: TransferRecord;
+	};
 	let {
 		variant,
 		initialTree,
@@ -56,32 +100,107 @@
 	const chrome = getDriveChrome();
 	const isApiBacked = $derived(variant === 'my-storage' || variant === 'organization');
 	const api = $derived(variant === 'organization' ? organizationAPI : myStorageAPI);
+	const transferDriver: TransferDriver = (file, record, options) =>
+		api.uploadResumable(file, record, options);
+	const transferCancelDriver: TransferCancelDriver = (record) => api.cancelResumable(record);
 
 	let tree = $state<FileEntry[]>(untrack(() => cloneTree(initialTree)));
 	let currentItems = $state<FileEntry[]>([]);
 	let apiBreadcrumbs = $state<{ id: string; name: string }[]>([]);
 	let allFolders = $state<FileEntry[]>([]);
-	let uploadQueue = $state<{ name: string; size: number; progress: number; state: 'queued' | 'uploading' | 'started' | 'done' | 'failed'; error?: string }[]>([]);
+	let storageLoading = $state(false);
+	let downloadQueue = $state<DownloadQueueItem[]>([]);
+	const uploadQueue = $derived(
+		transferQueueState.items.filter(
+			(item) => item.ownerId === chrome.user.id && item.area === variant
+		)
+	);
 	let queueOpen = $state(false);
 	let queueDismissed = $state(false);
+	let queueFileInput: HTMLInputElement | undefined = $state();
+	let pendingQueueTransferId = $state<string | null>(null);
+	let queueStartX = $state<number | null>(null);
+	let queueSwipeOffset = $state(0);
+	let isSwipingQueue = $state(false);
+	const queueEntries = $derived<QueueDisplayItem[]>([
+		...uploadQueue.map((item) => ({
+			id: item.id,
+			kind: 'upload' as const,
+			name: item.relativePath || item.name,
+			size: item.size,
+			progress: item.progress,
+			state: item.state,
+			error: item.error,
+			transfer: item
+		})),
+		...downloadQueue.map((item, index) => ({
+			id: `zip-${index}`,
+			kind: 'download' as const,
+			name: item.name,
+			size: item.size,
+			progress: item.progress,
+			state: item.state,
+			error: item.error
+		}))
+	]);
+	const queueHasActive = $derived(
+		queueEntries.some((item) =>
+			['queued', 'uploading', 'retrying', 'verifying', 'committing'].includes(item.state)
+		)
+	);
+	const queueCanDismiss = $derived(
+		queueEntries.length > 0 &&
+			queueEntries.every((item) =>
+				['completed', 'done', 'started', 'failed', 'expired'].includes(item.state)
+			)
+	);
+	const queueHasProgress = $derived(
+		uploadQueue.some((item) =>
+			[
+				'queued',
+				'uploading',
+				'retrying',
+				'paused',
+				'waiting-for-file',
+				'verifying',
+				'committing',
+				'completed'
+			].includes(item.state)
+		)
+	);
+	const queueCompletedCount = $derived(
+		queueEntries.filter((item) => ['completed', 'done', 'started'].includes(item.state)).length
+	);
+	const queueHeading = $derived.by(() => {
+		const states = uploadQueue.map((item) => item.state);
+		if (states.includes('committing')) return 'Menyimpan';
+		if (states.includes('verifying')) return 'Memverifikasi';
+		if (states.includes('uploading')) return 'Mengunggah';
+		if (states.includes('retrying')) return 'Mencoba kembali';
+		if (states.includes('queued')) return 'Menunggu giliran';
+		if (states.includes('paused') || states.includes('waiting-for-file')) return 'Perlu tindakan';
+		if (states.includes('failed') || states.includes('expired')) return 'Ada masalah';
+		if (downloadQueue.some((item) => item.state === 'uploading')) return 'Memproses';
+		if (downloadQueue.some((item) => item.state === 'started')) return 'Unduhan dimulai';
+		return 'Selesai';
+	});
 	const uploadProgress = $derived.by(() => {
 		let totalWeight = 0;
 		let transferredWeight = 0;
 		for (const item of uploadQueue) {
-			if (item.state === 'started') continue;
 			const weight = Math.max(item.size, 1);
 			totalWeight += weight;
-			transferredWeight += weight * item.progress;
+			transferredWeight += (weight * item.progress) / 100;
 		}
+		if (!uploadQueue.length) return 0;
+		const settled = uploadQueue.every((item) =>
+			['completed', 'failed', 'expired'].includes(item.state)
+		);
+		const successful = uploadQueue.every((item) => item.state === 'completed');
+		if (settled && successful) return 100;
 		if (!totalWeight) return 0;
-		return uploadQueue.every((item) => item.state === 'done' || item.state === 'started')
-			? 100
-			: Math.min(Math.floor(transferredWeight / totalWeight), 99);
+		return Math.min(Math.floor((transferredWeight / totalWeight) * 100), 99);
 	});
-	let queueStartX: number | null = null;
-	let queueSwipeOffset = $state(0);
-	let isSwipingQueue = $state(false);
-	let storageLoading = $state(false);
 	let category = $state<FileCategory>('all');
 	let deleteConfirmOpen = $state(false);
 	let deleteTargetEntry = $state<FileEntry | null>(null);
@@ -116,17 +235,23 @@
 
 	const breadcrumbs = $derived(
 		isApiBacked
-			? [{ id: null, label: rootLabel }, ...apiBreadcrumbs.map((item) => ({ id: item.id, label: item.name }))]
+			? [
+					{ id: null, label: rootLabel },
+					...apiBreadcrumbs.map((item) => ({ id: item.id, label: item.name }))
+				]
 			: getBreadcrumbPath(tree, folderId, rootLabel)
 	);
 	const children = $derived(isApiBacked ? currentItems : getChildren(tree, folderId));
-	const visible = $derived(category === 'all' ? children : children.filter((e) => e.kind === category));
+	const visible = $derived(
+		category === 'all' ? children : children.filter((e) => e.kind === category)
+	);
 	const selectedCount = $derived(selectedIds.length);
 	const isAllSelected = $derived(
-		visible.length > 0 && selectedCount === visible.length && visible.every((item) => selectedIds.includes(item.id))
+		visible.length > 0 &&
+			selectedCount === visible.length &&
+			visible.every((item) => selectedIds.includes(item.id))
 	);
 	const isPartiallySelected = $derived(selectedCount > 0 && !isAllSelected);
-
 
 	function toggleSelectEntry(id: string) {
 		if (selectedIds.includes(id)) {
@@ -167,12 +292,15 @@
 			toast.info(`Mengunduh ${selected.length} item sebagai ZIP (mock)`);
 			return;
 		}
-		const queueIndex = uploadQueue.length;
+		const queueIndex = downloadQueue.length;
 		const totalSize = selected.reduce((acc, e) => acc + (e.sizeBytes || 1), 0);
-		uploadQueue = [
-			...uploadQueue,
+		downloadQueue = [
+			...downloadQueue,
 			{
-				name: selected.length === 1 ? `Men-zip-kan ${selected[0].name}` : `Men-zip-kan ${selected.length} item`,
+				name:
+					selected.length === 1
+						? `Men-zip-kan ${selected[0].name}`
+						: `Men-zip-kan ${selected.length} item`,
 				size: totalSize,
 				progress: 0,
 				state: 'uploading'
@@ -182,27 +310,31 @@
 		queueOpen = true;
 
 		try {
-			api.downloadBatchZip(selected.map((e) => e.id), (message) => {
-				uploadQueue[queueIndex] = {
-					...uploadQueue[queueIndex],
-					state: 'failed',
-					error: message
-				};
-				toast.error(message);
-			});
-			uploadQueue[queueIndex] = {
-				...uploadQueue[queueIndex],
+			api.downloadBatchZip(
+				selected.map((e) => e.id),
+				(message) => {
+					downloadQueue[queueIndex] = {
+						...downloadQueue[queueIndex],
+						state: 'failed',
+						error: message
+					};
+					toast.error(message);
+				}
+			);
+			downloadQueue[queueIndex] = {
+				...downloadQueue[queueIndex],
 				state: 'started'
 			};
 			toast.info('Pengunduhan berkas ZIP dimulai');
 		} catch (error) {
-			uploadQueue[queueIndex] = {
-				...uploadQueue[queueIndex],
+			downloadQueue[queueIndex] = {
+				...downloadQueue[queueIndex],
 				state: 'failed',
 				error: error instanceof Error ? error.message : 'Gagal men-zip berkas'
 			};
 			toast.error(error instanceof Error ? error.message : 'Gagal mengunduh ZIP');
 		}
+		selectedIds = [];
 	}
 	let fetchedPreviewEntry = $state<FileEntry | null>(null);
 
@@ -221,7 +353,8 @@
 
 		if (fetchedPreviewEntry?.id !== previewId) {
 			let cancelled = false;
-			api.getItem(previewId)
+			api
+				.getItem(previewId)
 				.then((item) => {
 					if (!cancelled && item) {
 						fetchedPreviewEntry = api.toEntry(item);
@@ -238,9 +371,9 @@
 
 	const previewEntry = $derived(
 		previewId
-			? (isApiBacked
-				? currentItems.find((entry) => entry.id === previewId) ?? fetchedPreviewEntry
-				: findEntry(tree, previewId) ?? null)
+			? isApiBacked
+				? (currentItems.find((entry) => entry.id === previewId) ?? fetchedPreviewEntry)
+				: (findEntry(tree, previewId) ?? null)
 			: null
 	);
 	const previewOpen = $derived(!!previewEntry);
@@ -257,8 +390,12 @@
 			currentItems = listing.items.map((item) => api.toEntry(item));
 			apiBreadcrumbs = listing.breadcrumbs;
 			allFolders = folders.items.map((item) => ({
-				id: item.id, name: item.name, kind: 'folder' as const, sizeBytes: 0,
-				parentId: item.parent_id, modifiedAt: ''
+				id: item.id,
+				name: item.name,
+				kind: 'folder' as const,
+				sizeBytes: 0,
+				parentId: item.parent_id,
+				modifiedAt: ''
 			}));
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : `Gagal memuat ${rootLabel}`);
@@ -307,7 +444,6 @@
 		syncQuery({ preview: null });
 	}
 
-
 	function guessKind(name: string): FileKind {
 		const ext = name.split('.').pop()?.toLowerCase() ?? '';
 		if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'heic'].includes(ext)) return 'image';
@@ -326,9 +462,7 @@
 	function addFile(name: string, size: number, kind: FileKind, replaceId?: string) {
 		if (replaceId) {
 			tree = tree.map((e) =>
-				e.id === replaceId
-					? { ...e, name, sizeBytes: size, kind, modifiedAt: 'Baru saja' }
-					: e
+				e.id === replaceId ? { ...e, name, sizeBytes: size, kind, modifiedAt: 'Baru saja' } : e
 			);
 		} else {
 			tree = [
@@ -346,7 +480,6 @@
 		}
 		toast.success(`“${name}” diunggah (mock)`);
 	}
-
 
 	async function handleUploadFiles(
 		files: FileList | File[],
@@ -374,12 +507,8 @@
 			return;
 		}
 
-		if (queueDismissed && uploadQueue.every((item) => item.state === 'done' || item.state === 'started' || item.state === 'failed')) {
-			uploadQueue = [];
-			queueOpen = false;
-		}
-
 		const folderPaths = new Map<string, string>();
+		const pathErrors: string[] = [];
 		if (effectiveParentId) folderPaths.set('', effectiveParentId);
 
 		async function ensureFolderPath(relPath: string): Promise<string | null> {
@@ -415,8 +544,10 @@
 			for (const emptyRelPath of emptyFolders) {
 				try {
 					await ensureFolderPath(emptyRelPath);
-				} catch (err) {
-					console.warn('Gagal membuat folder kosong:', emptyRelPath, err);
+				} catch (error) {
+					pathErrors.push(
+						`${emptyRelPath}: ${error instanceof Error ? error.message : 'Gagal membuat folder'}`
+					);
 				}
 			}
 		}
@@ -424,88 +555,231 @@
 		// If there were only empty folders without files:
 		if (!list.length) {
 			await refreshStorage();
-			toast.success('Folder berhasil dibuat', {
-				description: `${emptyFolders!.length} folder dibuat.`
-			});
+			if (pathErrors.length) {
+				toast.error(`${pathErrors.length} folder gagal dibuat`, { description: pathErrors[0] });
+			} else {
+				toast.success('Folder berhasil dibuat', {
+					description: `${emptyFolders!.length} folder dibuat.`
+				});
+			}
 			return;
 		}
 
-		const start = uploadQueue.length;
-		uploadQueue = [
-			...uploadQueue,
-			...list.map((file, index) => ({
-				name: paths?.[index] ? paths[index].replace(/\\/g, '/') : file.name,
-				size: file.size,
-				progress: 0,
-				state: 'queued' as const
-			}))
-		];
+		if (!chrome.user.id) {
+			toast.error('Sesi pengguna tidak tersedia. Silakan masuk kembali.');
+			return;
+		}
+
+		const prepared: { name: string; file: File; parentId: string | null; relativePath: string }[] =
+			[];
+		for (let index = 0; index < list.length; index += 1) {
+			const file = list[index];
+			try {
+				let parentId = effectiveParentId;
+				const relativePath = paths?.[index]?.replace(/\\/g, '/') || file.name;
+				if (paths?.[index]) {
+					const parts = relativePath.split('/').filter(Boolean);
+					parts.pop();
+					if (parts.length > 0) parentId = await ensureFolderPath(parts.join('/'));
+				}
+				prepared.push({ name: file.name, file, parentId, relativePath });
+			} catch (error) {
+				pathErrors.push(
+					`${paths?.[index] || file.name}: ${error instanceof Error ? error.message : 'Gagal menyiapkan folder tujuan'}`
+				);
+			}
+		}
+
+		if (!prepared.length) {
+			if (pathErrors.length) {
+				toast.error(`${pathErrors.length} item tidak dapat disiapkan`, {
+					description: pathErrors[0]
+				});
+			}
+			return;
+		}
+
+		let transferIds: string[];
+		try {
+			transferIds = await enqueueTransfers(chrome.user.id, variant, prepared);
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Gagal menyimpan antrean unggahan');
+			return;
+		}
 		queueDismissed = false;
 
 		let quotaAborted = false;
-
-		for (let index = 0; index < list.length; index += 1) {
-			const file = list[index];
-			const queueIndex = start + index;
-			try {
-				let parentId = effectiveParentId;
-				if (paths?.[index]) {
-					const normPath = paths[index].replace(/\\/g, '/');
-					const parts = normPath.split('/').filter(Boolean);
-					parts.pop();
-					if (parts.length > 0) {
-						parentId = await ensureFolderPath(parts.join('/'));
-					}
-				}
-				uploadQueue[queueIndex] = { ...uploadQueue[queueIndex], state: 'uploading' };
-				await api.upload(file, parentId, (progress) => {
-					uploadQueue[queueIndex] = { ...uploadQueue[queueIndex], progress: Math.min(progress, 99) };
-				});
-				uploadQueue[queueIndex] = { ...uploadQueue[queueIndex], progress: 100, state: 'done' };
-				if (variant === 'my-storage') void chrome?.refreshQuota();
-			} catch (error: unknown) {
-				const err = error as { message?: string; status?: number; code?: string };
-				const isQuota =
-					err?.status === 413 ||
-					err?.code === 'USER_QUOTA_EXCEEDED' ||
-					err?.code === 'STORAGE_POOL_FULL' ||
-					(err?.message && err.message.toLowerCase().includes('kuota'));
-
-				uploadQueue[queueIndex] = {
-					...uploadQueue[queueIndex],
-					state: 'failed',
-					error: isQuota ? 'Kuota penyimpanan tidak cukup' : (err?.message ?? 'Gagal')
-				};
-
-				if (isQuota) {
-					quotaAborted = true;
-					for (let rem = index + 1; rem < list.length; rem += 1) {
-						const remQueueIndex = start + rem;
-						uploadQueue[remQueueIndex] = {
-							...uploadQueue[remQueueIndex],
-							state: 'failed',
-							error: 'Dibatalkan: kuota tidak cukup'
-						};
-					}
-					break;
-				}
+		for (let index = 0; index < transferIds.length; index += 1) {
+			const id = transferIds[index];
+			await runTransfer(id, prepared[index].file, transferDriver, transferCancelDriver);
+			const current = transferQueueState.items.find((item) => item.id === id);
+			if (current && isTransferQuotaError(current)) {
+				quotaAborted = true;
+				await failPendingTransfers(
+					transferIds.slice(index + 1),
+					'Dibatalkan: kuota penyimpanan tidak cukup.'
+				);
+				break;
 			}
 		}
+
 		await refreshStorage();
-		await chrome?.refreshQuota();
-		const failed = uploadQueue.slice(start).filter((item) => item.state === 'failed').length;
+		if (variant === 'my-storage') await chrome.refreshQuota();
+		const failed = transferIds.filter((id) => {
+			const current = transferQueueState.items.find((item) => item.id === id);
+			return current?.state === 'failed' || current?.state === 'expired';
+		}).length;
 		if (quotaAborted) {
-			toast.error('Unggahan dihentikan: Kuota penyimpanan penuh', {
+			toast.error('Unggahan dihentikan: kuota penyimpanan penuh', {
 				description: 'Sebagian berkas gagal diunggah karena batas kuota terlampaui.'
 			});
 		} else {
-			toast[failed ? 'warning' : 'success'](
-				failed ? `${failed} unggahan gagal` : 'Unggahan selesai',
+			const failedTotal = failed + pathErrors.length;
+			toast[failedTotal ? 'warning' : 'success'](
+				failedTotal ? `${failedTotal} unggahan gagal` : 'Unggahan selesai',
 				{
-					description: failed ? 'Periksa daftar unggahan untuk detail.' : `${list.length} item berhasil diunggah.`
+					description: failedTotal
+						? 'Periksa daftar unggahan untuk detail.'
+						: `${prepared.length} item berhasil diunggah.`
 				}
 			);
 		}
+	}
+
+	async function executeQueuedUpload(id: string, file: File) {
+		const succeeded = await runTransfer(id, file, transferDriver, transferCancelDriver, true);
+		const current = transferQueueState.items.find((item) => item.id === id);
+		if (succeeded) {
+			await refreshStorage();
+			if (variant === 'my-storage') await chrome.refreshQuota();
+		} else if (current?.state === 'waiting-for-file' && current.error) {
+			toast.error(current.error);
+		} else if (
+			current &&
+			['uploading', 'retrying', 'verifying', 'committing'].includes(current.state) &&
+			!getInMemoryTransferFile(id)
+		) {
+			toast.info(
+				'Unggahan ini masih berjalan di tab lain. Coba lagi setelah transfer tersebut berhenti.'
+			);
+		}
+	}
+
+	function chooseQueuedFile(id: string) {
+		pendingQueueTransferId = id;
+		queueFileInput?.click();
+	}
+
+	async function handleQueuedFileSelection(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		const id = pendingQueueTransferId;
+		input.value = '';
+		pendingQueueTransferId = null;
+		if (id && file) await executeQueuedUpload(id, file);
+	}
+
+	async function resumeQueuedUpload(id: string) {
+		const record = transferQueueState.items.find((item) => item.id === id);
+		if (!record) return;
+		if (record.state === 'expired' || (record.state === 'failed' && !record.session)) {
+			await restartQueuedUpload(id);
+			return;
+		}
+		if (record.state === 'failed' && !(await resumeFailedTransfer(id))) {
+			toast.error('Sesi unggahan tidak dapat dilanjutkan. Mulai ulang dari nol.');
+			return;
+		}
+		const file = getInMemoryTransferFile(id);
+		if (file) await executeQueuedUpload(id, file);
+		else chooseQueuedFile(id);
+	}
+
+	async function restartQueuedUpload(id: string) {
+		if (!(await restartTransfer(id, transferCancelDriver))) {
+			toast.error(
+				'Sesi unggahan tidak dapat dihapus dengan aman. Coba lagi sebelum memulai ulang.'
+			);
+			return;
+		}
+		chooseQueuedFile(id);
+	}
+
+	async function pauseQueuedUpload(id: string) {
+		if (!(await pauseTransfer(id))) toast.error('Unggahan tidak dapat dijeda sekarang.');
+	}
+
+	async function cancelQueuedUpload(id: string) {
+		if (!(await cancelTransfer(id, transferCancelDriver))) {
+			toast.error('Unggahan belum dapat dibatalkan dengan aman.');
+		}
+	}
+
+	function queueStateLabel(item: QueueDisplayItem): string {
+		if (item.kind === 'download') {
+			if (item.state === 'uploading') return 'Memproses';
+			if (item.state === 'failed') return 'Gagal';
+			return 'Dimulai';
+		}
+		switch (item.state) {
+			case 'queued':
+				return 'Menunggu giliran';
+			case 'uploading':
+				return 'Mengunggah';
+			case 'retrying':
+				return 'Mencoba kembali';
+			case 'paused':
+				return 'Dijeda';
+			case 'waiting-for-file':
+				return 'Menunggu file';
+			case 'verifying':
+				return 'Memverifikasi';
+			case 'committing':
+				return 'Menyimpan';
+			case 'completed':
+				return 'Selesai';
+			case 'failed':
+				return 'Gagal';
+			case 'expired':
+				return 'Kedaluwarsa';
+			case 'done':
+				return 'Selesai';
+			case 'started':
+				return 'Dimulai';
+		}
+	}
+
+	function transferHasSession(item: QueueDisplayItem): boolean {
+		return Boolean(item.transfer?.session);
+	}
+
+	function transferCanPause(item: QueueDisplayItem): boolean {
+		return item.kind === 'upload' && ['uploading', 'retrying', 'verifying'].includes(item.state);
+	}
+
+	function transferCanCancel(item: QueueDisplayItem): boolean {
+		return item.kind === 'upload' && !['completed', 'committing'].includes(item.state);
+	}
+
+	function dismissQueue() {
+		if (queueCanDismiss) {
+			queueDismissed = true;
+			queueOpen = false;
+		}
+	}
+
+	function transferActionLabel(item: QueueDisplayItem): string {
+		if (item.state === 'expired' || (item.state === 'failed' && !transferHasSession(item))) {
+			return 'Mulai ulang dari nol';
+		}
+		if (item.state === 'failed' && transferHasSession(item)) return 'Pilih file untuk melanjutkan';
+		if (
+			item.state === 'waiting-for-file' ||
+			(['uploading', 'retrying', 'verifying', 'committing'].includes(item.state) &&
+				!getInMemoryTransferFile(item.id))
+		)
+			return 'Pilih file';
+		return 'Lanjutkan';
 	}
 
 	function triggerUpload() {
@@ -517,6 +791,13 @@
 	}
 
 	onMount(() => {
+		if (isApiBacked && chrome.user.id) {
+			void loadTransferQueue(chrome.user.id, variant).catch((error) => {
+				toast.error(
+					error instanceof Error ? error.message : 'Gagal memuat antrean transfer tersimpan'
+				);
+			});
+		}
 		chrome.registerUploadHandler(triggerUpload);
 		chrome.registerStorageChangeHandler?.(refreshStorage);
 		function handleDragEnter(e: DragEvent) {
@@ -595,7 +876,9 @@
 							await refreshStorage();
 							toast.success(`Folder “${conflict.suggested_name}” dibuat`);
 						} catch (retryError) {
-							toast.error(retryError instanceof Error ? retryError.message : 'Gagal membuat folder');
+							toast.error(
+								retryError instanceof Error ? retryError.message : 'Gagal membuat folder'
+							);
 						}
 					};
 					conflictConfirmOpen = true;
@@ -609,8 +892,18 @@
 			toast.error(`Folder “${name}” sudah ada.`);
 			return;
 		}
-		tree = [...tree, { id: nextId('folder'), name, kind: 'folder', sizeBytes: 0,
-			modifiedAt: 'Baru saja', parentId: folderId, storageNode: 'ssd' }];
+		tree = [
+			...tree,
+			{
+				id: nextId('folder'),
+				name,
+				kind: 'folder',
+				sizeBytes: 0,
+				modifiedAt: 'Baru saja',
+				parentId: folderId,
+				storageNode: 'ssd'
+			}
+		];
 		toast.success(`Folder “${name}” dibuat`);
 	}
 
@@ -627,9 +920,13 @@
 					try {
 						await api.mutate(actionEntry!.id, { ...update, name: conflict.suggested_name });
 						await refreshStorage();
-						toast.success(update.name !== undefined ? 'Nama diperbarui' : `“${actionEntry!.name}” dipindahkan`);
+						toast.success(
+							update.name !== undefined ? 'Nama diperbarui' : `“${actionEntry!.name}” dipindahkan`
+						);
 					} catch (retryError) {
-						toast.error(retryError instanceof Error ? retryError.message : 'Gagal memperbarui item');
+						toast.error(
+							retryError instanceof Error ? retryError.message : 'Gagal memperbarui item'
+						);
 					}
 				};
 				conflictConfirmOpen = true;
@@ -640,13 +937,20 @@
 			}
 		}
 		await refreshStorage();
-		toast.success(update.name !== undefined ? 'Nama diperbarui' : `“${actionEntry.name}” dipindahkan`);
+		toast.success(
+			update.name !== undefined ? 'Nama diperbarui' : `“${actionEntry.name}” dipindahkan`
+		);
 	}
 
 	function onRename(name: string) {
-		if (isApiBacked) { void runMutation({ name }); return; }
+		if (isApiBacked) {
+			void runMutation({ name });
+			return;
+		}
 		if (!actionEntry) return;
-		tree = tree.map((e) => e.id === actionEntry!.id ? { ...e, name, modifiedAt: 'Baru saja' } : e);
+		tree = tree.map((e) =>
+			e.id === actionEntry!.id ? { ...e, name, modifiedAt: 'Baru saja' } : e
+		);
 		toast.success('Nama diperbarui');
 	}
 
@@ -659,7 +963,12 @@
 					let movedCount = 0;
 					for (const entryToMove of entriesToMove) {
 						if (entryToMove.kind === 'folder' && targetFolderId === entryToMove.id) continue;
-						if (entryToMove.kind === 'folder' && targetFolderId && isAncestor(allFolders, entryToMove.id, targetFolderId)) continue;
+						if (
+							entryToMove.kind === 'folder' &&
+							targetFolderId &&
+							isAncestor(allFolders, entryToMove.id, targetFolderId)
+						)
+							continue;
 						try {
 							await api.moveItem(entryToMove.id, targetFolderId);
 							movedCount++;
@@ -669,13 +978,21 @@
 					}
 					selectedIds = [];
 					await refreshStorage();
-					const targetName = targetFolderId ? (allFolders.find((f) => f.id === targetFolderId)?.name ?? 'Folder') : rootLabel;
-					toast.success(movedCount === 1 ? `“${entriesToMove[0].name}” dipindahkan ke “${targetName}”` : `${movedCount} item dipindahkan ke “${targetName}”`);
+					const targetName = targetFolderId
+						? (allFolders.find((f) => f.id === targetFolderId)?.name ?? 'Folder')
+						: rootLabel;
+					toast.success(
+						movedCount === 1
+							? `“${entriesToMove[0].name}” dipindahkan ke “${targetName}”`
+							: `${movedCount} item dipindahkan ke “${targetName}”`
+					);
 				})();
 				return;
 			}
 			const movedSet = new Set(entriesToMove.map((e) => e.id));
-			tree = tree.map((e) => movedSet.has(e.id) ? { ...e, parentId: targetFolderId, modifiedAt: 'Baru saja' } : e);
+			tree = tree.map((e) =>
+				movedSet.has(e.id) ? { ...e, parentId: targetFolderId, modifiedAt: 'Baru saja' } : e
+			);
 			selectedIds = [];
 			toast.success(`${entriesToMove.length} item dipindahkan`);
 			return;
@@ -699,7 +1016,10 @@
 						conflictDescription = `Nama sudah digunakan. Gunakan nama yang disarankan “${conflict.suggested_name}”?`;
 						conflictAction = async () => {
 							try {
-								await api.mutate(entryToMove.id, { parent_id: targetFolderId, name: conflict.suggested_name });
+								await api.mutate(entryToMove.id, {
+									parent_id: targetFolderId,
+									name: conflict.suggested_name
+								});
 								await refreshStorage();
 								toast.success(`“${entryToMove.name}” dipindahkan`);
 							} catch (retryError) {
@@ -717,10 +1037,11 @@
 			})();
 			return;
 		}
-		tree = tree.map((e) => e.id === actionEntry!.id ? { ...e, parentId: targetFolderId, modifiedAt: 'Baru saja' } : e);
+		tree = tree.map((e) =>
+			e.id === actionEntry!.id ? { ...e, parentId: targetFolderId, modifiedAt: 'Baru saja' } : e
+		);
 		toast.success(`“${actionEntry.name}” dipindahkan`);
 	}
-
 
 	async function onCopy(entry: FileEntry) {
 		if (isApiBacked) {
@@ -741,8 +1062,18 @@
 			name = entry.name.replace(/(\.[^.]+)?$/, (m) => ` (salinan ${n})${m}`);
 			n += 1;
 		}
-		tree = [...tree, { ...entry, id: nextId('copy'), name, sizeBytes: 0, modifiedAt: 'Baru saja',
-			parentId: folderId, starred: false }];
+		tree = [
+			...tree,
+			{
+				...entry,
+				id: nextId('copy'),
+				name,
+				sizeBytes: 0,
+				modifiedAt: 'Baru saja',
+				parentId: folderId,
+				starred: false
+			}
+		];
 		toast.success(`Salinan zero-byte “${name}” dibuat`);
 	}
 
@@ -793,7 +1124,11 @@
 				selectedIds = [];
 				await refreshStorage();
 				if (variant === 'my-storage') void chrome?.refreshQuota();
-				toast.success(variant === 'organization' ? `${deletedCount} item dihapus` : `${deletedCount} item dipindahkan ke Trash`);
+				toast.success(
+					variant === 'organization'
+						? `${deletedCount} item dihapus`
+						: `${deletedCount} item dipindahkan ke Trash`
+				);
 				return;
 			}
 			const removeIds = new Set<string>(toDelete.map((e) => e.id));
@@ -808,13 +1143,23 @@
 			try {
 				await api.remove(entry.id);
 				const deletedBreadcrumb = apiBreadcrumbs.findIndex((item) => item.id === entry.id);
-				if (deletedBreadcrumb >= 0 && folderId && apiBreadcrumbs.slice(deletedBreadcrumb).some((item) => item.id === folderId)) {
+				if (
+					deletedBreadcrumb >= 0 &&
+					folderId &&
+					apiBreadcrumbs.slice(deletedBreadcrumb).some((item) => item.id === folderId)
+				) {
 					navigateFolder(deletedBreadcrumb > 0 ? apiBreadcrumbs[deletedBreadcrumb - 1].id : null);
 				}
 				await refreshStorage();
 				if (variant === 'my-storage') void chrome?.refreshQuota();
-				toast.success(variant === 'organization' ? `“${entry.name}” dihapus` : `“${entry.name}” dipindahkan ke Trash`);
-			} catch (error) { toast.error(error instanceof Error ? error.message : 'Gagal menghapus item'); }
+				toast.success(
+					variant === 'organization'
+						? `“${entry.name}” dihapus`
+						: `“${entry.name}” dipindahkan ke Trash`
+				);
+			} catch (error) {
+				toast.error(error instanceof Error ? error.message : 'Gagal menghapus item');
+			}
 			return;
 		}
 		const removeIds = new Set<string>([entry.id]);
@@ -838,8 +1183,11 @@
 
 	async function onDownload(entry: FileEntry) {
 		if (isApiBacked) {
-			try { await api.download(entry.id, entry.kind === 'folder' ? `${entry.name}.zip` : entry.name); }
-			catch (error) { toast.error(error instanceof Error ? error.message : 'Gagal mengunduh'); }
+			try {
+				await api.download(entry.id, entry.kind === 'folder' ? `${entry.name}.zip` : entry.name);
+			} catch (error) {
+				toast.error(error instanceof Error ? error.message : 'Gagal mengunduh');
+			}
 			return;
 		}
 		toast.info(`Mengunduh “${entry.name}” (mock)`, { description: formatSize(entry.sizeBytes) });
@@ -858,7 +1206,9 @@
 			// Double-click detected
 			dragStartAllowed = false;
 			openEntry(entry);
-			setTimeout(() => { dragStartAllowed = true; }, 100);
+			setTimeout(() => {
+				dragStartAllowed = true;
+			}, 100);
 		}
 		lastClickTime = now;
 	}
@@ -901,21 +1251,33 @@
 
 			if (folderWrapper) {
 				const targetFolderId = folderWrapper.getAttribute('data-folder-id');
-				const targetFolder = (variant === 'my-storage' ? currentItems.find((e) => e.id === targetFolderId) : null) ?? findEntry(tree, targetFolderId || '');
+				const targetFolder =
+					(variant === 'my-storage' ? currentItems.find((e) => e.id === targetFolderId) : null) ??
+					findEntry(tree, targetFolderId || '');
 
 				if (targetFolder && targetFolder.kind === 'folder') {
 					const isMulti = selectedIds.includes(draggedEntryId) && selectedIds.length > 1;
 					const entriesToMove = isMulti
 						? visible.filter((ent) => selectedIds.includes(ent.id) && ent.id !== targetFolder.id)
-						: [((isApiBacked ? currentItems.find((ent) => ent.id === draggedEntryId) : null) ?? findEntry(tree, draggedEntryId))].filter(Boolean) as FileEntry[];
+						: ([
+								(isApiBacked ? currentItems.find((ent) => ent.id === draggedEntryId) : null) ??
+									findEntry(tree, draggedEntryId)
+							].filter(Boolean) as FileEntry[]);
 
-					if (entriesToMove.length > 0 && !(entriesToMove.length === 1 && entriesToMove[0].id === targetFolder.id)) {
+					if (
+						entriesToMove.length > 0 &&
+						!(entriesToMove.length === 1 && entriesToMove[0].id === targetFolder.id)
+					) {
 						if (isMulti) {
 							if (isApiBacked) {
 								void (async () => {
 									let movedCount = 0;
 									for (const movedEntry of entriesToMove) {
-										if (movedEntry.kind === 'folder' && isAncestor(isApiBacked ? allFolders : tree, movedEntry.id, targetFolder.id)) continue;
+										if (
+											movedEntry.kind === 'folder' &&
+											isAncestor(isApiBacked ? allFolders : tree, movedEntry.id, targetFolder.id)
+										)
+											continue;
 										try {
 											await api.moveItem(movedEntry.id, targetFolder.id);
 											movedCount++;
@@ -925,11 +1287,19 @@
 									}
 									selectedIds = [];
 									await refreshStorage();
-									toast.success(movedCount === 1 ? `“${entriesToMove[0].name}” dipindahkan ke “${targetFolder.name}”` : `${movedCount} item dipindahkan ke “${targetFolder.name}”`);
+									toast.success(
+										movedCount === 1
+											? `“${entriesToMove[0].name}” dipindahkan ke “${targetFolder.name}”`
+											: `${movedCount} item dipindahkan ke “${targetFolder.name}”`
+									);
 								})();
 							} else {
 								const movedIds = new Set(entriesToMove.map((ent) => ent.id));
-								tree = tree.map((ent) => movedIds.has(ent.id) ? { ...ent, parentId: targetFolder.id, modifiedAt: 'Baru saja' } : ent);
+								tree = tree.map((ent) =>
+									movedIds.has(ent.id)
+										? { ...ent, parentId: targetFolder.id, modifiedAt: 'Baru saja' }
+										: ent
+								);
 								selectedIds = [];
 								toast.success(`${entriesToMove.length} item dipindahkan ke “${targetFolder.name}”`);
 							}
@@ -953,11 +1323,16 @@
 									conflictDescription = `Nama sudah digunakan. Gunakan nama yang disarankan “${conflict.suggested_name}”?`;
 									conflictAction = async () => {
 										try {
-											await api.mutate(movedEntry.id, { parent_id: targetFolder.id, name: conflict.suggested_name });
+											await api.mutate(movedEntry.id, {
+												parent_id: targetFolder.id,
+												name: conflict.suggested_name
+											});
 											await refreshStorage();
 											toast.success(`“${movedEntry.name}” dipindahkan ke “${targetFolder.name}”`);
 										} catch (retryError) {
-											toast.error(retryError instanceof Error ? retryError.message : 'Gagal memindahkan');
+											toast.error(
+												retryError instanceof Error ? retryError.message : 'Gagal memindahkan'
+											);
 										}
 									};
 									conflictConfirmOpen = true;
@@ -1017,9 +1392,15 @@
 			const isMulti = selectedIds.includes(draggedEntryId) && selectedIds.length > 1;
 			const entriesToMove = isMulti
 				? visible.filter((ent) => selectedIds.includes(ent.id) && ent.id !== targetFolder.id)
-				: [((isApiBacked ? currentItems.find((ent) => ent.id === draggedEntryId) : null) ?? findEntry(tree, draggedEntryId))].filter(Boolean) as FileEntry[];
+				: ([
+						(isApiBacked ? currentItems.find((ent) => ent.id === draggedEntryId) : null) ??
+							findEntry(tree, draggedEntryId)
+					].filter(Boolean) as FileEntry[]);
 
-			if (entriesToMove.length === 0 || (entriesToMove.length === 1 && entriesToMove[0].id === targetFolder.id)) {
+			if (
+				entriesToMove.length === 0 ||
+				(entriesToMove.length === 1 && entriesToMove[0].id === targetFolder.id)
+			) {
 				draggedEntryId = null;
 				return;
 			}
@@ -1029,8 +1410,13 @@
 					void (async () => {
 						let movedCount = 0;
 						for (const movedEntry of entriesToMove) {
-							if (movedEntry.kind === 'folder' && isAncestor(isApiBacked ? allFolders : tree, movedEntry.id, targetFolder.id)) {
-								toast.error(`Tidak bisa memindahkan folder “${movedEntry.name}” ke dalam subfolder-nya sendiri`);
+							if (
+								movedEntry.kind === 'folder' &&
+								isAncestor(isApiBacked ? allFolders : tree, movedEntry.id, targetFolder.id)
+							) {
+								toast.error(
+									`Tidak bisa memindahkan folder “${movedEntry.name}” ke dalam subfolder-nya sendiri`
+								);
 								continue;
 							}
 							try {
@@ -1042,13 +1428,21 @@
 						}
 						selectedIds = [];
 						await refreshStorage();
-						toast.success(movedCount === 1 ? `“${entriesToMove[0].name}” dipindahkan ke “${targetFolder.name}”` : `${movedCount} item dipindahkan ke “${targetFolder.name}”`);
+						toast.success(
+							movedCount === 1
+								? `“${entriesToMove[0].name}” dipindahkan ke “${targetFolder.name}”`
+								: `${movedCount} item dipindahkan ke “${targetFolder.name}”`
+						);
 					})();
 					draggedEntryId = null;
 					return;
 				}
 				const movedIds = new Set(entriesToMove.map((ent) => ent.id));
-				tree = tree.map((ent) => movedIds.has(ent.id) ? { ...ent, parentId: targetFolder.id, modifiedAt: 'Baru saja' } : ent);
+				tree = tree.map((ent) =>
+					movedIds.has(ent.id)
+						? { ...ent, parentId: targetFolder.id, modifiedAt: 'Baru saja' }
+						: ent
+				);
 				selectedIds = [];
 				toast.success(`${entriesToMove.length} item dipindahkan ke “${targetFolder.name}”`);
 				draggedEntryId = null;
@@ -1075,7 +1469,10 @@
 						conflictDescription = `Nama sudah digunakan. Gunakan nama yang disarankan “${conflict.suggested_name}”?`;
 						conflictAction = async () => {
 							try {
-								await api.mutate(movedEntry.id, { parent_id: targetFolder.id, name: conflict.suggested_name });
+								await api.mutate(movedEntry.id, {
+									parent_id: targetFolder.id,
+									name: conflict.suggested_name
+								});
 								await refreshStorage();
 								toast.success(`“${movedEntry.name}” dipindahkan ke “${targetFolder.name}”`);
 							} catch (retryError) {
@@ -1112,12 +1509,13 @@
 		}
 	}
 </script>
+
 <svelte:window
 	onpointermove={(event) => {
 		if (queueStartX !== null) {
 			const diff = event.clientX - queueStartX;
 			queueSwipeOffset = Math.max(0, diff);
-			if (queueSwipeOffset > 80) {
+			if (queueCanDismiss && queueSwipeOffset > 80) {
 				queueDismissed = true;
 				queueStartX = null;
 				queueSwipeOffset = 0;
@@ -1126,7 +1524,7 @@
 		}
 	}}
 	onpointerup={() => {
-		if (queueStartX !== null && queueSwipeOffset > 60) {
+		if (queueCanDismiss && queueStartX !== null && queueSwipeOffset > 60) {
 			queueDismissed = true;
 		}
 		queueStartX = null;
@@ -1165,10 +1563,23 @@
 		const input = e.currentTarget as HTMLInputElement;
 		if (input.files) {
 			const files = Array.from(input.files);
-			void handleUploadFiles(files, files.map((file) => (file as File & { webkitRelativePath?: string }).webkitRelativePath ?? file.name));
+			void handleUploadFiles(
+				files,
+				files.map(
+					(file) => (file as File & { webkitRelativePath?: string }).webkitRelativePath ?? file.name
+				)
+			);
 		}
 		input.value = '';
 	}}
+/>
+<input
+	bind:this={queueFileInput}
+	type="file"
+	class="hidden"
+	aria-label="Pilih kembali file untuk melanjutkan unggahan"
+	data-testid="resume-upload-file-input"
+	onchange={handleQueuedFileSelection}
 />
 
 <div class="flex flex-col gap-4">
@@ -1176,7 +1587,13 @@
 	{#if storageLoading}
 		<p class="text-sm text-muted" role="status">Memuat {rootLabel}…</p>
 	{/if}
-	<FileExplorerToolbar bind:category onNewFolder={() => (newFolderOpen = true)} onUpload={triggerUpload} onUploadFolder={triggerFolderUpload} showFolderUpload={isApiBacked} />
+	<FileExplorerToolbar
+		bind:category
+		onNewFolder={() => (newFolderOpen = true)}
+		onUpload={triggerUpload}
+		onUploadFolder={triggerFolderUpload}
+		showFolderUpload={isApiBacked}
+	/>
 
 	{#if selectedCount > 0}
 		<div
@@ -1184,7 +1601,7 @@
 			data-testid="bulk-action-bar"
 		>
 			<div class="flex items-center gap-3">
-				<label class="flex items-center gap-2 cursor-pointer select-none">
+				<label class="flex cursor-pointer items-center gap-2 select-none">
 					<Checkbox
 						checked={isAllSelected}
 						indeterminate={isPartiallySelected}
@@ -1206,7 +1623,7 @@
 							type="button"
 							variant="ghost"
 							size="icon"
-							class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white rounded-full"
+							class="rounded-full bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
 							aria-label="Aksi massal"
 							data-testid="bulk-actions-menu-trigger"
 						>
@@ -1216,7 +1633,7 @@
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="end" class="min-w-48">
 					<DropdownMenu.Item
-						class="gap-2 cursor-pointer"
+						class="cursor-pointer gap-2"
 						onclick={handleBulkDownload}
 						data-testid="bulk-action-download"
 					>
@@ -1224,7 +1641,7 @@
 						<span>Unduh selected</span>
 					</DropdownMenu.Item>
 					<DropdownMenu.Item
-						class="gap-2 cursor-pointer"
+						class="cursor-pointer gap-2"
 						onclick={handleBulkMove}
 						data-testid="bulk-action-move"
 					>
@@ -1233,7 +1650,7 @@
 					</DropdownMenu.Item>
 					<DropdownMenu.Separator />
 					<DropdownMenu.Item
-						class="gap-2 text-destructive focus:text-destructive cursor-pointer"
+						class="cursor-pointer gap-2 text-destructive focus:text-destructive"
 						onclick={handleBulkDelete}
 						data-testid="bulk-action-delete"
 					>
@@ -1277,6 +1694,13 @@
 					<div
 						data-folder-id={entry.kind === 'folder' ? entry.id : undefined}
 						draggable="true"
+						role="presentation"
+						onkeydown={(e) => {
+							if (e.key === ' ' && (e.target as HTMLElement).getAttribute('role') === 'option') {
+								e.preventDefault();
+								handleItemClick(entry);
+							}
+						}}
 						onclick={() => handleItemClick(entry)}
 						ondragstart={(e) => handleItemDragStart(entry, e)}
 						ondragend={handleItemDragEnd}
@@ -1292,13 +1716,15 @@
 							}
 						}}
 						ondragover={entry.kind === 'folder' ? (e) => handleFolderDragOver(entry, e) : undefined}
-						ondragleave={entry.kind === 'folder' ? (e) => handleFolderDragLeave(entry, e) : undefined}
+						ondragleave={entry.kind === 'folder'
+							? (e) => handleFolderDragLeave(entry, e)
+							: undefined}
 						ondrop={entry.kind === 'folder' ? (e) => handleFolderDrop(entry, e) : undefined}
-		class={`${entry.id === draggedEntryId ? 'opacity-50 cursor-grabbing' : ''} ${
-			entry.kind === 'folder' && dragOverFolderId === entry.id
-				? 'border-primary bg-accent/40 ring-2 ring-primary/50 rounded-xl transition-all'
-				: ''
-		}`}
+						class={`${entry.id === draggedEntryId ? 'cursor-grabbing opacity-50' : ''} ${
+							entry.kind === 'folder' && dragOverFolderId === entry.id
+								? 'rounded-xl border-primary bg-accent/40 ring-2 ring-primary/50 transition-all'
+								: ''
+						}`}
 					>
 						<FileExplorerContextMenu {entry} {variant} {...menuHandlers}>
 							<FileGridCard
@@ -1316,8 +1742,10 @@
 									<button
 										type="button"
 										class={cn(
-											"inline-flex size-7 items-center justify-center rounded-lg bg-surface/90 shadow-sm backdrop-blur-sm transition-opacity hover:bg-surface focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary",
-											selectedIds.includes(entry.id) ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100"
+											'inline-flex size-7 items-center justify-center rounded-lg bg-surface/90 shadow-sm backdrop-blur-sm transition-opacity hover:bg-surface focus-visible:ring-1 focus-visible:ring-primary focus-visible:outline-none',
+											selectedIds.includes(entry.id)
+												? 'opacity-100'
+												: 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
 										)}
 										title={selectedIds.includes(entry.id) ? 'Batal pilih' : 'Pilih'}
 										aria-label={`Pilih ${entry.name}`}
@@ -1351,6 +1779,13 @@
 					<div
 						data-folder-id={entry.kind === 'folder' ? entry.id : undefined}
 						draggable="true"
+						role="presentation"
+						onkeydown={(e) => {
+							if (e.key === ' ' && (e.target as HTMLElement).getAttribute('role') === 'option') {
+								e.preventDefault();
+								handleItemClick(entry);
+							}
+						}}
 						onclick={() => handleItemClick(entry)}
 						ondragstart={(e) => handleItemDragStart(entry, e)}
 						ondragend={handleItemDragEnd}
@@ -1366,11 +1801,13 @@
 							}
 						}}
 						ondragover={entry.kind === 'folder' ? (e) => handleFolderDragOver(entry, e) : undefined}
-						ondragleave={entry.kind === 'folder' ? (e) => handleFolderDragLeave(entry, e) : undefined}
+						ondragleave={entry.kind === 'folder'
+							? (e) => handleFolderDragLeave(entry, e)
+							: undefined}
 						ondrop={entry.kind === 'folder' ? (e) => handleFolderDrop(entry, e) : undefined}
-						class={`${entry.id === draggedEntryId ? 'opacity-50 cursor-grabbing' : ''} ${
+						class={`${entry.id === draggedEntryId ? 'cursor-grabbing opacity-50' : ''} ${
 							entry.kind === 'folder' && dragOverFolderId === entry.id
-								? 'border-primary bg-accent/40 ring-2 ring-primary/50 rounded-lg transition-all'
+								? 'rounded-lg border-primary bg-accent/40 ring-2 ring-primary/50 transition-all'
 								: ''
 						}`}
 					>
@@ -1382,7 +1819,7 @@
 							onOpen={openEntry}
 							onSelect={() => {}}
 							onToggleSelect={(e) => toggleSelectEntry(e.id)}
-							onDownload={onDownload}
+							{onDownload}
 							onRename={(e) => {
 								actionEntry = e;
 								renameOpen = true;
@@ -1391,13 +1828,13 @@
 								actionEntry = e;
 								moveOpen = true;
 							}}
-							onCopy={onCopy}
-							onStar={onStar}
+							{onCopy}
+							{onStar}
 							onShare={(e) => {
 								actionEntry = e;
 								shareOpen = true;
 							}}
-							onDelete={onDelete}
+							{onDelete}
 						/>
 					</div>
 				{/each}
@@ -1406,10 +1843,10 @@
 	</FileExplorerDropzone>
 </div>
 
-{#if isApiBacked && uploadQueue.length > 0 && !queueDismissed}
+{#if isApiBacked && queueEntries.length > 0 && (!queueDismissed || queueHasActive)}
 	<aside
 		transition:fly={{ x: 350, duration: 250 }}
-		class="fixed left-4 right-4 top-20 z-50 ml-auto w-auto max-w-sm rounded-xl border border-subtle bg-surface p-4 text-main shadow-none"
+		class="fixed top-20 right-4 left-4 z-50 ml-auto w-auto max-w-sm rounded-xl border border-subtle bg-surface p-4 text-main shadow-none"
 		aria-label="Antrean unggahan"
 		data-testid="upload-queue"
 		style={`touch-action: pan-y; ${
@@ -1428,16 +1865,16 @@
 		<div class="flex items-center justify-between gap-3">
 			<button
 				type="button"
-				class="text-left text-sm font-semibold hover:opacity-80 transition-opacity"
+				class="text-left text-sm font-semibold transition-opacity hover:opacity-80"
 				aria-expanded={queueOpen}
 				onclick={() => (queueOpen = !queueOpen)}
 			>
-				{uploadQueue.some((item) => item.state === 'uploading') ? (uploadQueue.some((item) => item.name.toLowerCase().includes('zip')) ? 'Memproses' : 'Mengunggah') : uploadQueue.some((item) => item.state === 'started') ? 'Unduhan dimulai' : 'Selesai'} · {uploadQueue.filter((item) => item.state === 'done' || item.state === 'started').length}/{uploadQueue.length}
+				{queueHeading} · {queueCompletedCount}/{queueEntries.length}
 			</button>
-			<div class="flex items-center gap-1 shrink-0">
+			<div class="flex shrink-0 items-center gap-1">
 				<button
 					type="button"
-					class="inline-flex size-6 items-center justify-center rounded-md text-muted hover:bg-muted/20 hover:text-main transition-colors"
+					class="inline-flex size-6 items-center justify-center rounded-md text-muted transition-colors hover:bg-muted/20 hover:text-main"
 					aria-label={queueOpen ? 'Ciutkan antrean unggahan' : 'Buka antrean unggahan'}
 					onclick={() => (queueOpen = !queueOpen)}
 				>
@@ -1447,43 +1884,92 @@
 						<ChevronDown class="size-4" />
 					{/if}
 				</button>
-				{#if uploadQueue.every((item) => item.state === 'done' || item.state === 'started' || item.state === 'failed')}
+				{#if queueCanDismiss}
 					<button
 						type="button"
-						class="inline-flex size-6 items-center justify-center rounded-md text-muted hover:bg-muted/20 hover:text-main transition-colors"
+						class="inline-flex size-6 items-center justify-center rounded-md text-muted transition-colors hover:bg-muted/20 hover:text-main"
 						aria-label="Tutup notifikasi unggahan"
 						data-testid="dismiss-upload-queue"
-						onclick={() => (queueDismissed = true)}
+						onclick={dismissQueue}
 					>
 						<X class="size-4" />
 					</button>
 				{/if}
 			</div>
 		</div>
-		{#if uploadQueue.some((item) => item.state === 'uploading' || item.state === 'queued' || item.state === 'done')}
-			<div class="mt-2 h-1.5 overflow-hidden rounded-full bg-muted/30" role="progressbar" aria-label="Progress unggahan" aria-valuenow={uploadProgress} aria-valuemin="0" aria-valuemax="100">
+		{#if queueHasProgress}
+			<div
+				class="mt-2 h-1.5 overflow-hidden rounded-full bg-muted/30"
+				role="progressbar"
+				aria-label="Progress unggahan"
+				aria-valuenow={uploadProgress}
+				aria-valuemin="0"
+				aria-valuemax="100"
+			>
 				<div class="h-full bg-primary transition-all" style={`width:${uploadProgress}%`}></div>
 			</div>
 		{/if}
 		{#if queueOpen}
-			<ul class="mt-3 max-h-56 space-y-2.5 overflow-y-auto text-xs">
-				{#each uploadQueue as item, index (index)}
-					<li class="flex flex-col gap-1" data-testid="upload-queue-item">
+			<ul class="mt-3 max-h-72 space-y-3 overflow-y-auto text-xs">
+				{#each queueEntries as item (item.id)}
+					<li
+						class="flex flex-col gap-1.5"
+						data-testid={item.kind === 'upload' ? 'upload-queue-item' : 'download-queue-item'}
+						data-state={item.state}
+					>
 						<div class="flex items-center justify-between gap-2">
 							<span class="min-w-0 flex-1 truncate font-medium text-main" title={item.name}>
 								{item.name}
 							</span>
-							{#if item.state !== 'failed'}
-								<span class="shrink-0 text-muted">
-									{item.state === 'done' ? 'Selesai' : item.state === 'started' ? 'Dimulai' : `${item.progress}%`}
-								</span>
-							{/if}
+							<span class="shrink-0 text-muted">
+								{queueStateLabel(
+									item
+								)}{#if !['completed', 'done', 'started', 'failed', 'expired'].includes(item.state)}
+									· {item.progress}%{/if}
+							</span>
 						</div>
-						{#if item.state === 'failed'}
-							<div class="flex justify-end">
-								<span class="text-right text-xs font-medium text-danger">
-									{item.error}
-								</span>
+						{#if item.error}
+							<span class="text-xs font-medium text-danger">{item.error}</span>
+						{/if}
+						{#if item.kind === 'upload'}
+							<div class="flex flex-wrap justify-end gap-2">
+								{#if transferCanPause(item)}
+									<button
+										type="button"
+										class="text-primary hover:underline"
+										aria-label={`Jeda ${item.name}`}
+										data-testid={`pause-upload-${item.id}`}
+										onclick={() => void pauseQueuedUpload(item.id)}>Jeda</button
+									>
+								{/if}
+								{#if ['queued', 'paused', 'waiting-for-file', 'failed', 'expired'].includes(item.state) || (['uploading', 'retrying', 'verifying', 'committing'].includes(item.state) && !getInMemoryTransferFile(item.id))}
+									<button
+										type="button"
+										class="text-primary hover:underline"
+										aria-label={`${transferActionLabel(item)}: ${item.name}`}
+										data-testid={`resume-upload-${item.id}`}
+										onclick={() => void resumeQueuedUpload(item.id)}
+										>{transferActionLabel(item)}</button
+									>
+								{/if}
+								{#if item.state === 'failed' && transferHasSession(item)}
+									<button
+										type="button"
+										class="text-primary hover:underline"
+										aria-label={`Mulai ulang dari nol: ${item.name}`}
+										data-testid={`restart-upload-${item.id}`}
+										onclick={() => void restartQueuedUpload(item.id)}>Mulai ulang dari nol</button
+									>
+								{/if}
+								{#if transferCanCancel(item)}
+									<button
+										type="button"
+										class="text-danger hover:underline"
+										aria-label={`Batalkan ${item.name}`}
+										data-testid={`cancel-upload-${item.id}`}
+										onclick={() => void cancelQueuedUpload(item.id)}>Batalkan</button
+									>
+								{/if}
 							</div>
 						{/if}
 					</li>
@@ -1493,11 +1979,7 @@
 	</aside>
 {/if}
 <NewFolderDialog bind:open={newFolderOpen} onConfirm={onNewFolder} />
-<RenameDialog
-	bind:open={renameOpen}
-	initialName={actionEntry?.name ?? ''}
-	onConfirm={onRename}
-/>
+<RenameDialog bind:open={renameOpen} initialName={actionEntry?.name ?? ''} onConfirm={onRename} />
 <MoveDialog
 	bind:open={moveOpen}
 	entry={moveMultipleEntries.length > 0 ? null : actionEntry}
@@ -1528,49 +2010,51 @@
 	}}
 />
 {#if !isApiBacked}
-<ConflictResolutionDialog
-	bind:open={conflictOpen}
-	fileName={pendingUpload?.name ?? ''}
-	onReplace={() => {
-		if (!pendingUpload || !actionEntry) return;
-		addFile(pendingUpload.name, pendingUpload.size, pendingUpload.kind, actionEntry.id);
-		pendingUpload = null;
-	}}
-	onKeepBoth={() => {
-		if (!pendingUpload) return;
-		const ext = pendingUpload.name.includes('.')
-			? pendingUpload.name.slice(pendingUpload.name.lastIndexOf('.'))
-			: '';
-		const base = pendingUpload.name.slice(0, pendingUpload.name.length - ext.length);
-		let name = `${base} (1)${ext}`;
-		let n = 2;
-		while (findSiblingByName(name)) {
-			name = `${base} (${n})${ext}`;
-			n += 1;
-		}
-		addFile(name, pendingUpload.size, pendingUpload.kind);
-		pendingUpload = null;
-	}}
-/>
+	<ConflictResolutionDialog
+		bind:open={conflictOpen}
+		fileName={pendingUpload?.name ?? ''}
+		onReplace={() => {
+			if (!pendingUpload || !actionEntry) return;
+			addFile(pendingUpload.name, pendingUpload.size, pendingUpload.kind, actionEntry.id);
+			pendingUpload = null;
+		}}
+		onKeepBoth={() => {
+			if (!pendingUpload) return;
+			const ext = pendingUpload.name.includes('.')
+				? pendingUpload.name.slice(pendingUpload.name.lastIndexOf('.'))
+				: '';
+			const base = pendingUpload.name.slice(0, pendingUpload.name.length - ext.length);
+			let name = `${base} (1)${ext}`;
+			let n = 2;
+			while (findSiblingByName(name)) {
+				name = `${base} (${n})${ext}`;
+				n += 1;
+			}
+			addFile(name, pendingUpload.size, pendingUpload.kind);
+			pendingUpload = null;
+		}}
+	/>
 {/if}
 <ShareSheet bind:open={shareOpen} entry={actionEntry} />
 <FilePreviewDialog
 	open={previewOpen}
 	entry={previewEntry}
 	source={variant}
-	onDownload={onDownload}
+	{onDownload}
 	onClose={closePreview}
 />
 <ConfirmDialog
 	bind:open={deleteConfirmOpen}
 	title={bulkDeleteEntries.length > 0
 		? `Pindahkan ${bulkDeleteEntries.length} Item ke Trash?`
-		: (deleteTargetEntry?.kind === 'folder' ? 'Pindahkan Folder ke Trash?' : 'Pindahkan Berkas ke Trash?')}
+		: deleteTargetEntry?.kind === 'folder'
+			? 'Pindahkan Folder ke Trash?'
+			: 'Pindahkan Berkas ke Trash?'}
 	description={bulkDeleteEntries.length > 0
 		? `Pindahkan ${bulkDeleteEntries.length} item terpilih ke Trash?`
-		: (deleteTargetEntry?.kind === 'folder'
+		: deleteTargetEntry?.kind === 'folder'
 			? `Pindahkan “${deleteTargetEntry.name}” dan semua isinya ke Trash?`
-			: `Pindahkan “${deleteTargetEntry?.name}” ke Trash?`)}
+			: `Pindahkan “${deleteTargetEntry?.name}” ke Trash?`}
 	confirmText="Hapus ke Trash"
 	variant="destructive"
 	onConfirm={executeDelete}
