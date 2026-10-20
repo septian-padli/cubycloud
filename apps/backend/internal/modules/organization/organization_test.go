@@ -1,6 +1,7 @@
 package organization_test
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -9,11 +10,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/textproto"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
 
 	"github.com/cubycloud/backend/internal/database"
 	"github.com/cubycloud/backend/internal/middleware"
@@ -283,5 +286,49 @@ func TestOrganization_GetItem(t *testing.T) {
 	}
 	if fetched.ID != uploadedItem.ID || fetched.Name != "nested.txt" || fetched.ParentID == nil || *fetched.ParentID != folder.ID {
 		t.Fatalf("unexpected fetched item: %+v", fetched)
+	}
+}
+
+func TestOrganization_BatchDownloadZipForm(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.db.Close()
+	user1ID := ulid.Make().String()
+	insertTestUser(t, env.db, user1ID, "user1", "REGULAR", 100*1024*1024)
+	token := generateToken(env.secret, user1ID, "REGULAR")
+	fileContent := []byte("first content")
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, _ := writer.CreateFormFile("file", "first.txt")
+	part.Write(fileContent)
+	writer.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/drive/organization/upload?filename=first.txt", body)
+	req.Header.Set(echo.HeaderContentType, writer.FormDataContentType())
+	req.Header.Set(echo.HeaderAuthorization, "Bearer "+token)
+	rec := httptest.NewRecorder()
+	env.echo.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("upload first: %d %s", rec.Code, rec.Body.String())
+	}
+	var first organization.Item
+	if err := json.Unmarshal(rec.Body.Bytes(), &first); err != nil {
+		t.Fatal(err)
+	}
+
+	form := url.Values{"ids": {first.ID}}
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/drive/organization/batch/download-zip", strings.NewReader(form.Encode()))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
+	req.Header.Set(echo.HeaderAuthorization, "Bearer "+token)
+	rec = httptest.NewRecorder()
+	env.echo.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("batch download form status = %d: %s", rec.Code, rec.Body.String())
+	}
+	archive, err := zip.NewReader(bytes.NewReader(rec.Body.Bytes()), int64(rec.Body.Len()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(archive.File) != 1 || archive.File[0].Name != "first.txt" {
+		t.Fatalf("archive entries = %v, want first.txt", archive.File)
 	}
 }

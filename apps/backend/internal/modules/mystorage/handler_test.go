@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -155,7 +156,7 @@ func TestSyncCloudEnforcesActualObjectSize(t *testing.T) {
 				t.Fatal(err)
 			}
 			expires := time.Now().Add(time.Hour)
-			_, err = db.Exec(`INSERT INTO pending_cloud_uploads(id, owner_id, storage_node_id, filename, size_bytes, expires_at) VALUES('upload', 'owner', 's3-node', 'file.bin', 1, ?)`, expires)
+			_, err = db.Exec(`INSERT INTO pending_cloud_uploads(id, owner_id, storage_node_id, filename, size_bytes, expires_at) VALUES('upload', 'owner', 's3-node', 'file.bin', ?, ?)`, tt.actualSize, expires)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -171,8 +172,8 @@ func TestSyncCloudEnforcesActualObjectSize(t *testing.T) {
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("SyncCloud error = %v, want %v", err, tt.wantErr)
 			}
-			if !driver.deleted {
-				t.Fatal("rejected S3 object was not deleted")
+			if driver.deleted {
+				t.Fatal("retryable quota/capacity failure deleted S3 object")
 			}
 			var itemCount int
 			if err = db.QueryRow(`SELECT COUNT(*) FROM my_storage_items WHERE id='upload'`).Scan(&itemCount); err != nil {
@@ -181,7 +182,397 @@ func TestSyncCloudEnforcesActualObjectSize(t *testing.T) {
 			if itemCount != 0 {
 				t.Fatalf("metadata rows = %d, want 0", itemCount)
 			}
+			var pending int
+			if err = db.QueryRow(`SELECT COUNT(*) FROM pending_cloud_uploads WHERE id='upload'`).Scan(&pending); err != nil {
+				t.Fatal(err)
+			}
+			if pending != 1 {
+				t.Fatalf("pending rows = %d, want 1 for retry", pending)
+			}
 		})
+	}
+}
+
+func TestSyncCloudRejectsMismatchedObjectSize(t *testing.T) {
+	for _, actual := range []int64{0, 2} {
+		t.Run(fmt.Sprintf("actual_%d", actual), func(t *testing.T) {
+			db, err := database.Open(context.Background(), filepath.Join(t.TempDir(), "cloud.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			if _, err := db.Exec(`INSERT INTO users(id,username,email,password_hash,role,quota_bytes) VALUES('owner','owner','owner@example.test','hash','REGULAR',-1)`); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.Exec(`INSERT INTO storage_nodes(id,type,capacity_bytes,enabled) VALUES('node','S3',1000,1)`); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.Exec(`INSERT INTO pending_cloud_uploads(id,owner_id,storage_node_id,filename,size_bytes,expires_at) VALUES('upload','owner','node','file.bin',1,datetime('now','+1 hour'))`); err != nil {
+				t.Fatal(err)
+			}
+			driver := &syncCloudTestDriver{uploadLimitDriver: &uploadLimitDriver{}, actualSize: actual}
+			_, err = NewService(db, driver).SyncCloud(context.Background(), "owner", "upload")
+			if !errors.Is(err, errInvalidSize) {
+				t.Fatalf("actual size %d: error = %v, want %v", actual, err, errInvalidSize)
+			}
+			httpErr, ok := respond(echo.New().NewContext(httptest.NewRequest(http.MethodPost, "/sync-cloud", nil), httptest.NewRecorder()), err).(*echo.HTTPError)
+			if !ok || httpErr.Code != http.StatusBadRequest {
+				t.Fatalf("HTTP mismatch error = %v, want 400", httpErr)
+			}
+			if driver.deleted {
+				t.Fatal("size mismatch deleted object needed for retry")
+			}
+			var items, pending int
+			if err := db.QueryRow(`SELECT COUNT(*) FROM my_storage_items WHERE id='upload'`).Scan(&items); err != nil {
+				t.Fatal(err)
+			}
+			if err := db.QueryRow(`SELECT COUNT(*) FROM pending_cloud_uploads WHERE id='upload'`).Scan(&pending); err != nil {
+				t.Fatal(err)
+			}
+			if items != 0 || pending != 1 {
+				t.Fatalf("after mismatch: metadata=%d pending=%d, want 0 and 1", items, pending)
+			}
+		})
+	}
+}
+
+func TestSyncCloudCommitFailurePreservesObjectAndIntent(t *testing.T) {
+	for _, shared := range []bool{false, true} {
+		t.Run(fmt.Sprintf("shared_%t", shared), func(t *testing.T) {
+			db, err := database.Open(context.Background(), filepath.Join(t.TempDir(), "cloud.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			for _, owner := range []string{"owner", "other"} {
+				if _, err := db.Exec(`INSERT INTO users(id,username,email,password_hash,role,quota_bytes) VALUES(?,?,?,'hash','REGULAR',-1)`, owner, owner, owner+"@example.test"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := db.Exec(`INSERT INTO storage_nodes(id,type,capacity_bytes,enabled) VALUES('node','S3',1000,1)`); err != nil {
+				t.Fatal(err)
+			}
+			if shared {
+				if _, err := db.Exec(`INSERT INTO my_storage_items(id,owner_id,name,kind,size_bytes,disk_key,storage_node_id,modified_at) VALUES('shared','other','shared.bin','file',1,'upload','node',CURRENT_TIMESTAMP)`); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := db.Exec(`INSERT INTO pending_cloud_uploads(id,owner_id,storage_node_id,filename,size_bytes,expires_at) VALUES('upload','owner','node','file.bin',1,datetime('now','+1 hour'))`); err != nil {
+				t.Fatal(err)
+			}
+			// Deferred FK failure occurs only at Commit, after metadata and intent deletion.
+			if _, err := db.Exec(`CREATE TABLE commit_failure (owner_id TEXT REFERENCES users(id) DEFERRABLE INITIALLY DEFERRED)`); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.Exec(`CREATE TRIGGER fail_cloud_commit AFTER INSERT ON my_storage_items BEGIN INSERT INTO commit_failure(owner_id) VALUES('missing-owner'); END`); err != nil {
+				t.Fatal(err)
+			}
+			driver := &syncCloudTestDriver{uploadLimitDriver: &uploadLimitDriver{}, actualSize: 1}
+			service := NewService(db, driver)
+			if _, err := service.SyncCloud(context.Background(), "owner", "upload"); err == nil {
+				t.Fatal("commit should fail on deferred FK")
+			}
+			if driver.deleted {
+				t.Fatal("failed commit deleted existing/new S3 object")
+			}
+			var items, pending int
+			if err := db.QueryRow(`SELECT COUNT(*) FROM my_storage_items WHERE disk_key='upload'`).Scan(&items); err != nil {
+				t.Fatal(err)
+			}
+			if err := db.QueryRow(`SELECT COUNT(*) FROM pending_cloud_uploads WHERE id='upload'`).Scan(&pending); err != nil {
+				t.Fatal(err)
+			}
+			wantItems := 0
+			if shared {
+				wantItems = 1
+			}
+			if items != wantItems || pending != 1 {
+				t.Fatalf("after commit failure: metadata=%d pending=%d, want %d and 1", items, pending, wantItems)
+			}
+			if _, err := db.Exec(`DROP TRIGGER fail_cloud_commit`); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := service.SyncCloud(context.Background(), "owner", "upload"); err != nil {
+				t.Fatalf("retry after DB recovers: %v", err)
+			}
+		})
+	}
+}
+
+func TestUploadIntentOutlivesPresignedURLAndExpires(t *testing.T) {
+	db, err := database.Open(context.Background(), filepath.Join(t.TempDir(), "cloud.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`INSERT INTO users(id,username,email,password_hash,role,quota_bytes) VALUES('owner','owner','owner@example.test','hash','REGULAR',-1)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO storage_nodes(id,type,capacity_bytes,enabled) VALUES('node','S3',1000,1)`); err != nil {
+		t.Fatal(err)
+	}
+	driver := &syncCloudTestDriver{uploadLimitDriver: &uploadLimitDriver{}, actualSize: 1}
+	service := NewService(db, driver)
+	intent, err := service.UploadIntent(context.Background(), "owner", "file.bin", 1, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	urlExpiry, err := time.Parse(time.RFC3339, intent.ExpiresAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var intentExpiry time.Time
+	if err := db.QueryRow(`SELECT expires_at FROM pending_cloud_uploads WHERE id=?`, intent.UploadID).Scan(&intentExpiry); err != nil {
+		t.Fatal(err)
+	}
+	if !intentExpiry.After(urlExpiry.Add(time.Hour)) || intentExpiry.After(time.Now().Add(48*time.Hour)) {
+		t.Fatalf("intent expiry %s must outlive URL expiry %s, but remain bounded", intentExpiry, urlExpiry)
+	}
+	if cleaned, err := service.CleanupExpiredPendingCloudUploads(context.Background()); err != nil || cleaned != 0 || driver.deleted {
+		t.Fatalf("active intent cleanup = %d, %v, object deleted=%t; want 0, nil, false", cleaned, err, driver.deleted)
+	}
+	// Simulate a slow transfer whose signed URL has expired, but whose intent is active.
+	if _, err := db.Exec(`UPDATE pending_cloud_uploads SET created_at=datetime('now','-1 hour') WHERE id=?`, intent.UploadID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.SyncCloud(context.Background(), "owner", intent.UploadID); err != nil {
+		t.Fatalf("sync active intent after URL lifetime: %v", err)
+	}
+	intent, err = service.UploadIntent(context.Background(), "owner", "later.bin", 1, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	driver.headCalls = 0
+	if _, err := db.Exec(`UPDATE pending_cloud_uploads SET expires_at=datetime('now','-1 minute') WHERE id=?`, intent.UploadID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.SyncCloud(context.Background(), "owner", intent.UploadID); !errors.Is(err, errNotFound) {
+		t.Fatalf("expired intent synced: %v, want %v", err, errNotFound)
+	}
+	if driver.headCalls != 0 || driver.deleted {
+		t.Fatalf("expired intent inspected or deleted S3 object before cleanup: head=%d deleted=%t", driver.headCalls, driver.deleted)
+	}
+	_, err = service.CleanupExpiredPendingCloudUploads(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !driver.deleted {
+		t.Fatal("expired pending S3 object was not cleaned up")
+	}
+	var pending int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM pending_cloud_uploads WHERE id=?`, intent.UploadID).Scan(&pending); err != nil {
+		t.Fatal(err)
+	}
+	if pending != 0 {
+		t.Fatalf("expired pending uploads = %d, want 0", pending)
+	}
+}
+
+func TestUploadIntentMetadataFinalizationFailurePreservesS3AndIntent(t *testing.T) {
+	t.Run("quota exhaustion during finalization", func(t *testing.T) {
+		db, err := database.Open(context.Background(), filepath.Join(t.TempDir(), "cloud.db"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+		if _, err := db.Exec(`INSERT INTO users(id,username,email,password_hash,role,quota_bytes) VALUES('owner','owner','owner@example.test','hash','REGULAR',100)`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(`INSERT INTO storage_nodes(id,type,capacity_bytes,enabled) VALUES('node','S3',1000,1)`); err != nil {
+			t.Fatal(err)
+		}
+		driver := &syncCloudTestDriver{uploadLimitDriver: &uploadLimitDriver{}, actualSize: 50}
+		service := NewService(db, driver)
+
+		intent, err := service.UploadIntent(context.Background(), "owner", "document.pdf", 50, nil, false)
+		if err != nil {
+			t.Fatalf("UploadIntent: %v", err)
+		}
+
+		// Simulate quota exhaustion before finalization
+		if _, err := db.Exec(`UPDATE users SET quota_bytes=20 WHERE id='owner'`); err != nil {
+			t.Fatal(err)
+		}
+
+		// Metadata finalization fails due to quota
+		_, syncErr := service.SyncCloud(context.Background(), "owner", intent.UploadID)
+		if !errors.Is(syncErr, errQuota) {
+			t.Fatalf("SyncCloud err = %v, want %v", syncErr, errQuota)
+		}
+		if driver.deleted {
+			t.Fatal("S3 object deleted when metadata finalization failed")
+		}
+
+		var pendingCount int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM pending_cloud_uploads WHERE id=?`, intent.UploadID).Scan(&pendingCount); err != nil {
+			t.Fatal(err)
+		}
+		if pendingCount != 1 {
+			t.Fatalf("pending_cloud_uploads count = %d, want 1", pendingCount)
+		}
+
+		var itemCount int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM my_storage_items WHERE id=?`, intent.UploadID).Scan(&itemCount); err != nil {
+			t.Fatal(err)
+		}
+		if itemCount != 0 {
+			t.Fatalf("my_storage_items count = %d, want 0", itemCount)
+		}
+
+		// Quota increased/restored -> retry SyncCloud succeeds
+		if _, err := db.Exec(`UPDATE users SET quota_bytes=100 WHERE id='owner'`); err != nil {
+			t.Fatal(err)
+		}
+		item, err := service.SyncCloud(context.Background(), "owner", intent.UploadID)
+		if err != nil {
+			t.Fatalf("SyncCloud retry failed: %v", err)
+		}
+		if item.ID != intent.UploadID || item.SizeBytes != 50 {
+			t.Fatalf("synced item mismatch: %+v", item)
+		}
+		if driver.deleted {
+			t.Fatal("S3 object deleted after successful retry")
+		}
+
+		if err := db.QueryRow(`SELECT COUNT(*) FROM pending_cloud_uploads WHERE id=?`, intent.UploadID).Scan(&pendingCount); err != nil {
+			t.Fatal(err)
+		}
+		if pendingCount != 0 {
+			t.Fatalf("pending_cloud_uploads count = %d, want 0 after sync", pendingCount)
+		}
+	})
+
+	t.Run("invalid parent folder during finalization", func(t *testing.T) {
+		db, err := database.Open(context.Background(), filepath.Join(t.TempDir(), "cloud.db"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer db.Close()
+		if _, err := db.Exec(`INSERT INTO users(id,username,email,password_hash,role,quota_bytes) VALUES('owner','owner','owner@example.test','hash','REGULAR',-1)`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(`INSERT INTO storage_nodes(id,type,capacity_bytes,enabled) VALUES('node','S3',1000,1)`); err != nil {
+			t.Fatal(err)
+		}
+		// Create a parent folder
+		if _, err := db.Exec(`INSERT INTO my_storage_items(id,owner_id,name,kind,size_bytes,storage_node_id,modified_at) VALUES('folder1','owner','Documents','folder',0,'node',CURRENT_TIMESTAMP)`); err != nil {
+			t.Fatal(err)
+		}
+
+		parent := "folder1"
+		driver := &syncCloudTestDriver{uploadLimitDriver: &uploadLimitDriver{}, actualSize: 30}
+		service := NewService(db, driver)
+
+		intent, err := service.UploadIntent(context.Background(), "owner", "report.docx", 30, &parent, false)
+		if err != nil {
+			t.Fatalf("UploadIntent: %v", err)
+		}
+
+		// Parent folder is soft-deleted before finalization
+		if _, err := db.Exec(`UPDATE my_storage_items SET deleted_at=CURRENT_TIMESTAMP WHERE id='folder1'`); err != nil {
+			t.Fatal(err)
+		}
+
+		// Metadata finalization fails due to bad parent
+		_, syncErr := service.SyncCloud(context.Background(), "owner", intent.UploadID)
+		if !errors.Is(syncErr, errNotFound) {
+			t.Fatalf("SyncCloud err = %v, want %v", syncErr, errNotFound)
+		}
+		if driver.deleted {
+			t.Fatal("S3 object deleted when metadata finalization failed")
+		}
+
+		var pendingCount int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM pending_cloud_uploads WHERE id=?`, intent.UploadID).Scan(&pendingCount); err != nil {
+			t.Fatal(err)
+		}
+		if pendingCount != 1 {
+			t.Fatalf("pending_cloud_uploads count = %d, want 1", pendingCount)
+		}
+
+		// Parent folder restored -> retry SyncCloud succeeds
+		if _, err := db.Exec(`UPDATE my_storage_items SET deleted_at=NULL WHERE id='folder1'`); err != nil {
+			t.Fatal(err)
+		}
+		item, err := service.SyncCloud(context.Background(), "owner", intent.UploadID)
+		if err != nil {
+			t.Fatalf("SyncCloud retry failed: %v", err)
+		}
+		if item.ID != intent.UploadID || item.ParentID == nil || *item.ParentID != "folder1" {
+			t.Fatalf("synced item mismatch: %+v", item)
+		}
+		if driver.deleted {
+			t.Fatal("S3 object deleted after successful retry")
+		}
+
+		if err := db.QueryRow(`SELECT COUNT(*) FROM pending_cloud_uploads WHERE id=?`, intent.UploadID).Scan(&pendingCount); err != nil {
+			t.Fatal(err)
+		}
+		if pendingCount != 0 {
+			t.Fatalf("pending_cloud_uploads count = %d, want 0 after sync", pendingCount)
+		}
+	})
+}
+
+func TestExpiredOrCancelledCloudIntentKeepsSharedObject(t *testing.T) {
+	for _, source := range []string{"my_storage_items", "organization_items"} {
+		for _, expired := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s_expired_%t", source, expired), func(t *testing.T) {
+				db, err := database.Open(context.Background(), filepath.Join(t.TempDir(), "cloud.db"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer db.Close()
+				for _, user := range []string{"owner", "other"} {
+					if _, err := db.Exec(`INSERT INTO users(id,username,email,password_hash,role,quota_bytes) VALUES(?,?,?,'hash','REGULAR',-1)`, user, user, user+"@example.test"); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if _, err := db.Exec(`INSERT INTO storage_nodes(id,type,capacity_bytes,enabled) VALUES('node','S3',1000,1)`); err != nil {
+					t.Fatal(err)
+				}
+				if source == "my_storage_items" {
+					_, err = db.Exec(`INSERT INTO my_storage_items(id,owner_id,name,kind,size_bytes,disk_key,storage_node_id,modified_at) VALUES('shared','other','shared.bin','file',1,'upload','node',CURRENT_TIMESTAMP)`)
+				} else {
+					_, err = db.Exec(`INSERT INTO organization_items(id,created_by,name,kind,size_bytes,disk_key,storage_node_id) VALUES('shared','other','shared.bin','file',1,'upload','node')`)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err := db.Exec(`INSERT INTO pending_cloud_uploads(id,owner_id,storage_node_id,filename,size_bytes,expires_at) VALUES('upload','owner','node','file.bin',1,datetime('now','+1 hour'))`); err != nil {
+					t.Fatal(err)
+				}
+				driver := &syncCloudTestDriver{uploadLimitDriver: &uploadLimitDriver{}}
+				service := NewService(db, driver)
+				if expired {
+					if _, err := db.Exec(`UPDATE pending_cloud_uploads SET expires_at=datetime('now','-1 minute') WHERE id='upload'`); err != nil {
+						t.Fatal(err)
+					}
+					n, err := service.CleanupExpiredPendingCloudUploads(context.Background())
+					if err != nil || n != 1 {
+						t.Fatalf("cleanup = %d, %v, want 1 and nil", n, err)
+					}
+				} else {
+					deleted, err := service.CancelUploadIntent(context.Background(), "owner", "upload")
+					if err != nil || !deleted {
+						t.Fatalf("cancel = %t, %v, want true and nil", deleted, err)
+					}
+				}
+				if driver.deleted {
+					t.Fatal("cleanup/cancel deleted a referenced cloud object")
+				}
+				var items, pending int
+				if err := db.QueryRow(`SELECT COUNT(*) FROM ` + source + ` WHERE disk_key='upload'`).Scan(&items); err != nil {
+					t.Fatal(err)
+				}
+				if err := db.QueryRow(`SELECT COUNT(*) FROM pending_cloud_uploads WHERE id='upload'`).Scan(&pending); err != nil {
+					t.Fatal(err)
+				}
+				if items != 1 || pending != 0 {
+					t.Fatalf("after cleanup/cancel: shared items=%d, pending=%d", items, pending)
+				}
+			})
+		}
 	}
 }
 func TestCancelUploadIntentSerializesWithSyncCloud(t *testing.T) {

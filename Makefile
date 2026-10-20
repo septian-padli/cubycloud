@@ -68,10 +68,10 @@ test-backend:
 	@echo "==> Running backend Go tests..."
 	@cd apps/backend && go test ./... -v
 
-# Run frontend checks
+# Run frontend type checks and Bun regression tests
 test-frontend:
-	@echo "==> Running frontend type check..."
-	@cd apps/frontend && bun run check
+	@echo "==> Running frontend type check and unit tests..."
+	@cd apps/frontend && bun run check && bun test src
 
 # Reset setup for clean test
 reset-setup:

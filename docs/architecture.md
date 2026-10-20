@@ -41,7 +41,7 @@ Backend modules include setup, authentication, administration, My Storage, Organ
 
 `DATA_DIR_PATH` selects the application data root. The default is `/app/data` when that directory is writable, otherwise `./data` relative to the process working directory. In the Dockerfile, `/app/data` is declared as a volume.
 
-The application stores the SQLite database at `DATA_DIR_PATH/db/cubycloud.db`; local storage nodes and temporary TUS upload data also live under this data root. Mount a persistent, writable directory or volume and back it up as application data.
+The application stores the SQLite database at `DATA_DIR_PATH/db/cubycloud.db`; local storage nodes and temporary TUS upload data also live under this data root. TUS chunks and metadata default to `DATA_DIR_PATH/temp/tus` (overridable with `TEMP_TUS_PATH` or `TUS_TEMP_PATH`) so unfinished transfers survive a container replacement when the same volume is retained. Mount a persistent, writable directory or volume and back it up as application data.
 
 Boot-time settings are read from process environment variables (and supported `.env` files):
 
@@ -59,6 +59,10 @@ Application settings such as default quota and audit retention are managed throu
 The storage driver supports local filesystem nodes and configured S3-compatible nodes. S3/R2 credentials are encrypted before they are persisted. Browser-to-S3 transfers use presigned requests where supported; local uploads use the backend and resumable TUS protocol.
 
 Physical node capacity is enforced independently from per-user My Storage quota. Organization data is not charged to an individual user's quota, but it still consumes shared node capacity. Capacity checks include active upload reservations to prevent concurrent uploads from over-allocating a node.
+
+For browser-to-S3 uploads, a presigned PUT URL lasts 15 minutes, while its pending upload intent lasts 24 hours. Finalization verifies that S3 reports exactly the requested object size before recording metadata. A failed metadata commit preserves the object and intent for retry; cancellation or expiry deletes a cloud object only when no My Storage or Organization item still references it.
+
+Batch ZIP downloads use the existing authenticated POST endpoint. The browser submits selected IDs as form fields and handles the ZIP attachment as a native download, without collecting the response in JavaScript memory. Native downloads do not expose byte progress or reliable completion events to the page; the UI reports that the download has started, not that it has finished.
 
 ## Security boundaries
 

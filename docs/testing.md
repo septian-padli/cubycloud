@@ -21,13 +21,19 @@ Run the checks included in the root Makefile:
 make test
 ```
 
-`make test` runs `go test ./...` in `apps/backend` and `bun run check` in `apps/frontend`. The frontend check runs SvelteKit sync and `svelte-check`; it does not run Playwright or ESLint.
+`make test` runs `go test ./...` in `apps/backend`, then `bun run check` and `bun test src` in `apps/frontend`. Playwright and ESLint run separately.
 
 Run either part separately:
 
 ```bash
 make test-backend
 make test-frontend
+```
+
+To run the frontend transfer regressions directly:
+
+```bash
+cd apps/frontend && bun test src
 ```
 
 The frontend package also defines a formatter/linter check:
@@ -54,7 +60,7 @@ The full suite includes the MinIO-backed S3 storage scenario. Start the optional
 docker compose -f ../../compose.minio.yaml up -d
 ```
 
-The E2E tests cover setup provisioning, authentication, file management and resumable uploads, previews, sharing, Organization access, storage administration, quotas, and S3 transfers. They use synthetic accounts and temporary data; do not add real credentials or user files to fixtures.
+The E2E tests cover setup provisioning, authentication, file management and resumable uploads, previews, sharing, Organization access, storage administration, quotas, and S3 transfers. The multi-select scenario downloads a real ZIP via a native browser POST rather than buffering it in JavaScript. Tests use synthetic accounts and temporary data; do not add real credentials or user files to fixtures. Run individual E2E spec files separately when their setup requires different initial admin accounts; the Playwright server shares one temporary database within a single invocation.
 
 ## Test scope notes
 

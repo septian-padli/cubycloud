@@ -48,3 +48,53 @@ export async function downloadObject(base: string, id: string, name: string, fol
 	anchor.click();
 	anchor.remove();
 }
+
+const activeZipFrames = new Set<HTMLIFrameElement>();
+let zipDownloadCounter = 0;
+
+/** Let the browser stream POSTed ZIP bytes to Downloads; fetch/Blob would buffer the whole archive. */
+export function downloadBatchZip(base: string, ids: string[], onError?: (message: string) => void): 'started' {
+	for (const f of activeZipFrames) {
+		if (f.isConnected === false) activeZipFrames.delete(f);
+	}
+	const frame = document.createElement('iframe');
+	frame.name = activeZipFrames.size === 0 ? 'cubycloud-zip-download' : `cubycloud-zip-download-${++zipDownloadCounter}`;
+	activeZipFrames.add(frame);
+	frame.title = 'Unduhan ZIP';
+	frame.hidden = true;
+	document.body.append(frame);
+	frame.onload = () => {
+		if (frame.contentDocument?.URL === 'about:blank') return;
+		const body = frame.contentDocument?.body?.textContent?.trim();
+		if (!body) return;
+		let message = 'Gagal mengunduh berkas ZIP';
+		try {
+			const response = JSON.parse(body) as { error?: string };
+			if (response.error) message = response.error;
+		} catch {
+			// Non-JSON error pages have no safe structured message to display.
+		}
+		onError?.(message);
+	};
+	const form = document.createElement('form');
+	form.action = `${base}/batch/download-zip`;
+	form.method = 'POST';
+	form.enctype = 'application/x-www-form-urlencoded';
+	form.target = frame.name;
+	form.style.display = 'none';
+	for (const id of ids) {
+		const input = document.createElement('input');
+		input.type = 'hidden';
+		input.name = 'ids';
+		input.value = id;
+		form.append(input);
+	}
+	document.body.append(form);
+	try {
+		form.submit();
+	} finally {
+		form.remove();
+	}
+	// Native downloads have no completion or byte-progress event for this POST.
+	return 'started';
+}

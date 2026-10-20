@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cubycloud/backend/internal/config"
 	"github.com/labstack/echo/v4"
 	"github.com/oklog/ulid/v2"
 )
@@ -25,7 +26,43 @@ type TusUploadInfo struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
-var tusFileMu sync.Mutex
+type tusUploadLock struct {
+	mu   sync.Mutex
+	refs int
+}
+
+var tusLocks = struct {
+	mu   sync.Mutex
+	byID map[string]*tusUploadLock
+}{byID: make(map[string]*tusUploadLock)}
+
+func lockTusUpload(id string) *tusUploadLock {
+	tusLocks.mu.Lock()
+	lock := tusLocks.byID[id]
+	if lock == nil {
+		lock = &tusUploadLock{}
+		tusLocks.byID[id] = lock
+	}
+	lock.refs++
+	tusLocks.mu.Unlock()
+	lock.mu.Lock()
+	return lock
+}
+
+func unlockTusUpload(id string, lock *tusUploadLock) {
+	if lock == nil {
+		return
+	}
+	lock.mu.Unlock()
+	tusLocks.mu.Lock()
+	lock.refs--
+	if lock.refs <= 0 {
+		if tusLocks.byID[id] == lock {
+			delete(tusLocks.byID, id)
+		}
+	}
+	tusLocks.mu.Unlock()
+}
 
 func (h *Handler) tusTempDir() string {
 	if dir := os.Getenv("TEMP_TUS_PATH"); dir != "" {
@@ -34,7 +71,11 @@ func (h *Handler) tusTempDir() string {
 	if dir := os.Getenv("TUS_TEMP_PATH"); dir != "" {
 		return dir
 	}
-	return filepath.Join(os.TempDir(), "tus")
+	dataDir := os.Getenv("DATA_DIR_PATH")
+	if dataDir == "" {
+		dataDir = config.Load().DataDirPath
+	}
+	return filepath.Join(dataDir, "temp", "tus")
 }
 
 func parseTusMetadata(header string) map[string]string {
@@ -135,12 +176,9 @@ func (h *Handler) createTusUpload(c echo.Context) error {
 	uploadID := ulid.Make().String()
 	tempDir := h.tusTempDir()
 
-	tusFileMu.Lock()
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
-		tusFileMu.Unlock()
 		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{"error": "failed to initialize tus temp directory"})
 	}
-	tusFileMu.Unlock()
 
 	info := TusUploadInfo{
 		ID:           uploadID,
@@ -158,8 +196,8 @@ func (h *Handler) createTusUpload(c echo.Context) error {
 	infoPath := filepath.Join(tempDir, uploadID+".info")
 	partPath := filepath.Join(tempDir, uploadID+".part")
 
-	tusFileMu.Lock()
-	defer tusFileMu.Unlock()
+	lock := lockTusUpload(uploadID)
+	defer unlockTusUpload(uploadID, lock)
 
 	if err := os.WriteFile(infoPath, infoBytes, 0644); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{"error": "failed to save upload metadata"})
@@ -190,18 +228,16 @@ func (h *Handler) headTusUpload(c echo.Context) error {
 	infoPath := filepath.Join(tempDir, id+".info")
 	partPath := filepath.Join(tempDir, id+".part")
 
-	tusFileMu.Lock()
+	lock := lockTusUpload(id)
+	defer unlockTusUpload(id, lock)
 	infoBytes, err := os.ReadFile(infoPath)
 	if err != nil {
-		tusFileMu.Unlock()
 		return echo.NewHTTPError(http.StatusNotFound, map[string]string{"error": "upload not found"})
 	}
 	stat, err := os.Stat(partPath)
 	if err != nil {
-		tusFileMu.Unlock()
 		return echo.NewHTTPError(http.StatusNotFound, map[string]string{"error": "upload file not found"})
 	}
-	tusFileMu.Unlock()
 
 	var info TusUploadInfo
 	if err := json.Unmarshal(infoBytes, &info); err != nil {
@@ -242,30 +278,26 @@ func (h *Handler) patchTusUpload(c echo.Context) error {
 	infoPath := filepath.Join(tempDir, id+".info")
 	partPath := filepath.Join(tempDir, id+".part")
 
-	tusFileMu.Lock()
+	lock := lockTusUpload(id)
+	defer unlockTusUpload(id, lock)
 	infoBytes, err := os.ReadFile(infoPath)
 	if err != nil {
-		tusFileMu.Unlock()
 		return echo.NewHTTPError(http.StatusNotFound, map[string]string{"error": "upload not found"})
 	}
 	var info TusUploadInfo
 	if err := json.Unmarshal(infoBytes, &info); err != nil {
-		tusFileMu.Unlock()
 		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{"error": "corrupted upload metadata"})
 	}
 	if info.Owner != owner(c) {
-		tusFileMu.Unlock()
 		return echo.NewHTTPError(http.StatusNotFound, map[string]string{"error": "upload not found"})
 	}
 
 	stat, err := os.Stat(partPath)
 	if err != nil {
-		tusFileMu.Unlock()
 		return echo.NewHTTPError(http.StatusNotFound, map[string]string{"error": "upload file not found"})
 	}
 	currentOffset := stat.Size()
 	if reqOffset != currentOffset {
-		tusFileMu.Unlock()
 		c.Response().Header().Set("Tus-Resumable", "1.0.0")
 		c.Response().Header().Set("Upload-Offset", strconv.FormatInt(currentOffset, 10))
 		return echo.NewHTTPError(http.StatusConflict, map[string]string{"error": "upload offset mismatch"})
@@ -273,7 +305,6 @@ func (h *Handler) patchTusUpload(c echo.Context) error {
 
 	file, err := os.OpenFile(partPath, os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
-		tusFileMu.Unlock()
 		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{"error": "failed to open upload file"})
 	}
 
@@ -281,13 +312,11 @@ func (h *Handler) patchTusUpload(c echo.Context) error {
 	written, copyErr := io.Copy(file, io.LimitReader(c.Request().Body, remaining))
 	_ = file.Close()
 	if copyErr != nil {
-		tusFileMu.Unlock()
 		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{"error": "failed to write chunk"})
 	}
 	newOffset := currentOffset + written
 
 	if newOffset > info.UploadLength {
-		tusFileMu.Unlock()
 		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": "uploaded bytes exceed Upload-Length"})
 	}
 
@@ -295,10 +324,8 @@ func (h *Handler) patchTusUpload(c echo.Context) error {
 		// Finalize upload
 		f, openErr := os.Open(partPath)
 		if openErr != nil {
-			tusFileMu.Unlock()
 			return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{"error": "failed to open completed upload file"})
 		}
-		tusFileMu.Unlock()
 		defer f.Close()
 
 		ctx := c.Request().Context()
@@ -322,10 +349,8 @@ func (h *Handler) patchTusUpload(c echo.Context) error {
 		}
 
 		_ = f.Close()
-		tusFileMu.Lock()
 		_ = os.Remove(partPath)
 		_ = os.Remove(infoPath)
-		tusFileMu.Unlock()
 
 		c.Response().Header().Set("Upload-Offset", strconv.FormatInt(newOffset, 10))
 		c.Response().Header().Set("Tus-Resumable", "1.0.0")
@@ -336,8 +361,6 @@ func (h *Handler) patchTusUpload(c echo.Context) error {
 		c.Response().Header().Set("Access-Control-Expose-Headers", "Location, Tus-Resumable, Upload-Offset, Upload-Length, Upload-Item-Id, Upload-Item")
 		return c.NoContent(http.StatusNoContent)
 	}
-
-	tusFileMu.Unlock()
 
 	c.Response().Header().Set("Upload-Offset", strconv.FormatInt(newOffset, 10))
 	c.Response().Header().Set("Tus-Resumable", "1.0.0")
@@ -358,8 +381,8 @@ func (h *Handler) deleteTusUpload(c echo.Context) error {
 	infoPath := filepath.Join(tempDir, id+".info")
 	partPath := filepath.Join(tempDir, id+".part")
 
-	tusFileMu.Lock()
-	defer tusFileMu.Unlock()
+	lock := lockTusUpload(id)
+	defer unlockTusUpload(id, lock)
 
 	infoBytes, err := os.ReadFile(infoPath)
 	if err != nil {
