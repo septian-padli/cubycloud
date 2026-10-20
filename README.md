@@ -68,6 +68,30 @@ Or run directly via script: `./scripts/dev.sh`.
 - Frontend: [http://localhost:5188](http://localhost:5188)
 - Backend API: [http://localhost:8383](http://localhost:8383)
 
+### Local S3-Compatible Storage (MinIO)
+
+Run a loopback-only MinIO instance for development:
+
+```bash
+docker compose -f compose.minio.yaml up -d
+curl -fsS http://localhost:19000/minio/health/ready
+```
+
+The stack creates a private `cubycloud-dev` bucket and a separate application account scoped to that bucket with object read/write/delete permissions. The CubyCloud backend and frontend support connecting to this MinIO instance as an S3-compatible node via the Super Admin UI (`/admin/settings`) with PBKDF2/AES-256-GCM encrypted credentials, presigned direct transfers, backend stream fallback, and persistent restart support. Anonymous object access is disabled. Images use digest-pinned Chainguard builds because MinIO upstream no longer publishes community container images.
+MinIO's global S3 CORS allowlist permits browser transfers from the default Vite (`localhost`/`127.0.0.1:5188`) and Playwright (`localhost`/`127.0.0.1:15188`) origins. This only enables browser cross-origin requests; the bucket remains private and application credentials remain scoped by the MinIO policy. Update `MINIO_API_CORS_ALLOW_ORIGIN` in the Compose file if using a different development origin.
+
+| Purpose | Endpoint / value |
+|---------|------------------|
+| S3 API | `http://localhost:19000` |
+| MinIO Console | `http://localhost:19001` |
+| Bucket / region | `cubycloud-dev` / `us-east-1` |
+| Admin login | `cubycloud-admin` / `cubycloud-admin-local-only-2026` |
+| Application access key | `cubycloud-app` |
+| Application secret key | `cubycloud-app-local-only-2026` |
+
+This separate development stack is not part of the production image or deployment. `docker compose -f compose.minio.yaml down` preserves its data volume; avoid `down -v` unless intentionally deleting that data.
+
+
 ### Run Backend Only (Go)
 
 ```bash

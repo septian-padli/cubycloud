@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { FileEntry } from '$lib/types/drive.js';
+	import type { ExplorerVariant, FileEntry } from '$lib/types/drive.js';
 	import type { Snippet } from 'svelte';
 	import * as ContextMenu from '$lib/components/ui/context-menu/index.js';
 	import {
@@ -16,6 +16,8 @@
 
 	let {
 		entry,
+		variant,
+		allowShare = variant !== 'organization',
 		onOpen,
 		onDownload,
 		onRename,
@@ -27,6 +29,8 @@
 		children
 	}: {
 		entry: FileEntry;
+		variant?: ExplorerVariant;
+		allowShare?: boolean;
 		onOpen: (entry: FileEntry) => void;
 		onDownload: (entry: FileEntry) => void;
 		onRename: (entry: FileEntry) => void;
@@ -79,10 +83,12 @@
 			<Star class={cn("size-4 stroke-2", entry.starred ? "fill-amber-400 stroke-amber-500 text-amber-500" : "")} />
 			{entry.starred ? 'Hapus Bintang' : 'Bintang'}
 		</ContextMenu.Item>
-		<ContextMenu.Item class="gap-2" onclick={() => onShare(entry)}>
-			<Share2 class="size-4 stroke-2" />
-			Bagikan
-		</ContextMenu.Item>
+		{#if allowShare}
+			<ContextMenu.Item class="gap-2" onclick={() => onShare(entry)}>
+				<Share2 class="size-4 stroke-2" />
+				Bagikan
+			</ContextMenu.Item>
+		{/if}
 		<ContextMenu.Separator />
 		<ContextMenu.Item variant="destructive" class="gap-2" onclick={() => onDelete(entry)}>
 			<Trash2 class="size-4 stroke-2" />

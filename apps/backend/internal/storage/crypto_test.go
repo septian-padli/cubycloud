@@ -1,10 +1,9 @@
 package storage
-
 import (
 	"bytes"
+	"path/filepath"
 	"testing"
 )
-
 func TestEncryptDecryptRoundtrip(t *testing.T) {
 	key := []byte("test-key-material")
 	plaintext := []byte("s3-secret-key-value")
@@ -23,6 +22,28 @@ func TestEncryptDecryptRoundtrip(t *testing.T) {
 	}
 	if !bytes.Equal(decrypted, plaintext) {
 		t.Fatalf("got %s, want %s", decrypted, plaintext)
+	}
+}
+func TestNodeDriverNormalizesDataDirPathForCredentials(t *testing.T) {
+	dataDir := t.TempDir()
+	t.Setenv("DATA_DIR_PATH", dataDir+"/")
+
+	driver := newNodeDriver(nil, filepath.Join(dataDir, "storage")).(*nodeDriver)
+	wantKey := []byte(filepath.Clean(dataDir))
+	if !bytes.Equal(driver.keyMaterial, wantKey) {
+		t.Fatalf("decryption key material = %q, want normalized path %q", driver.keyMaterial, wantKey)
+	}
+
+	ciphertext, err := EncryptCredential([]byte("secret"), wantKey)
+	if err != nil {
+		t.Fatalf("encrypt credential: %v", err)
+	}
+	plaintext, err := DecryptCredential(ciphertext, driver.keyMaterial)
+	if err != nil {
+		t.Fatalf("decrypt credential with DATA_DIR_PATH trailing slash: %v", err)
+	}
+	if !bytes.Equal(plaintext, []byte("secret")) {
+		t.Fatalf("decrypted credential = %q, want secret", plaintext)
 	}
 }
 

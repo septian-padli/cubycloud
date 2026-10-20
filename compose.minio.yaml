@@ -1,0 +1,79 @@
+name: cubycloud-minio-dev
+
+services:
+  minio:
+    image: cgr.dev/chainguard/minio@sha256:709099319add48dfb44aa596a7070d3ddd8dd04d7ae881765719aec29df9e510
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: cubycloud-admin
+      MINIO_ROOT_PASSWORD: cubycloud-admin-local-only-2026
+      MINIO_API_CORS_ALLOW_ORIGIN: "http://localhost:5188,http://127.0.0.1:5188,http://localhost:15188,http://127.0.0.1:15188"
+    ports:
+      - "127.0.0.1:19000:9000"
+      - "127.0.0.1:19001:9001"
+    volumes:
+      - data:/data
+    restart: unless-stopped
+
+  minio-init:
+    image: cgr.dev/chainguard/minio-client@sha256:0f20f9b9a9a06e2ada88afda965b824fd2d77793083b3b2b10186a9502c836f4
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint: ["/bin/sh", "-ec"]
+    environment:
+      MINIO_ROOT_USER: cubycloud-admin
+      MINIO_ROOT_PASSWORD: cubycloud-admin-local-only-2026
+      MINIO_BUCKET: cubycloud-dev
+      MINIO_APP_ACCESS_KEY: cubycloud-app
+      MINIO_APP_SECRET_KEY: cubycloud-app-local-only-2026
+    command:
+      - |
+        attempts=0
+        until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" && mc ready local; do
+          attempts=$$((attempts + 1))
+          if [ "$$attempts" -ge 30 ]; then
+            echo "MinIO did not become ready within 60 seconds" >&2
+            exit 1
+          fi
+          sleep 2
+        done
+
+        mc mb --ignore-existing "local/$$MINIO_BUCKET"
+        mc anonymous set none "local/$$MINIO_BUCKET"
+        cat > /tmp/cubycloud-app-policy.json <<EOF
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": ["s3:ListBucket", "s3:ListBucketMultipartUploads"],
+              "Resource": ["arn:aws:s3:::$$MINIO_BUCKET"]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:DeleteObject",
+                "s3:AbortMultipartUpload",
+                "s3:ListMultipartUploadParts"
+              ],
+              "Resource": ["arn:aws:s3:::$$MINIO_BUCKET/*"]
+            }
+          ]
+        }
+        EOF
+
+        if ! mc admin policy info local cubycloud-app >/dev/null 2>&1; then
+          mc admin policy create local cubycloud-app /tmp/cubycloud-app-policy.json
+        fi
+        if ! mc admin user info local "$$MINIO_APP_ACCESS_KEY" >/dev/null 2>&1; then
+          mc admin user add local "$$MINIO_APP_ACCESS_KEY" "$$MINIO_APP_SECRET_KEY"
+        fi
+        mc admin policy attach local cubycloud-app --user "$$MINIO_APP_ACCESS_KEY"
+    restart: "no"
+
+volumes:
+  data:
+    name: cubycloud-minio-dev-data

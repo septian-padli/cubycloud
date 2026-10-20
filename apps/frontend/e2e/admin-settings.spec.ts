@@ -79,7 +79,8 @@ test('Admin Settings manages settings, validation, unsaved changes warnings, and
 	await expect(page.getByTestId('error-concurrency')).not.toBeVisible();
 
 	// Select audit retention
-	await page.getByTestId('select-audit-retention').selectOption('30');
+	await page.getByTestId('select-audit-retention').click();
+	await page.getByRole('option', { name: '30 hari' }).click();
 
 	// Form is dirty and valid, so Save button should be enabled
 	await expect(saveBtn).toBeEnabled();
@@ -94,14 +95,16 @@ test('Admin Settings manages settings, validation, unsaved changes warnings, and
 
 	// 4. Test Global Save Settings
 	await saveBtn.click();
+	const saveConfirmModal = page.getByTestId('confirm-dialog');
+	await expect(saveConfirmModal).toBeVisible();
+	await saveConfirmModal.getByRole('button', { name: 'Simpan' }).click();
 	await expect(page.getByText('Pengaturan berhasil disimpan')).toBeVisible();
 	await expect(saveBtn).toBeDisabled();
-
 	// Reload to verify persisted settings from backend
 	await page.reload();
 	await expect(page.getByTestId('input-default-quota')).toHaveValue('35');
 	await expect(page.getByTestId('input-worker-concurrency')).toHaveValue('3');
-	await expect(page.getByTestId('select-audit-retention')).toHaveValue('30');
+	await expect(page.getByTestId('select-audit-retention')).toContainText('30 hari');
 	await expect(saveBtn).toBeDisabled();
 
 	// 5. Test Unsaved Changes Warning on Navigation

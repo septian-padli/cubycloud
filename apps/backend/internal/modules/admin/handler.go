@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/cubycloud/backend/internal/storage"
@@ -228,6 +229,123 @@ func (h *Handler) DeleteNode(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"message": "node deleted successfully"})
 }
 
+// GetUsers returns list of users with usage and quotas
+func (h *Handler) GetUsers(c echo.Context) error {
+	resp, err := h.service.ListUsers(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{
+			"error": fmt.Sprintf("failed to get users: %v", err),
+		})
+	}
+	return c.JSON(http.StatusOK, resp)
+}
+
+// CreateUser creates a new regular user
+func (h *Handler) CreateUser(c echo.Context) error {
+	var req CreateUserRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": "invalid request"})
+	}
+
+	user, err := h.service.CreateUser(c.Request().Context(), &req)
+	if err != nil {
+		if strings.Contains(err.Error(), "already exists") {
+			return echo.NewHTTPError(http.StatusConflict, map[string]string{"error": err.Error()})
+		}
+		if strings.Contains(err.Error(), "required") || strings.Contains(err.Error(), "must be") || strings.Contains(err.Error(), "invalid") {
+			return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{"error": "failed to create user"})
+	}
+
+	return c.JSON(http.StatusCreated, user)
+}
+
+// UpdateUserQuota updates a user's quota configuration
+func (h *Handler) UpdateUserQuota(c echo.Context) error {
+	userID := c.Param("id")
+	if userID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": "user ID required"})
+	}
+
+	var req UpdateUserQuotaRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": "invalid request"})
+	}
+
+	user, err := h.service.UpdateUserQuota(c.Request().Context(), userID, &req)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return echo.NewHTTPError(http.StatusNotFound, map[string]string{"error": "user not found"})
+		}
+		if strings.Contains(err.Error(), "locked") || strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "must be") {
+			return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{"error": "failed to update user quota"})
+	}
+
+	return c.JSON(http.StatusOK, user)
+}
+
+// DeleteUser deletes a user
+func (h *Handler) DeleteUser(c echo.Context) error {
+	targetID := c.Param("id")
+	if targetID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": "user ID required"})
+	}
+
+	var req DeleteUserRequest
+	_ = c.Bind(&req)
+
+	actorID, _ := c.Get("user_id").(string)
+	if err := h.service.DeleteUser(c.Request().Context(), actorID, targetID, &req); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return echo.NewHTTPError(http.StatusNotFound, map[string]string{"error": "user not found"})
+		}
+		if strings.Contains(err.Error(), "cannot delete") || strings.Contains(err.Error(), "does not match") {
+			return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{"error": "failed to delete user"})
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"message": "user deleted successfully"})
+}
+
+// GetStorageStats returns system-wide storage stats for super admin
+func (h *Handler) GetStorageStats(c echo.Context) error {
+	stats, err := h.service.GetAdminStorageStats(c.Request().Context())
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{
+			"error": fmt.Sprintf("failed to get storage stats: %v", err),
+		})
+	}
+	return c.JSON(http.StatusOK, stats)
+}
+
+// GetTopStorageUsers returns paginated users ordered by storage usage
+func (h *Handler) GetTopStorageUsers(c echo.Context) error {
+	limit := 20
+	if l := c.QueryParam("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil {
+			limit = parsed
+		}
+	}
+	offset := 0
+	if o := c.QueryParam("offset"); o != "" {
+		if parsed, err := strconv.Atoi(o); err == nil {
+			offset = parsed
+		}
+	}
+
+	resp, err := h.service.GetAdminTopStorageUsers(c.Request().Context(), limit, offset)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{
+			"error": fmt.Sprintf("failed to get top storage users: %v", err),
+		})
+	}
+	return c.JSON(http.StatusOK, resp)
+}
+
 // RegisterRoutes registers all admin endpoints with JWT auth + Super Admin guard
 func RegisterRoutes(e *echo.Echo, db *bun.DB, storage storage.StorageDriver, dataDirPath, dbPath string, jwtAuth, superAdminGuard echo.MiddlewareFunc) {
 	handler := NewHandler(db, storage, dataDirPath, dbPath)
@@ -248,6 +366,15 @@ func RegisterRoutes(e *echo.Echo, db *bun.DB, storage storage.StorageDriver, dat
 	admin.DELETE("/storage-nodes/:id", handler.DeleteNode)
 	admin.POST("/storage-nodes/rescan", handler.RescanStorageNodes)
 	
+	// Users management
+	admin.GET("/users", handler.GetUsers)
+	admin.POST("/users", handler.CreateUser)
+	admin.PUT("/users/:id/quota", handler.UpdateUserQuota)
+	admin.DELETE("/users/:id", handler.DeleteUser)
+
 	// Backup
 	admin.GET("/backup", handler.DownloadBackup)
+	// Storage stats & top users
+	admin.GET("/storage/stats", handler.GetStorageStats)
+	admin.GET("/storage/top-users", handler.GetTopStorageUsers)
 }

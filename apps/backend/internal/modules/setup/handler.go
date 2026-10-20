@@ -72,8 +72,9 @@ func (h *Handler) ScanNodes(c echo.Context) error {
 
 func (h *Handler) generateJWT(userID string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": userID,
-		"exp": time.Now().Add(7 * 24 * time.Hour).Unix(),
+		"sub":  userID,
+		"role": "SUPER_ADMIN",
+		"exp":  time.Now().Add(7 * 24 * time.Hour).Unix(),
 	})
 	return token.SignedString([]byte(h.jwtSecret))
 }

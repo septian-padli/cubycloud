@@ -16,7 +16,9 @@
 		isAncestor,
 		nextId
 	} from '$lib/mocks/file-tree.js';
-	import { myStorageAPI, moveItem, toggleStar } from '$lib/api/my-storage.js';
+	import { myStorageAPI } from '$lib/api/my-storage.js';
+	import { organizationAPI } from '$lib/api/organization.js';
+	import { recordItemAccess } from '$lib/api/drive-home.js';
 	import { cn } from '$lib/utils.js';
 	import { extractDroppedEntries } from '$lib/utils/drag-drop.js';
 	import FileExplorerBreadcrumbs from './file-explorer-breadcrumbs.svelte';
@@ -32,11 +34,14 @@
 	import { ConfirmDialog } from '$lib/components/ui/confirm-dialog/index.js';
 	import ShareSheet from './share-sheet.svelte';
 	import FilePreviewDialog from './file-preview-dialog.svelte';
+	import { previewUrl } from '$lib/api/preview.js';
 	import DriveFileGrid from '$lib/components/drive/drive-file-grid.svelte';
 	import FileGridCard from '$lib/components/drive/file-grid-card.svelte';
-	import StorageNodeBadge from './storage-node-badge.svelte';
 	import { driveView } from '$lib/drive-view.svelte.js';
-	import { ChevronDown, ChevronUp, Star, X } from '@lucide/svelte';
+	import { ChevronDown, ChevronUp, Download, FolderInput, MoreVertical, Star, Trash2, X } from '@lucide/svelte';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
+	import { Button } from '$lib/components/ui/button/index.js';
+	import { Checkbox } from '$lib/components/ui/checkbox/index.js';
 
 	let {
 		variant,
@@ -49,7 +54,8 @@
 	} = $props();
 
 	const chrome = getDriveChrome();
-	const showNodeBadge = $derived(chrome.user.role === 'super_admin');
+	const isApiBacked = $derived(variant === 'my-storage' || variant === 'organization');
+	const api = $derived(variant === 'organization' ? organizationAPI : myStorageAPI);
 
 	let tree = $state<FileEntry[]>(untrack(() => cloneTree(initialTree)));
 	let currentItems = $state<FileEntry[]>([]);
@@ -82,7 +88,10 @@
 	let conflictTitle = $state('Folder Sudah Ada');
 	let conflictDescription = $state('');
 	let conflictAction = $state<(() => Promise<void>) | null>(null);
-	let selectedId = $state<string | null>(null);
+	let bulkDeleteEntries = $state<FileEntry[]>([]);
+	let moveMultipleEntries = $state<FileEntry[]>([]);
+	let selectedIds = $state<string[]>([]);
+
 	let dragActive = $state(false);
 	let dragDepth = 0;
 
@@ -105,20 +114,139 @@
 	const previewId = $derived(page.url.searchParams.get('preview'));
 
 	const breadcrumbs = $derived(
-		variant === 'my-storage'
+		isApiBacked
 			? [{ id: null, label: rootLabel }, ...apiBreadcrumbs.map((item) => ({ id: item.id, label: item.name }))]
 			: getBreadcrumbPath(tree, folderId, rootLabel)
 	);
-	const children = $derived(variant === 'my-storage' ? currentItems : getChildren(tree, folderId));
+	const children = $derived(isApiBacked ? currentItems : getChildren(tree, folderId));
 	const visible = $derived(category === 'all' ? children : children.filter((e) => e.kind === category));
+	const selectedCount = $derived(selectedIds.length);
+	const isAllSelected = $derived(
+		visible.length > 0 && selectedCount === visible.length && visible.every((item) => selectedIds.includes(item.id))
+	);
+	const isPartiallySelected = $derived(selectedCount > 0 && !isAllSelected);
+
+
+	function toggleSelectEntry(id: string) {
+		if (selectedIds.includes(id)) {
+			selectedIds = selectedIds.filter((item) => item !== id);
+		} else {
+			selectedIds = [...selectedIds, id];
+		}
+	}
+
+	function toggleSelectAll() {
+		if (isAllSelected) {
+			selectedIds = [];
+		} else {
+			selectedIds = visible.map((item) => item.id);
+		}
+	}
+
+	function handleBulkMove() {
+		const selected = visible.filter((e) => selectedIds.includes(e.id));
+		if (selected.length === 0) return;
+		actionEntry = null;
+		moveMultipleEntries = selected;
+		moveOpen = true;
+	}
+
+	function handleBulkDelete() {
+		const selected = visible.filter((e) => selectedIds.includes(e.id));
+		if (selected.length === 0) return;
+		deleteTargetEntry = null;
+		bulkDeleteEntries = selected;
+		deleteConfirmOpen = true;
+	}
+
+	async function handleBulkDownload() {
+		const selected = visible.filter((e) => selectedIds.includes(e.id));
+		if (selected.length === 0) return;
+		if (!isApiBacked) {
+			toast.info(`Mengunduh ${selected.length} item sebagai ZIP (mock)`);
+			return;
+		}
+		const queueIndex = uploadQueue.length;
+		const totalSize = selected.reduce((acc, e) => acc + (e.sizeBytes || 1), 0);
+		uploadQueue = [
+			...uploadQueue,
+			{
+				name: selected.length === 1 ? `Men-zip-kan ${selected[0].name}` : `Men-zip-kan ${selected.length} item`,
+				size: totalSize,
+				progress: 0,
+				state: 'uploading'
+			}
+		];
+		queueDismissed = false;
+		queueOpen = true;
+
+		try {
+			await api.downloadBatchZip(
+				selected.map((e) => e.id),
+				(percent) => {
+					uploadQueue[queueIndex] = {
+						...uploadQueue[queueIndex],
+						progress: Math.min(percent, 99)
+					};
+				}
+			);
+			uploadQueue[queueIndex] = {
+				...uploadQueue[queueIndex],
+				progress: 100,
+				state: 'done'
+			};
+			toast.success('Pengunduhan berkas ZIP selesai');
+		} catch (error) {
+			uploadQueue[queueIndex] = {
+				...uploadQueue[queueIndex],
+				state: 'failed',
+				error: error instanceof Error ? error.message : 'Gagal men-zip berkas'
+			};
+			toast.error(error instanceof Error ? error.message : 'Gagal mengunduh ZIP');
+		}
+	}
+	let fetchedPreviewEntry = $state<FileEntry | null>(null);
+
+	$effect(() => {
+		if (!previewId) {
+			fetchedPreviewEntry = null;
+			return;
+		}
+		if (!isApiBacked) return;
+
+		const inCurrent = currentItems.find((entry) => entry.id === previewId);
+		if (inCurrent) {
+			if (fetchedPreviewEntry) fetchedPreviewEntry = null;
+			return;
+		}
+
+		if (fetchedPreviewEntry?.id !== previewId) {
+			let cancelled = false;
+			api.getItem(previewId)
+				.then((item) => {
+					if (!cancelled && item) {
+						fetchedPreviewEntry = api.toEntry(item);
+					}
+				})
+				.catch(() => {
+					// Item tidak ditemukan atau link tidak valid
+				});
+			return () => {
+				cancelled = true;
+			};
+		}
+	});
+
 	const previewEntry = $derived(
-		previewId ? (variant === 'my-storage'
-			? currentItems.find((entry) => entry.id === previewId) ?? null
-			: findEntry(tree, previewId) ?? null) : null
+		previewId
+			? (isApiBacked
+				? currentItems.find((entry) => entry.id === previewId) ?? fetchedPreviewEntry
+				: findEntry(tree, previewId) ?? null)
+			: null
 	);
 	const previewOpen = $derived(!!previewEntry);
 	const moveFolders = $derived(
-		variant === 'my-storage'
+		isApiBacked
 			? allFolders.filter((f) => f.id !== actionEntry?.id)
 			: getFolderOptions(tree).filter((f) => f.id !== actionEntry?.id)
 	);
@@ -126,22 +254,22 @@
 	async function refreshStorage() {
 		storageLoading = true;
 		try {
-			const [listing, folders] = await Promise.all([myStorageAPI.list(folderId), myStorageAPI.folders()]);
-			currentItems = listing.items.map((item) => myStorageAPI.toEntry(item));
+			const [listing, folders] = await Promise.all([api.list(folderId), api.folders()]);
+			currentItems = listing.items.map((item) => api.toEntry(item));
 			apiBreadcrumbs = listing.breadcrumbs;
 			allFolders = folders.items.map((item) => ({
 				id: item.id, name: item.name, kind: 'folder' as const, sizeBytes: 0,
 				parentId: item.parent_id, modifiedAt: ''
 			}));
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Gagal memuat My Storage');
+			toast.error(error instanceof Error ? error.message : `Gagal memuat ${rootLabel}`);
 		} finally {
 			storageLoading = false;
 		}
 	}
 
 	$effect(() => {
-		if (variant === 'my-storage') void refreshStorage();
+		if (isApiBacked) void refreshStorage();
 	});
 	function syncQuery(next: { folder?: string | null; preview?: string | null }) {
 		const params = new URLSearchParams(page.url.searchParams);
@@ -162,11 +290,13 @@
 	}
 
 	function navigateFolder(id: string | null) {
-		selectedId = null;
+		selectedIds = [];
 		syncQuery({ folder: id, preview: null });
 	}
 
 	function openEntry(entry: FileEntry) {
+		const source = variant === 'organization' ? 'organization' : 'my-storage';
+		void recordItemAccess(entry.id, source);
 		if (entry.kind === 'folder') {
 			navigateFolder(entry.id);
 			return;
@@ -230,7 +360,7 @@
 
 		if (!list.length && (!emptyFolders || !emptyFolders.length)) return;
 
-		if (variant !== 'my-storage') {
+		if (!isApiBacked) {
 			if (list.length > 0) {
 				const file = list[0];
 				const existing = findSiblingByName(file.name);
@@ -260,7 +390,7 @@
 			for (const part of parts) {
 				accumulated = accumulated ? `${accumulated}/${part}` : part;
 				if (!folderPaths.has(accumulated)) {
-					const folder = await myStorageAPI.findOrCreateFolder(part, parent, allFolders);
+					const folder = await api.findOrCreateFolder(part, parent, allFolders);
 					folderPaths.set(accumulated, folder.id);
 					if (!allFolders.some((f) => f.id === folder.id)) {
 						allFolders = [
@@ -329,10 +459,11 @@
 					}
 				}
 				uploadQueue[queueIndex] = { ...uploadQueue[queueIndex], state: 'uploading' };
-				await myStorageAPI.upload(file, parentId, (progress) => {
+				await api.upload(file, parentId, (progress) => {
 					uploadQueue[queueIndex] = { ...uploadQueue[queueIndex], progress: Math.min(progress, 99) };
 				});
 				uploadQueue[queueIndex] = { ...uploadQueue[queueIndex], progress: 100, state: 'done' };
+				if (variant === 'my-storage') void chrome?.refreshQuota();
 			} catch (error: unknown) {
 				const err = error as { message?: string; status?: number; code?: string };
 				const isQuota =
@@ -361,8 +492,8 @@
 				}
 			}
 		}
-
 		await refreshStorage();
+		await chrome?.refreshQuota();
 		const failed = uploadQueue.slice(start).filter((item) => item.state === 'failed').length;
 		if (quotaAborted) {
 			toast.error('Unggahan dihentikan: Kuota penyimpanan penuh', {
@@ -388,7 +519,7 @@
 
 	onMount(() => {
 		chrome.registerUploadHandler(triggerUpload);
-
+		chrome.registerStorageChangeHandler?.(refreshStorage);
 		function handleDragEnter(e: DragEvent) {
 			const types = e.dataTransfer?.types || [];
 			if (!types.includes('Files')) return;
@@ -441,6 +572,7 @@
 
 	onDestroy(() => {
 		chrome.registerUploadHandler(null);
+		chrome.registerStorageChangeHandler?.(null);
 		draggedEntryId = null;
 		if (longPressTimer) {
 			clearTimeout(longPressTimer);
@@ -448,9 +580,9 @@
 		}
 	});
 	async function onNewFolder(name: string) {
-		if (variant === 'my-storage') {
+		if (isApiBacked) {
 			try {
-				await myStorageAPI.createFolder(name, folderId);
+				await api.createFolder(name, folderId);
 				await refreshStorage();
 				toast.success(`Folder “${name}” dibuat`);
 			} catch (error) {
@@ -460,7 +592,7 @@
 					conflictDescription = `Folder “${name}” sudah ada. Gunakan nama yang disarankan “${conflict.suggested_name}”?`;
 					conflictAction = async () => {
 						try {
-							await myStorageAPI.createFolder(conflict.suggested_name!, folderId);
+							await api.createFolder(conflict.suggested_name!, folderId);
 							await refreshStorage();
 							toast.success(`Folder “${conflict.suggested_name}” dibuat`);
 						} catch (retryError) {
@@ -486,7 +618,7 @@
 	async function runMutation(update: { name?: string; parent_id?: string | null }) {
 		if (!actionEntry) return;
 		try {
-			await myStorageAPI.mutate(actionEntry.id, update);
+			await api.mutate(actionEntry.id, update);
 		} catch (error) {
 			const conflict = error as Error & { status?: number; suggested_name?: string };
 			if (conflict.status === 409 && conflict.suggested_name) {
@@ -494,7 +626,7 @@
 				conflictDescription = `Nama sudah digunakan. Gunakan nama yang disarankan “${conflict.suggested_name}”?`;
 				conflictAction = async () => {
 					try {
-						await myStorageAPI.mutate(actionEntry!.id, { ...update, name: conflict.suggested_name });
+						await api.mutate(actionEntry!.id, { ...update, name: conflict.suggested_name });
 						await refreshStorage();
 						toast.success(update.name !== undefined ? 'Nama diperbarui' : `“${actionEntry!.name}” dipindahkan`);
 					} catch (retryError) {
@@ -513,23 +645,52 @@
 	}
 
 	function onRename(name: string) {
-		if (variant === 'my-storage') { void runMutation({ name }); return; }
+		if (isApiBacked) { void runMutation({ name }); return; }
 		if (!actionEntry) return;
 		tree = tree.map((e) => e.id === actionEntry!.id ? { ...e, name, modifiedAt: 'Baru saja' } : e);
 		toast.success('Nama diperbarui');
 	}
 
 	function onMove(targetFolderId: string | null) {
+		if (moveMultipleEntries.length > 0) {
+			const entriesToMove = [...moveMultipleEntries];
+			moveMultipleEntries = [];
+			if (isApiBacked) {
+				void (async () => {
+					let movedCount = 0;
+					for (const entryToMove of entriesToMove) {
+						if (entryToMove.kind === 'folder' && targetFolderId === entryToMove.id) continue;
+						if (entryToMove.kind === 'folder' && targetFolderId && isAncestor(allFolders, entryToMove.id, targetFolderId)) continue;
+						try {
+							await api.moveItem(entryToMove.id, targetFolderId);
+							movedCount++;
+						} catch {
+							// skip conflict/error for batch
+						}
+					}
+					selectedIds = [];
+					await refreshStorage();
+					const targetName = targetFolderId ? (allFolders.find((f) => f.id === targetFolderId)?.name ?? 'Folder') : rootLabel;
+					toast.success(movedCount === 1 ? `“${entriesToMove[0].name}” dipindahkan ke “${targetName}”` : `${movedCount} item dipindahkan ke “${targetName}”`);
+				})();
+				return;
+			}
+			const movedSet = new Set(entriesToMove.map((e) => e.id));
+			tree = tree.map((e) => movedSet.has(e.id) ? { ...e, parentId: targetFolderId, modifiedAt: 'Baru saja' } : e);
+			selectedIds = [];
+			toast.success(`${entriesToMove.length} item dipindahkan`);
+			return;
+		}
 		if (!actionEntry) return;
 		if (actionEntry.kind === 'folder' && targetFolderId === actionEntry.id) {
 			toast.error('Tidak dapat memindahkan folder ke dirinya sendiri.');
 			return;
 		}
-		if (variant === 'my-storage') {
+		if (isApiBacked) {
 			const entryToMove = actionEntry;
 			void (async () => {
 				try {
-					await moveItem(entryToMove.id, targetFolderId);
+					await api.moveItem(entryToMove.id, targetFolderId);
 					await refreshStorage();
 					toast.success(`“${entryToMove.name}” dipindahkan`);
 				} catch (error) {
@@ -539,7 +700,7 @@
 						conflictDescription = `Nama sudah digunakan. Gunakan nama yang disarankan “${conflict.suggested_name}”?`;
 						conflictAction = async () => {
 							try {
-								await myStorageAPI.mutate(entryToMove.id, { parent_id: targetFolderId, name: conflict.suggested_name });
+								await api.mutate(entryToMove.id, { parent_id: targetFolderId, name: conflict.suggested_name });
 								await refreshStorage();
 								toast.success(`“${entryToMove.name}” dipindahkan`);
 							} catch (retryError) {
@@ -563,10 +724,11 @@
 
 
 	async function onCopy(entry: FileEntry) {
-		if (variant === 'my-storage') {
+		if (isApiBacked) {
 			try {
-				await myStorageAPI.duplicate(entry.id);
+				await api.duplicate(entry.id);
 				await refreshStorage();
+				if (variant === 'my-storage') void chrome?.refreshQuota();
 				toast.success(`“${entry.name}” diduplikasi`);
 			} catch (error) {
 				toast.error(error instanceof Error ? error.message : 'Gagal menduplikasi');
@@ -587,12 +749,12 @@
 
 	async function onStar(entry: FileEntry) {
 		const nextStarred = !entry.starred;
-		if (variant === 'my-storage') {
+		if (isApiBacked) {
 			currentItems = currentItems.map((item) =>
 				item.id === entry.id ? { ...item, starred: nextStarred } : item
 			);
 			try {
-				const result = await toggleStar(entry.id);
+				const result = await api.toggleStar(entry.id);
 				currentItems = currentItems.map((item) =>
 					item.id === entry.id ? { ...item, starred: result.is_starred } : item
 				);
@@ -615,17 +777,44 @@
 	}
 
 	async function executeDelete() {
+		if (bulkDeleteEntries.length > 0) {
+			const toDelete = [...bulkDeleteEntries];
+			bulkDeleteEntries = [];
+			deleteTargetEntry = null;
+			if (isApiBacked) {
+				let deletedCount = 0;
+				for (const entry of toDelete) {
+					try {
+						await api.remove(entry.id);
+						deletedCount++;
+					} catch {
+						// continue
+					}
+				}
+				selectedIds = [];
+				await refreshStorage();
+				if (variant === 'my-storage') void chrome?.refreshQuota();
+				toast.success(variant === 'organization' ? `${deletedCount} item dihapus` : `${deletedCount} item dipindahkan ke Trash`);
+				return;
+			}
+			const removeIds = new Set<string>(toDelete.map((e) => e.id));
+			tree = tree.filter((e) => !removeIds.has(e.id));
+			selectedIds = [];
+			toast.success(`${toDelete.length} item dipindahkan ke Trash (mock)`);
+			return;
+		}
 		if (!deleteTargetEntry) return;
 		const entry = deleteTargetEntry;
-		if (variant === 'my-storage') {
+		if (isApiBacked) {
 			try {
-				await myStorageAPI.remove(entry.id);
+				await api.remove(entry.id);
 				const deletedBreadcrumb = apiBreadcrumbs.findIndex((item) => item.id === entry.id);
 				if (deletedBreadcrumb >= 0 && folderId && apiBreadcrumbs.slice(deletedBreadcrumb).some((item) => item.id === folderId)) {
 					navigateFolder(deletedBreadcrumb > 0 ? apiBreadcrumbs[deletedBreadcrumb - 1].id : null);
 				}
 				await refreshStorage();
-				toast.success(`“${entry.name}” dipindahkan ke Trash`);
+				if (variant === 'my-storage') void chrome?.refreshQuota();
+				toast.success(variant === 'organization' ? `“${entry.name}” dihapus` : `“${entry.name}” dipindahkan ke Trash`);
 			} catch (error) { toast.error(error instanceof Error ? error.message : 'Gagal menghapus item'); }
 			return;
 		}
@@ -643,14 +832,14 @@
 			}
 		}
 		tree = tree.filter((e) => !removeIds.has(e.id));
-		if (selectedId && removeIds.has(selectedId)) selectedId = null;
+		selectedIds = selectedIds.filter((id) => !removeIds.has(id));
 		if (folderId && removeIds.has(folderId)) navigateFolder(entry.parentId);
 		toast.success(`“${entry.name}” dipindahkan ke Trash (mock)`);
 	}
 
 	async function onDownload(entry: FileEntry) {
-		if (variant === 'my-storage') {
-			try { await myStorageAPI.download(entry.id, entry.kind === 'folder' ? `${entry.name}.zip` : entry.name); }
+		if (isApiBacked) {
+			try { await api.download(entry.id, entry.kind === 'folder' ? `${entry.name}.zip` : entry.name); }
 			catch (error) { toast.error(error instanceof Error ? error.message : 'Gagal mengunduh'); }
 			return;
 		}
@@ -716,14 +905,46 @@
 				const targetFolder = (variant === 'my-storage' ? currentItems.find((e) => e.id === targetFolderId) : null) ?? findEntry(tree, targetFolderId || '');
 
 				if (targetFolder && targetFolder.kind === 'folder') {
-					const movedEntry = (variant === 'my-storage' ? currentItems.find((e) => e.id === draggedEntryId) : null) ?? findEntry(tree, draggedEntryId);
-					if (movedEntry && movedEntry.id !== targetFolder.id) {
+					const isMulti = selectedIds.includes(draggedEntryId) && selectedIds.length > 1;
+					const entriesToMove = isMulti
+						? visible.filter((ent) => selectedIds.includes(ent.id) && ent.id !== targetFolder.id)
+						: [((isApiBacked ? currentItems.find((ent) => ent.id === draggedEntryId) : null) ?? findEntry(tree, draggedEntryId))].filter(Boolean) as FileEntry[];
+
+					if (entriesToMove.length > 0 && !(entriesToMove.length === 1 && entriesToMove[0].id === targetFolder.id)) {
+						if (isMulti) {
+							if (isApiBacked) {
+								void (async () => {
+									let movedCount = 0;
+									for (const movedEntry of entriesToMove) {
+										if (movedEntry.kind === 'folder' && isAncestor(isApiBacked ? allFolders : tree, movedEntry.id, targetFolder.id)) continue;
+										try {
+											await api.moveItem(movedEntry.id, targetFolder.id);
+											movedCount++;
+										} catch {
+											// skip
+										}
+									}
+									selectedIds = [];
+									await refreshStorage();
+									toast.success(movedCount === 1 ? `“${entriesToMove[0].name}” dipindahkan ke “${targetFolder.name}”` : `${movedCount} item dipindahkan ke “${targetFolder.name}”`);
+								})();
+							} else {
+								const movedIds = new Set(entriesToMove.map((ent) => ent.id));
+								tree = tree.map((ent) => movedIds.has(ent.id) ? { ...ent, parentId: targetFolder.id, modifiedAt: 'Baru saja' } : ent);
+								selectedIds = [];
+								toast.success(`${entriesToMove.length} item dipindahkan ke “${targetFolder.name}”`);
+							}
+							isDraggingViaTouch = false;
+							draggedEntryId = null;
+							return;
+						}
+						const movedEntry = entriesToMove[0];
 						// Circular move check
 						if (movedEntry.kind === 'folder' && isAncestor(tree, movedEntry.id, targetFolder.id)) {
 							toast.error('Tidak bisa memindahkan folder ke dalam subfolder-nya sendiri');
-						} else if (variant === 'my-storage') {
+						} else if (isApiBacked) {
 							try {
-								await moveItem(movedEntry.id, targetFolder.id);
+								await api.moveItem(movedEntry.id, targetFolder.id);
 								await refreshStorage();
 								toast.success(`“${movedEntry.name}” dipindahkan ke “${targetFolder.name}”`);
 							} catch (error) {
@@ -733,7 +954,7 @@
 									conflictDescription = `Nama sudah digunakan. Gunakan nama yang disarankan “${conflict.suggested_name}”?`;
 									conflictAction = async () => {
 										try {
-											await myStorageAPI.mutate(movedEntry.id, { parent_id: targetFolder.id, name: conflict.suggested_name });
+											await api.mutate(movedEntry.id, { parent_id: targetFolder.id, name: conflict.suggested_name });
 											await refreshStorage();
 											toast.success(`“${movedEntry.name}” dipindahkan ke “${targetFolder.name}”`);
 										} catch (retryError) {
@@ -794,12 +1015,48 @@
 
 		// 1. Internal item move
 		if (draggedEntryId) {
-			const movedEntry = (variant === 'my-storage' ? currentItems.find((e) => e.id === draggedEntryId) : null) ?? findEntry(tree, draggedEntryId);
-			if (!movedEntry || movedEntry.id === targetFolder.id) {
+			const isMulti = selectedIds.includes(draggedEntryId) && selectedIds.length > 1;
+			const entriesToMove = isMulti
+				? visible.filter((ent) => selectedIds.includes(ent.id) && ent.id !== targetFolder.id)
+				: [((isApiBacked ? currentItems.find((ent) => ent.id === draggedEntryId) : null) ?? findEntry(tree, draggedEntryId))].filter(Boolean) as FileEntry[];
+
+			if (entriesToMove.length === 0 || (entriesToMove.length === 1 && entriesToMove[0].id === targetFolder.id)) {
 				draggedEntryId = null;
 				return;
 			}
 
+			if (isMulti) {
+				if (isApiBacked) {
+					void (async () => {
+						let movedCount = 0;
+						for (const movedEntry of entriesToMove) {
+							if (movedEntry.kind === 'folder' && isAncestor(isApiBacked ? allFolders : tree, movedEntry.id, targetFolder.id)) {
+								toast.error(`Tidak bisa memindahkan folder “${movedEntry.name}” ke dalam subfolder-nya sendiri`);
+								continue;
+							}
+							try {
+								await api.moveItem(movedEntry.id, targetFolder.id);
+								movedCount++;
+							} catch {
+								// skip
+							}
+						}
+						selectedIds = [];
+						await refreshStorage();
+						toast.success(movedCount === 1 ? `“${entriesToMove[0].name}” dipindahkan ke “${targetFolder.name}”` : `${movedCount} item dipindahkan ke “${targetFolder.name}”`);
+					})();
+					draggedEntryId = null;
+					return;
+				}
+				const movedIds = new Set(entriesToMove.map((ent) => ent.id));
+				tree = tree.map((ent) => movedIds.has(ent.id) ? { ...ent, parentId: targetFolder.id, modifiedAt: 'Baru saja' } : ent);
+				selectedIds = [];
+				toast.success(`${entriesToMove.length} item dipindahkan ke “${targetFolder.name}”`);
+				draggedEntryId = null;
+				return;
+			}
+
+			const movedEntry = entriesToMove[0];
 			// Prevent circular move: folder cannot be moved into its own descendant
 			if (movedEntry.kind === 'folder' && isAncestor(tree, movedEntry.id, targetFolder.id)) {
 				toast.error('Tidak bisa memindahkan folder ke dalam subfolder-nya sendiri');
@@ -807,9 +1064,9 @@
 				return;
 			}
 
-			if (variant === 'my-storage') {
+			if (isApiBacked) {
 				try {
-					await moveItem(movedEntry.id, targetFolder.id);
+					await api.moveItem(movedEntry.id, targetFolder.id);
 					await refreshStorage();
 					toast.success(`“${movedEntry.name}” dipindahkan ke “${targetFolder.name}”`);
 				} catch (error) {
@@ -819,7 +1076,7 @@
 						conflictDescription = `Nama sudah digunakan. Gunakan nama yang disarankan “${conflict.suggested_name}”?`;
 						conflictAction = async () => {
 							try {
-								await myStorageAPI.mutate(movedEntry.id, { parent_id: targetFolder.id, name: conflict.suggested_name });
+								await api.mutate(movedEntry.id, { parent_id: targetFolder.id, name: conflict.suggested_name });
 								await refreshStorage();
 								toast.success(`“${movedEntry.name}” dipindahkan ke “${targetFolder.name}”`);
 							} catch (retryError) {
@@ -918,10 +1175,76 @@
 <div class="flex flex-col gap-4">
 	<FileExplorerBreadcrumbs segments={breadcrumbs} onNavigate={navigateFolder} />
 	{#if storageLoading}
-		<p class="text-sm text-muted" role="status">Memuat My Storage…</p>
+		<p class="text-sm text-muted" role="status">Memuat {rootLabel}…</p>
 	{/if}
-	<FileExplorerToolbar bind:category onNewFolder={() => (newFolderOpen = true)} onUpload={triggerUpload} onUploadFolder={triggerFolderUpload} showFolderUpload={variant === 'my-storage'} />
+	<FileExplorerToolbar bind:category onNewFolder={() => (newFolderOpen = true)} onUpload={triggerUpload} onUploadFolder={triggerFolderUpload} showFolderUpload={isApiBacked} />
 
+	{#if selectedCount > 0}
+		<div
+			class="flex items-center justify-between rounded-xl border border-subtle bg-surface px-4 py-2.5 shadow-none transition-all"
+			data-testid="bulk-action-bar"
+		>
+			<div class="flex items-center gap-3">
+				<label class="flex items-center gap-2 cursor-pointer select-none">
+					<Checkbox
+						checked={isAllSelected}
+						indeterminate={isPartiallySelected}
+						onCheckedChange={toggleSelectAll}
+						aria-label="Pilih semua berkas"
+						data-testid="select-all-checkbox"
+					/>
+					<span class="text-sm font-medium text-main" data-testid="selected-count-label">
+						{selectedCount} item dipilih
+					</span>
+				</label>
+			</div>
+
+			<DropdownMenu.Root>
+				<DropdownMenu.Trigger>
+					{#snippet child({ props })}
+						<Button
+							{...props}
+							type="button"
+							variant="ghost"
+							size="icon"
+							class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white rounded-full"
+							aria-label="Aksi massal"
+							data-testid="bulk-actions-menu-trigger"
+						>
+							<MoreVertical class="size-4 stroke-2" />
+						</Button>
+					{/snippet}
+				</DropdownMenu.Trigger>
+				<DropdownMenu.Content align="end" class="min-w-48">
+					<DropdownMenu.Item
+						class="gap-2 cursor-pointer"
+						onclick={handleBulkDownload}
+						data-testid="bulk-action-download"
+					>
+						<Download class="size-4 stroke-2" />
+						<span>Unduh selected</span>
+					</DropdownMenu.Item>
+					<DropdownMenu.Item
+						class="gap-2 cursor-pointer"
+						onclick={handleBulkMove}
+						data-testid="bulk-action-move"
+					>
+						<FolderInput class="size-4 stroke-2" />
+						<span>Pindahkan</span>
+					</DropdownMenu.Item>
+					<DropdownMenu.Separator />
+					<DropdownMenu.Item
+						class="gap-2 text-destructive focus:text-destructive cursor-pointer"
+						onclick={handleBulkDelete}
+						data-testid="bulk-action-delete"
+					>
+						<Trash2 class="size-4 stroke-2 text-destructive" />
+						<span>Delete</span>
+					</DropdownMenu.Item>
+				</DropdownMenu.Content>
+			</DropdownMenu.Root>
+		</div>
+	{/if}
 	<FileExplorerDropzone active={dragActive}>
 		{#if visible.length === 0}
 			<div
@@ -978,40 +1301,41 @@
 				: ''
 		}`}
 					>
-						<FileExplorerContextMenu {entry} {...menuHandlers}>
+						<FileExplorerContextMenu {entry} {variant} {...menuHandlers}>
 							<FileGridCard
 								kind={entry.kind}
 								name={entry.name}
 								subtitle={entry.kind === 'folder'
 									? `Folder · ${entry.modifiedAt}`
 									: `${formatSize(entry.sizeBytes)} · ${entry.modifiedAt}`}
-								selected={selectedId === entry.id}
-								onSelect={() => (selectedId = entry.id)}
+								previewUrl={entry.kind !== 'folder' ? previewUrl(variant, entry.id) : undefined}
+								selected={selectedIds.includes(entry.id)}
+								onSelect={() => {}}
 								onOpen={() => openEntry(entry)}
 							>
-								{#snippet star()}
+								{#snippet select()}
 									<button
 										type="button"
-										class="inline-flex size-7 items-center justify-center rounded-lg bg-surface/80 p-1 backdrop-blur-sm transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
-										title={entry.starred ? 'Hapus Bintang' : 'Bintang'}
-										aria-label={entry.starred ? 'Hapus Bintang' : 'Bintang'}
+										class={cn(
+											"inline-flex size-7 items-center justify-center rounded-lg bg-surface/90 shadow-sm backdrop-blur-sm transition-opacity hover:bg-surface focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary",
+											selectedIds.includes(entry.id) ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus-within:opacity-100"
+										)}
+										title={selectedIds.includes(entry.id) ? 'Batal pilih' : 'Pilih'}
+										aria-label={`Pilih ${entry.name}`}
 										onclick={(e) => {
 											e.stopPropagation();
-											onStar(entry);
+											toggleSelectEntry(entry.id);
 										}}
 									>
-										<Star
-											class={cn(
-												'size-4 transition-colors',
-												entry.starred
-													? 'fill-amber-400 stroke-amber-500 text-amber-500'
-													: 'stroke-1 text-muted-foreground/40 hover:text-amber-500'
-											)}
+										<Checkbox
+											checked={selectedIds.includes(entry.id)}
+											class="pointer-events-none"
+											tabindex={-1}
 										/>
 									</button>
 								{/snippet}
 								{#snippet menu()}
-									<FileExplorerActionsMenu {entry} {...menuHandlers} />
+									<FileExplorerActionsMenu {entry} {variant} {...menuHandlers} />
 								{/snippet}
 							</FileGridCard>
 						</FileExplorerContextMenu>
@@ -1053,10 +1377,12 @@
 					>
 						<FileExplorerRow
 							{entry}
-							selected={selectedId === entry.id}
+							{variant}
+							selected={selectedIds.includes(entry.id)}
 							isDragOver={entry.kind === 'folder' && dragOverFolderId === entry.id}
 							onOpen={openEntry}
-							onSelect={(e) => (selectedId = e.id)}
+							onSelect={() => {}}
+							onToggleSelect={(e) => toggleSelectEntry(e.id)}
 							onDownload={onDownload}
 							onRename={(e) => {
 								actionEntry = e;
@@ -1081,7 +1407,7 @@
 	</FileExplorerDropzone>
 </div>
 
-{#if variant === 'my-storage' && uploadQueue.length > 0 && !queueDismissed}
+{#if isApiBacked && uploadQueue.length > 0 && !queueDismissed}
 	<aside
 		transition:fly={{ x: 350, duration: 250 }}
 		class="fixed left-4 right-4 top-20 z-50 ml-auto w-auto max-w-sm rounded-xl border border-subtle bg-surface p-4 text-main shadow-none"
@@ -1107,7 +1433,7 @@
 				aria-expanded={queueOpen}
 				onclick={() => (queueOpen = !queueOpen)}
 			>
-				{uploadQueue.some((item) => item.state === 'uploading') ? 'Mengunggah' : 'Unggahan'} · {uploadQueue.filter((item) => item.state === 'done').length}/{uploadQueue.length}
+				{uploadQueue.some((item) => item.state === 'uploading') ? (uploadQueue.some((item) => item.name.toLowerCase().includes('zip')) ? 'Memproses' : 'Mengunggah') : 'Selesai'} · {uploadQueue.filter((item) => item.state === 'done').length}/{uploadQueue.length}
 			</button>
 			<div class="flex items-center gap-1 shrink-0">
 				<button
@@ -1139,13 +1465,26 @@
 			<div class="h-full bg-primary transition-all" style={`width:${uploadProgress}%`}></div>
 </div>
 		{#if queueOpen}
-			<ul class="mt-3 max-h-56 space-y-2 overflow-y-auto text-xs">
+			<ul class="mt-3 max-h-56 space-y-2.5 overflow-y-auto text-xs">
 				{#each uploadQueue as item, index (index)}
-					<li class="flex justify-between gap-2" data-testid="upload-queue-item">
-						<span class="min-w-0 truncate" title={item.name}>{item.name}</span>
-						<span class={item.state === 'failed' ? 'text-destructive' : 'text-muted'}>
-							{item.state === 'failed' ? item.error : item.state === 'done' ? 'Selesai' : `${item.progress}%`}
-						</span>
+					<li class="flex flex-col gap-1" data-testid="upload-queue-item">
+						<div class="flex items-center justify-between gap-2">
+							<span class="min-w-0 flex-1 truncate font-medium text-main" title={item.name}>
+								{item.name}
+							</span>
+							{#if item.state !== 'failed'}
+								<span class="shrink-0 text-muted">
+									{item.state === 'done' ? 'Selesai' : `${item.progress}%`}
+								</span>
+							{/if}
+						</div>
+						{#if item.state === 'failed'}
+							<div class="flex justify-end">
+								<span class="text-right text-xs font-medium text-danger">
+									{item.error}
+								</span>
+							</div>
+						{/if}
 					</li>
 				{/each}
 			</ul>
@@ -1160,9 +1499,10 @@
 />
 <MoveDialog
 	bind:open={moveOpen}
-	entry={actionEntry}
-	folders={variant === 'my-storage' ? allFolders : tree}
-	currentParentId={actionEntry?.parentId ?? null}
+	entry={moveMultipleEntries.length > 0 ? null : actionEntry}
+	entries={moveMultipleEntries}
+	folders={isApiBacked ? allFolders : tree}
+	currentParentId={moveMultipleEntries[0]?.parentId ?? actionEntry?.parentId ?? null}
 	onConfirm={onMove}
 />
 <ConflictResolutionDialog
@@ -1186,7 +1526,7 @@
 		moveConflictTargetFolder = null;
 	}}
 />
-{#if variant !== 'my-storage'}
+{#if !isApiBacked}
 <ConflictResolutionDialog
 	bind:open={conflictOpen}
 	fileName={pendingUpload?.name ?? ''}
@@ -1216,15 +1556,20 @@
 <FilePreviewDialog
 	open={previewOpen}
 	entry={previewEntry}
+	source={variant}
 	onDownload={onDownload}
 	onClose={closePreview}
 />
 <ConfirmDialog
 	bind:open={deleteConfirmOpen}
-	title={deleteTargetEntry?.kind === 'folder' ? 'Pindahkan Folder ke Trash?' : 'Pindahkan Berkas ke Trash?'}
-	description={deleteTargetEntry?.kind === 'folder'
-		? `Pindahkan “${deleteTargetEntry.name}” dan semua isinya ke Trash?`
-		: `Pindahkan “${deleteTargetEntry?.name}” ke Trash?`}
+	title={bulkDeleteEntries.length > 0
+		? `Pindahkan ${bulkDeleteEntries.length} Item ke Trash?`
+		: (deleteTargetEntry?.kind === 'folder' ? 'Pindahkan Folder ke Trash?' : 'Pindahkan Berkas ke Trash?')}
+	description={bulkDeleteEntries.length > 0
+		? `Pindahkan ${bulkDeleteEntries.length} item terpilih ke Trash?`
+		: (deleteTargetEntry?.kind === 'folder'
+			? `Pindahkan “${deleteTargetEntry.name}” dan semua isinya ke Trash?`
+			: `Pindahkan “${deleteTargetEntry?.name}” ke Trash?`)}
 	confirmText="Hapus ke Trash"
 	variant="destructive"
 	onConfirm={executeDelete}

@@ -16,7 +16,7 @@ type TrashPurgeRunner struct {
 }
 
 // StartTrashPurgeJob initializes and starts a periodic background worker
-// that purges items from the trash bin older than retention (default 30 days).
+// that purges items from the trash bin older than retention (default 30 days) across My Storage and Organization.
 func StartTrashPurgeJob(parentCtx context.Context, db *bun.DB, store storage.StorageDriver, interval, retention time.Duration) *TrashPurgeRunner {
 	if interval <= 0 {
 		interval = 1 * time.Hour
@@ -39,6 +39,7 @@ func StartTrashPurgeJob(parentCtx context.Context, db *bun.DB, store storage.Sto
 			return
 		case <-time.After(3 * time.Second):
 			runner.purge(ctx, retention)
+			runner.cleanupExpiredPendingCloudUploads(ctx)
 		}
 
 		ticker := time.NewTicker(interval)
@@ -50,6 +51,7 @@ func StartTrashPurgeJob(parentCtx context.Context, db *bun.DB, store storage.Sto
 				return
 			case <-ticker.C:
 				runner.purge(ctx, retention)
+				runner.cleanupExpiredPendingCloudUploads(ctx)
 			}
 		}
 	}()
@@ -63,6 +65,16 @@ func (r *TrashPurgeRunner) purge(ctx context.Context, retention time.Duration) {
 		log.Printf("[TRASH_PURGE_JOB] Error purging expired trash: %v", err)
 	} else if purged > 0 {
 		log.Printf("[TRASH_PURGE_JOB] Purged %d expired trash items (> %v)", purged, retention)
+	}
+}
+
+func (r *TrashPurgeRunner) cleanupExpiredPendingCloudUploads(ctx context.Context) {
+	deleted, err := r.service.CleanupExpiredPendingCloudUploads(ctx)
+	if err != nil {
+		log.Printf("[CLOUD_UPLOAD_CLEANUP_JOB] Error cleaning expired upload intents: %v", err)
+	}
+	if deleted > 0 {
+		log.Printf("[CLOUD_UPLOAD_CLEANUP_JOB] Deleted %d expired upload intents", deleted)
 	}
 }
 

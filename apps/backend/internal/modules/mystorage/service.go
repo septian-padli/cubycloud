@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cubycloud/backend/internal/database"
 	"github.com/cubycloud/backend/internal/storage"
 	"github.com/oklog/ulid/v2"
 	"github.com/uptrace/bun"
@@ -24,6 +25,7 @@ var (
 	errQuota       = errors.New("USER_QUOTA_EXCEEDED")
 	errStorageFull = errors.New("STORAGE_POOL_FULL")
 	errInvalidName = errors.New("invalid name")
+	errInvalidSize = errors.New("invalid upload size")
 	errBadParent   = errors.New("parent is not a folder")
 	errMoveCycle   = errors.New("cannot move folder into itself")
 
@@ -31,6 +33,8 @@ var (
 	ErrNameConflict = errors.New("name already in use")
 	ErrCircularMove = errors.New("cannot move folder into itself or its descendant")
 	ErrBadParent    = errBadParent
+	ErrStorageFull  = errStorageFull
+	ErrQuota        = errQuota
 )
 
 type Item struct {
@@ -51,12 +55,57 @@ type Folder struct {
 	Name     string  `json:"name"`
 	ParentID *string `json:"parent_id"`
 }
+type LargestFileItem struct {
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Kind       string    `json:"kind"`
+	SizeBytes  int64     `json:"size_bytes"`
+	ParentID   *string   `json:"parent_id"`
+	Location   string    `json:"location"`
+	ModifiedAt time.Time `json:"modified_at"`
+}
+
+type LargestFilesResult struct {
+	Items      []LargestFileItem `json:"items"`
+	Total      int64             `json:"total"`
+	HasMore    bool              `json:"has_more"`
+	NextOffset int               `json:"next_offset"`
+}
+
+type StorageCategoryUsage struct {
+	ID     string  `json:"id"`
+	Label  string  `json:"label"`
+	Bytes  int64   `json:"bytes"`
+	UsedGB float64 `json:"used_gb"`
+}
+
+type CategoryUsageResult struct {
+	TotalBytes int64                  `json:"total_bytes"`
+	TotalGB    float64                `json:"total_gb"`
+	Categories []StorageCategoryUsage `json:"categories"`
+}
+
+type UploadIntentResult struct {
+	Placement string `json:"placement"` // "local" | "s3"
+	UploadID  string `json:"upload_id,omitempty"`
+	URL       string `json:"url,omitempty"`
+	Method    string `json:"method,omitempty"`
+	ExpiresAt string `json:"expires_at,omitempty"`
+}
+
+type DownloadURLResult struct {
+	URL       *string `json:"url"`
+	Filename  string  `json:"filename"`
+	ExpiresAt *string `json:"expires_at,omitempty"`
+}
 
 type Service struct {
 	db       *bun.DB
 	storage  storage.StorageDriver
 	uploadMu sync.Mutex
 }
+
+var cloudUploadMu sync.Mutex
 
 func NewService(db *bun.DB, driver storage.StorageDriver) *Service {
 	return &Service{db: db, storage: driver}
@@ -162,6 +211,10 @@ func (s *Service) get(ctx context.Context, owner, id string) (Item, error) {
 	return i, err
 }
 
+func (s *Service) Get(ctx context.Context, owner, id string) (Item, error) {
+	return s.get(ctx, owner, id)
+}
+
 func uniqueName(
 	ctx context.Context,
 	q interface {
@@ -261,6 +314,7 @@ func (s *Service) CreateFolder(ctx context.Context, owner, name string, parent *
 	if err != nil {
 		return Item{}, "", err
 	}
+	_ = database.RecordActivity(ctx, tx, owner, "upload", i.ID, name, "folder", "my-storage")
 	if err = tx.Commit(); err != nil {
 		return Item{}, "", err
 	}
@@ -354,8 +408,7 @@ func (s *Service) localPlacement(ctx context.Context) (string, string, int64, er
 		return "", "", 0, nil
 	}
 	for i := range candidates {
-		var used int64
-		err = s.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(size_bytes),0) FROM (SELECT disk_key,MAX(size_bytes) size_bytes FROM my_storage_items WHERE kind='file' AND disk_key IS NOT NULL AND (storage_node_id=? OR (storage_node_id IS NULL AND ?=?)) GROUP BY disk_key)`, candidates[i].id, candidates[i].id, legacyID).Scan(&used)
+		used, err := storage.NodeUsedBytes(ctx, s.db.DB, candidates[i].id)
 		if err != nil {
 			return "", "", 0, err
 		}
@@ -363,7 +416,11 @@ func (s *Service) localPlacement(ctx context.Context) (string, string, int64, er
 		if candidates[i].capacity%20 != 0 {
 			reserve++
 		}
-		candidates[i].capacity -= used + reserve
+		reserved := storage.GetNodeReserved(candidates[i].id)
+		candidates[i].capacity -= used + reserve + reserved
+		if candidates[i].capacity < 0 {
+			candidates[i].capacity = 0
+		}
 		physicalCapacity, physicalFree, statErr := s.storage.StatLocal(ctx, candidates[i].path)
 		if statErr != nil {
 			return "", "", 0, statErr
@@ -470,53 +527,63 @@ func (s *Service) Upload(ctx context.Context, owner, name string, parent *string
 	}
 
 	id := ulid.Make().String()
-	nodeID, nodePath, available, err := s.localPlacement(ctx)
+	placement, err := storage.SelectPlacement(ctx, s.db, s.storage, 1)
 	if err != nil {
 		return Item{}, err
 	}
 	var storedNodeID any
-	if nodeID != "" {
-		storedNodeID = nodeID
-		if maxBytes > available {
-			maxBytes = available
+	if placement.ID != "" {
+		storedNodeID = placement.ID
+		if maxBytes > placement.Available {
+			maxBytes = placement.Available
 			limitErr = errStorageFull
 		}
 	}
+	var initialReserve int64
+	if sz, ok := r.(interface{ Size() int64 }); ok {
+		initialReserve = sz.Size()
+	} else if lr, ok := r.(interface{ Len() int }); ok {
+		initialReserve = int64(lr.Len())
+	}
+	res := storage.ReserveNode(placement.ID, initialReserve)
+	defer res.Release()
 	readLimit := maxBytes
 	if readLimit < int64(^uint64(0)>>1) {
 		readLimit++
 	}
 	counter := &countingReader{Reader: io.LimitReader(r, readLimit)}
-	if err = s.storage.WriteLocal(ctx, nodePath, id, counter); err != nil {
-		_ = s.storage.DeleteLocal(ctx, nodePath, id)
-		return Item{}, err
-	}
-	cleanup := func() {
-		_ = s.storage.DeleteLocal(ctx, nodePath, id)
+
+	var cleanup func()
+	if placement.Type == "S3" {
+		cloud, ok := s.storage.(storage.CloudStorageDriver)
+		if !ok {
+			return Item{}, errors.New("cloud driver unavailable")
+		}
+		if err = cloud.WriteObject(ctx, placement.ID, id, counter, -1); err != nil {
+			_ = cloud.DeleteObject(ctx, placement.ID, id)
+			return Item{}, err
+		}
+		cleanup = func() {
+			_ = cloud.DeleteObject(ctx, placement.ID, id)
+		}
+	} else {
+		if err = s.storage.WriteLocal(ctx, placement.Path, id, counter); err != nil {
+			_ = s.storage.DeleteLocal(ctx, placement.Path, id)
+			return Item{}, err
+		}
+		cleanup = func() {
+			_ = s.storage.DeleteLocal(ctx, placement.Path, id)
+		}
 	}
 	size := counter.n
 	if size > maxBytes {
 		cleanup()
 		return Item{}, limitErr
 	}
-	if nodeID != "" {
-		physicalCapacity, physicalFree, statErr := s.storage.StatLocal(ctx, nodePath)
-		if statErr != nil {
-			cleanup()
-			return Item{}, statErr
-		}
-		if physicalCapacity > 0 {
-			reserve := physicalCapacity / 20
-			if physicalCapacity%20 != 0 {
-				reserve++
-			}
-			if physicalFree < reserve {
-				cleanup()
-				return Item{}, errStorageFull
-			}
-		}
-	}
+	res.SetBytes(size)
 
+	unlockNode := storage.LockNode(placement.ID)
+	defer unlockNode()
 	tx, err = s.db.BeginTx(ctx, nil)
 	if err != nil {
 		cleanup()
@@ -552,26 +619,8 @@ func (s *Service) Upload(ctx context.Context, owner, name string, parent *string
 		cleanup()
 		return Item{}, err
 	}
-	if nodeID != "" {
-		var capacity, used int64
-		if err = tx.QueryRowContext(ctx, `SELECT capacity_bytes FROM storage_nodes WHERE id=? AND type='LOCAL' AND enabled=1`, nodeID).Scan(&capacity); err != nil {
-			cleanup()
-			return Item{}, errStorageFull
-		}
-		legacyID, legacyErr := legacyLocalStorageNodeID(ctx, tx)
-		if legacyErr != nil {
-			cleanup()
-			return Item{}, legacyErr
-		}
-		if err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(size_bytes),0) FROM (SELECT disk_key,MAX(size_bytes) size_bytes FROM my_storage_items WHERE kind='file' AND disk_key IS NOT NULL AND (storage_node_id=? OR (storage_node_id IS NULL AND ?=?)) GROUP BY disk_key)`, nodeID, nodeID, legacyID).Scan(&used); err != nil {
-			cleanup()
-			return Item{}, err
-		}
-		reserve := capacity / 20
-		if capacity%20 != 0 {
-			reserve++
-		}
-		if capacity-used-reserve < size {
+	if placement.ID != "" && placement.Type == "LOCAL" {
+		if err = storage.CheckNodeCapacityTx(ctx, tx, s.storage, placement.ID, size); err != nil {
 			cleanup()
 			return Item{}, errStorageFull
 		}
@@ -593,6 +642,7 @@ func (s *Service) Upload(ctx context.Context, owner, name string, parent *string
 		cleanup()
 		return Item{}, err
 	}
+	_ = database.RecordActivity(ctx, tx, owner, "upload", id, candidate, "file", "my-storage")
 	if err = tx.Commit(); err != nil {
 		cleanup()
 		return Item{}, err
@@ -620,26 +670,6 @@ func (s *Service) quotaRemaining(ctx context.Context, q quotaQuery, owner string
 		return 0, err
 	}
 	if role == "SUPER_ADMIN" || quota < 0 {
-		return int64(^uint64(0) >> 1), nil
-	}
-	if quota == 0 {
-		var gb string
-		err := q.QueryRowContext(ctx, `SELECT value FROM settings WHERE key='default_user_quota_gb'`).Scan(&gb)
-		if err == nil {
-			var n int64
-			_, _ = fmt.Sscan(gb, &n)
-			if n > 0 && n <= int64(^uint64(0)>>1)/(1024*1024*1024) {
-				quota = n * 1024 * 1024 * 1024
-			} else {
-				quota = -1
-			}
-		} else if errors.Is(err, sql.ErrNoRows) {
-			quota = -1
-		} else {
-			return 0, err
-		}
-	}
-	if quota < 0 {
 		return int64(^uint64(0) >> 1), nil
 	}
 	var used int64
@@ -743,8 +773,10 @@ func (s *Service) Update(ctx context.Context, owner, id string, name *string, pa
 	if err != nil {
 		return Item{}, "", err
 	}
+	if newName != i.Name || changeParent {
+		_ = database.RecordActivity(ctx, tx, owner, "edit", id, newName, i.Kind, "my-storage")
+	}
 	if err = tx.Commit(); err != nil {
-		return Item{}, "", err
 	}
 	i.Name = newName
 	i.ParentID = newParent
@@ -910,11 +942,7 @@ func (s *Service) Download(ctx context.Context, owner, id string) (Item, io.Read
 		return item, nil, err
 	}
 	if item.Kind == "file" {
-		nodePath, err := s.localPathForKey(ctx, *item.DiskKey)
-		if err != nil {
-			return item, nil, err
-		}
-		r, err := s.storage.ReadLocal(ctx, nodePath, *item.DiskKey)
+		r, err := storage.ReadBlob(ctx, s.db, s.storage, "my_storage_items", *item.DiskKey)
 		return item, r, err
 	}
 	r, err := s.zipFolder(ctx, owner, item)
@@ -932,12 +960,7 @@ func (s *Service) zipFolder(ctx context.Context, owner string, root Item) (io.Re
 				if f.Kind != "file" {
 					continue
 				}
-				nodePath, e := s.localPathForKey(ctx, *f.DiskKey)
-				if e != nil {
-					err = e
-					break
-				}
-				r, e := s.storage.ReadLocal(ctx, nodePath, *f.DiskKey)
+				r, e := storage.ReadBlob(ctx, s.db, s.storage, "my_storage_items", *f.DiskKey)
 				if e != nil {
 					err = e
 					break
@@ -968,6 +991,101 @@ func (s *Service) zipFolder(ctx context.Context, owner string, root Item) (io.Re
 				}
 			}
 		}
+		closeErr := zw.Close()
+		if err == nil {
+			err = closeErr
+		}
+		_ = pw.CloseWithError(err)
+	}()
+	return pr, nil
+}
+
+func (s *Service) BatchDownloadZip(ctx context.Context, owner string, itemIDs []string) (io.ReadCloser, error) {
+	pr, pw := io.Pipe()
+	go func() {
+		zw := zip.NewWriter(pw)
+		var err error
+		usedPaths := make(map[string]int)
+
+		sanitizePath := func(p string) string {
+			count := usedPaths[p]
+			usedPaths[p]++
+			if count == 0 {
+				return p
+			}
+			ext := path.Ext(p)
+			base := strings.TrimSuffix(p, ext)
+			return fmt.Sprintf("%s (%d)%s", base, count, ext)
+		}
+
+		for _, id := range itemIDs {
+			item, e := s.get(ctx, owner, id)
+			if e != nil {
+				continue
+			}
+			if item.Kind == "file" {
+				if item.DiskKey == nil {
+					continue
+				}
+				r, e := storage.ReadBlob(ctx, s.db, s.storage, "my_storage_items", *item.DiskKey)
+				if e != nil {
+					err = e
+					break
+				}
+				entryName := sanitizePath(item.Name)
+				w, e := zw.Create(entryName)
+				if e == nil {
+					_, e = io.Copy(w, r)
+				}
+				r.Close()
+				if e != nil {
+					err = e
+					break
+				}
+			} else if item.Kind == "folder" {
+				var files []Item
+				if e := loadTree(ctx, s.db.DB, owner, item.ID, &files); e != nil {
+					err = e
+					break
+				}
+				for _, f := range files {
+					if f.Kind != "file" || f.DiskKey == nil {
+						continue
+					}
+					r, e := storage.ReadBlob(ctx, s.db, s.storage, "my_storage_items", *f.DiskKey)
+					if e != nil {
+						err = e
+						break
+					}
+					rel := f.Name
+					parent := f.ParentID
+					for parent != nil && *parent != item.ID {
+						p, e := s.get(ctx, owner, *parent)
+						if e != nil {
+							err = e
+							break
+						}
+						rel = path.Join(p.Name, rel)
+						parent = p.ParentID
+					}
+					rel = path.Join(item.Name, rel)
+					entryName := sanitizePath(rel)
+					w, e := zw.Create(entryName)
+					if e == nil {
+						_, e = io.Copy(w, r)
+					}
+					r.Close()
+					if e != nil {
+						err = e
+						break
+					}
+				}
+				if err != nil {
+					break
+				}
+			}
+		}
+
 		closeErr := zw.Close()
 		if err == nil {
 			err = closeErr
@@ -1081,6 +1199,7 @@ func (s *Service) MoveItem(ctx context.Context, userID string, itemID string, ta
 	if err != nil {
 		return nil, "", err
 	}
+	_ = database.RecordActivity(ctx, tx, userID, "edit", itemID, i.Name, i.Kind, "my-storage")
 
 	if err = tx.Commit(); err != nil {
 		return nil, "", err
@@ -1181,4 +1300,581 @@ func (s *Service) ListStarred(ctx context.Context, userID string) ([]VFSNode, er
 func (s *Service) ListFiles(ctx context.Context, owner string, parent *string) ([]VFSNode, error) {
 	items, _, err := s.List(ctx, owner, parent)
 	return items, err
+}
+
+func (s *Service) ListLargestFiles(ctx context.Context, owner string, limit int, offset int) (LargestFilesResult, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	result := LargestFilesResult{
+		Items:      make([]LargestFileItem, 0),
+		Total:      0,
+		HasMore:    false,
+		NextOffset: offset,
+	}
+
+	var total int64
+	err := s.db.DB.QueryRowContext(
+		ctx,
+		`SELECT COUNT(*) FROM my_storage_items WHERE owner_id = ? AND kind = 'file' AND deleted_at IS NULL`,
+		owner,
+	).Scan(&total)
+	if err != nil {
+		return result, err
+	}
+	result.Total = total
+	if total == 0 || int64(offset) >= total {
+		return result, nil
+	}
+
+	folderRows, err := s.db.DB.QueryContext(
+		ctx,
+		`SELECT id, name, parent_id FROM my_storage_items WHERE owner_id = ? AND kind = 'folder' AND deleted_at IS NULL`,
+		owner,
+	)
+	if err != nil {
+		return result, err
+	}
+	defer folderRows.Close()
+
+	folderMap := make(map[string]Folder)
+	for folderRows.Next() {
+		var f Folder
+		if err := folderRows.Scan(&f.ID, &f.Name, &f.ParentID); err != nil {
+			return result, err
+		}
+		folderMap[f.ID] = f
+	}
+	if err := folderRows.Err(); err != nil {
+		return result, err
+	}
+
+	resolveLocation := func(parentID *string) string {
+		if parentID == nil || *parentID == "" {
+			return "My Storage"
+		}
+		var parts []string
+		curr := parentID
+		visited := make(map[string]bool)
+		for curr != nil && *curr != "" {
+			if visited[*curr] {
+				break
+			}
+			visited[*curr] = true
+			f, ok := folderMap[*curr]
+			if !ok {
+				break
+			}
+			parts = append(parts, f.Name)
+			curr = f.ParentID
+		}
+		if len(parts) == 0 {
+			return "My Storage"
+		}
+		for i, j := 0, len(parts)-1; i < j; i, j = i+1, j-1 {
+			parts[i], parts[j] = parts[j], parts[i]
+		}
+		return "My Storage / " + strings.Join(parts, " / ")
+	}
+
+	fileRows, err := s.db.DB.QueryContext(
+		ctx,
+		`SELECT id, name, kind, size_bytes, parent_id, modified_at
+		FROM my_storage_items
+		WHERE owner_id = ? AND kind = 'file' AND deleted_at IS NULL
+		ORDER BY size_bytes DESC, modified_at DESC, id ASC
+		LIMIT ? OFFSET ?`,
+		owner,
+		limit,
+		offset,
+	)
+	if err != nil {
+		return result, err
+	}
+	defer fileRows.Close()
+
+	items := make([]LargestFileItem, 0, limit)
+	for fileRows.Next() {
+		var item LargestFileItem
+		if err := fileRows.Scan(
+			&item.ID,
+			&item.Name,
+			&item.Kind,
+			&item.SizeBytes,
+			&item.ParentID,
+			&item.ModifiedAt,
+		); err != nil {
+			return result, err
+		}
+		item.Location = resolveLocation(item.ParentID)
+		items = append(items, item)
+	}
+	if err := fileRows.Err(); err != nil {
+		return result, err
+	}
+
+	result.Items = items
+	result.NextOffset = offset + len(items)
+	result.HasMore = int64(result.NextOffset) < total
+
+	return result, nil
+}
+
+func detectCategory(name string) string {
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(name)), ".")
+	switch ext {
+	case "mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "3gp", "ts", "mpg", "mpeg":
+		return "video"
+	case "jpg", "jpeg", "png", "gif", "bmp", "webp", "svg", "heic", "heif", "tiff", "tif", "ico", "avif":
+		return "image"
+	case "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "rtf", "odt", "ods", "odp", "md", "html", "htm", "xml", "json", "yaml", "yml":
+		return "document"
+	case "zip", "rar", "7z", "tar", "gz", "bz2", "xz", "tgz", "iso", "dmg":
+		return "archive"
+	default:
+		return "other"
+	}
+}
+
+func (s *Service) CategoryUsage(ctx context.Context, owner string) (CategoryUsageResult, error) {
+	query := `
+SELECT
+	COALESCE(disk_key, id) AS k,
+	MAX(size_bytes) AS size_bytes,
+	MAX(CASE WHEN deleted_at IS NULL THEN name ELSE '' END) AS active_name,
+	MAX(name) AS any_name,
+	COUNT(CASE WHEN deleted_at IS NULL THEN 1 END) AS active_count
+FROM my_storage_items
+WHERE owner_id = ? AND kind = 'file'
+GROUP BY k`
+
+	rows, err := s.db.DB.QueryContext(ctx, query, owner)
+	if err != nil {
+		return CategoryUsageResult{}, err
+	}
+	defer rows.Close()
+
+	var (
+		videoBytes    int64
+		imageBytes    int64
+		documentBytes int64
+		archiveBytes  int64
+		otherBytes    int64
+		trashBytes    int64
+		totalBytes    int64
+	)
+
+	for rows.Next() {
+		var (
+			k           string
+			sizeBytes   int64
+			activeName  string
+			anyName     string
+			activeCount int
+		)
+		if err := rows.Scan(&k, &sizeBytes, &activeName, &anyName, &activeCount); err != nil {
+			return CategoryUsageResult{}, err
+		}
+		totalBytes += sizeBytes
+
+		if activeCount == 0 {
+			trashBytes += sizeBytes
+			continue
+		}
+
+		name := activeName
+		if name == "" {
+			name = anyName
+		}
+		cat := detectCategory(name)
+		switch cat {
+		case "video":
+			videoBytes += sizeBytes
+		case "image":
+			imageBytes += sizeBytes
+		case "document":
+			documentBytes += sizeBytes
+		case "archive":
+			archiveBytes += sizeBytes
+		default:
+			otherBytes += sizeBytes
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return CategoryUsageResult{}, err
+	}
+
+	const gib = float64(1024 * 1024 * 1024)
+	toGB := func(b int64) float64 {
+		return float64(b) / gib
+	}
+
+	categories := []StorageCategoryUsage{
+		{ID: "video", Label: "Video", Bytes: videoBytes, UsedGB: toGB(videoBytes)},
+		{ID: "image", Label: "Gambar", Bytes: imageBytes, UsedGB: toGB(imageBytes)},
+		{ID: "document", Label: "Dokumen", Bytes: documentBytes, UsedGB: toGB(documentBytes)},
+		{ID: "archive", Label: "Arsip", Bytes: archiveBytes, UsedGB: toGB(archiveBytes)},
+	}
+	if otherBytes > 0 {
+		categories = append(categories, StorageCategoryUsage{
+			ID:     "other",
+			Label:  "Lainnya",
+			Bytes:  otherBytes,
+			UsedGB: toGB(otherBytes),
+		})
+	}
+	categories = append(categories, StorageCategoryUsage{
+		ID:     "trash",
+		Label:  "Trash",
+		Bytes:  trashBytes,
+		UsedGB: toGB(trashBytes),
+	})
+
+	return CategoryUsageResult{
+		TotalBytes: totalBytes,
+		TotalGB:    toGB(totalBytes),
+		Categories: categories,
+	}, nil
+}
+
+func (s *Service) UploadIntent(ctx context.Context, owner, filename string, size int64, parent *string, uniqueName bool) (*UploadIntentResult, error) {
+	parent = normalizeParent(parent)
+	if !validName(filename) {
+		return nil, errInvalidName
+	}
+	if size < 0 {
+		return nil, errInvalidSize
+	}
+
+	quotaRemaining, err := s.quotaRemaining(ctx, s.db.DB, owner)
+	if err != nil {
+		return nil, err
+	}
+	if quotaRemaining == 0 || (quotaRemaining > 0 && quotaRemaining < size) {
+		return nil, errQuota
+	}
+
+	placement, err := storage.SelectPlacement(ctx, s.db, s.storage, size)
+	if err != nil {
+		return nil, errStorageFull
+	}
+
+	if placement.Type != "S3" {
+		return &UploadIntentResult{
+			Placement: "local",
+		}, nil
+	}
+
+	cloud, ok := s.storage.(storage.CloudStorageDriver)
+	if !ok {
+		return &UploadIntentResult{Placement: "local"}, nil
+	}
+
+	uploadID := ulid.Make().String()
+	expiry := 15 * time.Minute
+	putURL, err := cloud.PresignUpload(ctx, placement.ID, uploadID, expiry)
+	if err != nil {
+		return nil, fmt.Errorf("presign upload: %w", err)
+	}
+
+	expiresAt := time.Now().UTC().Add(expiry)
+	var parentVal any
+	if parent != nil && *parent != "" {
+		parentVal = *parent
+	}
+
+	_, err = s.db.ExecContext(ctx, `
+		INSERT INTO pending_cloud_uploads (id, owner_id, storage_node_id, filename, size_bytes, parent_id, unique_name, expires_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, uploadID, owner, placement.ID, filename, size, parentVal, uniqueName, expiresAt)
+	if err != nil {
+		return nil, fmt.Errorf("record pending upload: %w", err)
+	}
+
+	return &UploadIntentResult{
+		Placement: "s3",
+		UploadID:  uploadID,
+		URL:       putURL,
+		Method:    "PUT",
+		ExpiresAt: expiresAt.Format(time.RFC3339),
+	}, nil
+}
+
+func (s *Service) SyncCloud(ctx context.Context, owner, uploadID string) (Item, error) {
+	var storageNodeID, filename string
+	var sizeBytes int64
+	var parentID sql.NullString
+	var uniqueNameRequested bool
+	var expiresAt time.Time
+
+	err := s.db.QueryRowContext(ctx, `
+		SELECT storage_node_id, filename, size_bytes, parent_id, unique_name, expires_at
+		FROM pending_cloud_uploads
+		WHERE id = ? AND owner_id = ?
+	`, uploadID, owner).Scan(&storageNodeID, &filename, &sizeBytes, &parentID, &uniqueNameRequested, &expiresAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Item{}, errNotFound
+	}
+	if err != nil {
+		return Item{}, err
+	}
+
+	var parent *string
+	if parentID.Valid && parentID.String != "" {
+		parent = &parentID.String
+	}
+	parent = normalizeParent(parent)
+
+	cloud, ok := s.storage.(storage.CloudStorageDriver)
+	if !ok {
+		return Item{}, errors.New("cloud driver unavailable")
+	}
+
+	cloudUploadMu.Lock()
+	defer cloudUploadMu.Unlock()
+	var pending int
+	if err = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pending_cloud_uploads WHERE id=? AND owner_id=?`, uploadID, owner).Scan(&pending); err != nil {
+		return Item{}, err
+	}
+	if pending == 0 {
+		return Item{}, errNotFound
+	}
+	requestedSize := sizeBytes
+	actualSize, err := cloud.HeadObject(ctx, storageNodeID, uploadID)
+	if err != nil {
+		return Item{}, fmt.Errorf("cloud object verification failed: %w", err)
+	}
+	if actualSize < 0 {
+		return Item{}, errors.New("cloud object has invalid size")
+	}
+	sizeBytes = actualSize
+
+
+
+	committed := false
+	defer func() {
+		if !committed {
+			_ = cloud.DeleteObject(context.Background(), storageNodeID, uploadID)
+		}
+	}()
+
+	available, err := storage.AvailableOnNode(ctx, s.db, s.storage, storageNodeID)
+	if err != nil {
+		return Item{}, errStorageFull
+	}
+	if expiresAt.After(time.Now().UTC()) && requestedSize > 0 {
+		available += requestedSize
+	}
+	if actualSize > available {
+		return Item{}, errStorageFull
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Item{}, err
+	}
+	defer tx.Rollback()
+
+	if err = s.checkQuota(ctx, tx, owner, actualSize); err != nil {
+		return Item{}, err
+	}
+
+
+
+	if err = s.checkParent(ctx, tx, owner, parent); err != nil {
+		return Item{}, err
+	}
+
+	var existingID string
+	lookupErr := tx.QueryRowContext(
+		ctx,
+		`SELECT id FROM my_storage_items WHERE owner_id=? AND deleted_at IS NULL AND name=? AND COALESCE(parent_id,'')=COALESCE(?,'')`,
+		owner,
+		filename,
+		parent,
+	).Scan(&existingID)
+	if lookupErr != nil && !errors.Is(lookupErr, sql.ErrNoRows) {
+		return Item{}, lookupErr
+	}
+
+	candidate := filename
+	if uniqueNameRequested || lookupErr == nil {
+		candidate, err = uniqueName(ctx, tx, owner, parent, filename, "")
+		if err != nil {
+			return Item{}, err
+		}
+	} else if lookupErr == nil {
+		return Item{}, errConflict
+	}
+
+	now := time.Now().UTC()
+	_, err = tx.ExecContext(
+		ctx,
+		`INSERT INTO my_storage_items (id, owner_id, name, kind, size_bytes, parent_id, disk_key, storage_node_id, modified_at)
+		 VALUES (?, ?, ?, 'file', ?, ?, ?, ?, ?)`,
+		uploadID,
+		owner,
+		candidate,
+		sizeBytes,
+		parent,
+		uploadID,
+		storageNodeID,
+		now,
+	)
+	if err != nil {
+		return Item{}, err
+	}
+
+	_ = database.RecordActivity(ctx, tx, owner, "upload", uploadID, candidate, "file", "my-storage")
+	_, _ = tx.ExecContext(ctx, `DELETE FROM pending_cloud_uploads WHERE id = ?`, uploadID)
+
+	if err = tx.Commit(); err != nil {
+		return Item{}, err
+	}
+	committed = true
+
+	return Item{
+		ID:         uploadID,
+		Name:       candidate,
+		Kind:       "file",
+		SizeBytes:  sizeBytes,
+		ParentID:   parent,
+		ModifiedAt: now,
+	}, nil
+}
+func (s *Service) CancelUploadIntent(ctx context.Context, owner, uploadID string) (bool, error) {
+	cloudUploadMu.Lock()
+	defer cloudUploadMu.Unlock()
+
+	var nodeID string
+	err := s.db.QueryRowContext(ctx, `SELECT storage_node_id FROM pending_cloud_uploads WHERE id=? AND owner_id=?`, uploadID, owner).Scan(&nodeID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	cloud, ok := s.storage.(storage.CloudStorageDriver)
+	if !ok {
+		return false, errors.New("cloud driver unavailable")
+	}
+	if err = cloud.DeleteObject(ctx, nodeID, uploadID); err != nil {
+		return false, fmt.Errorf("delete cloud upload object: %w", err)
+	}
+	result, err := s.db.ExecContext(ctx, `DELETE FROM pending_cloud_uploads WHERE id=? AND owner_id=?`, uploadID, owner)
+	if err != nil {
+		return false, err
+	}
+	deleted, err := result.RowsAffected()
+	return deleted > 0, err
+}
+
+func (s *Service) CleanupExpiredPendingCloudUploads(ctx context.Context) (int64, error) {
+	cloudUploadMu.Lock()
+	defer cloudUploadMu.Unlock()
+
+	rows, err := s.db.QueryContext(ctx, `SELECT id, storage_node_id FROM pending_cloud_uploads WHERE expires_at <= CURRENT_TIMESTAMP`)
+	if err != nil {
+		return 0, err
+	}
+	type expiredUpload struct{ id, nodeID string }
+	var uploads []expiredUpload
+	for rows.Next() {
+		var upload expiredUpload
+		if err = rows.Scan(&upload.id, &upload.nodeID); err != nil {
+			break
+		}
+		uploads = append(uploads, upload)
+	}
+	if err == nil {
+		err = rows.Err()
+	}
+	_ = rows.Close()
+	if err != nil {
+		return 0, err
+	}
+
+	cloud, ok := s.storage.(storage.CloudStorageDriver)
+	if !ok && len(uploads) > 0 {
+		return 0, errors.New("cloud driver unavailable")
+	}
+	var deleted int64
+	var firstErr error
+	for _, upload := range uploads {
+		if err = cloud.DeleteObject(ctx, upload.nodeID, upload.id); err != nil {
+			if firstErr == nil {
+				firstErr = fmt.Errorf("delete expired cloud upload %s: %w", upload.id, err)
+			}
+			continue
+		}
+		result, deleteErr := s.db.ExecContext(ctx, `DELETE FROM pending_cloud_uploads WHERE id=? AND expires_at <= CURRENT_TIMESTAMP`, upload.id)
+		if deleteErr != nil {
+			if firstErr == nil {
+				firstErr = deleteErr
+			}
+			continue
+		}
+		n, countErr := result.RowsAffected()
+		if countErr != nil {
+			if firstErr == nil {
+				firstErr = countErr
+			}
+			continue
+		}
+		deleted += n
+	}
+	return deleted, firstErr
+}
+
+func (s *Service) GetDownloadURL(ctx context.Context, owner, id string) (*DownloadURLResult, error) {
+	item, err := s.get(ctx, owner, id)
+	if err != nil {
+		return nil, err
+	}
+	if item.Kind == "folder" {
+		return &DownloadURLResult{
+			URL:      nil,
+			Filename: item.Name + ".zip",
+		}, nil
+	}
+
+	var nodeType sql.NullString
+	var nodeID sql.NullString
+	err = s.db.QueryRowContext(ctx, `
+		SELECT sn.id, sn.type
+		FROM my_storage_items i
+		JOIN storage_nodes sn ON sn.id = i.storage_node_id
+		WHERE i.id = ? AND i.owner_id = ? AND i.deleted_at IS NULL
+	`, id, owner).Scan(&nodeID, &nodeType)
+	if errors.Is(err, sql.ErrNoRows) || !nodeType.Valid || nodeType.String != "S3" {
+		return &DownloadURLResult{
+			URL:      nil,
+			Filename: item.Name,
+		}, nil
+	}
+
+	cloud, ok := s.storage.(storage.CloudStorageDriver)
+	if !ok {
+		return &DownloadURLResult{
+			URL:      nil,
+			Filename: item.Name,
+		}, nil
+	}
+
+	expiry := 15 * time.Minute
+	presignedURL, err := cloud.PresignDownload(ctx, nodeID.String, *item.DiskKey, item.Name, expiry)
+	if err != nil {
+		return nil, err
+	}
+
+	expiresAt := time.Now().UTC().Add(expiry).Format(time.RFC3339)
+	return &DownloadURLResult{
+		URL:       &presignedURL,
+		Filename:  item.Name,
+		ExpiresAt: &expiresAt,
+	}, nil
 }

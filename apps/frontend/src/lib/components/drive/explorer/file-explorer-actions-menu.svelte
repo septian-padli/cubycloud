@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { FileEntry } from '$lib/types/drive.js';
+	import type { ExplorerVariant, FileEntry } from '$lib/types/drive.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import {
@@ -17,6 +17,8 @@
 
 	let {
 		entry,
+		variant,
+		allowShare = variant !== 'organization',
 		onOpen,
 		onDownload,
 		onRename,
@@ -27,6 +29,8 @@
 		onDelete
 	}: {
 		entry: FileEntry;
+		variant?: ExplorerVariant;
+		allowShare?: boolean;
 		onOpen: (entry: FileEntry) => void;
 		onDownload: (entry: FileEntry) => void;
 		onRename: (entry: FileEntry) => void;
@@ -90,10 +94,12 @@
 			<Star class={cn("size-4 stroke-2", entry.starred ? "fill-amber-400 stroke-amber-500 text-amber-500" : "")} />
 			{entry.starred ? 'Hapus Bintang' : 'Bintang'}
 		</DropdownMenu.Item>
-		<DropdownMenu.Item class="gap-2" onclick={() => onShare(entry)}>
-			<Share2 class="size-4 stroke-2" />
-			Bagikan
-		</DropdownMenu.Item>
+		{#if allowShare}
+			<DropdownMenu.Item class="gap-2" onclick={() => onShare(entry)}>
+				<Share2 class="size-4 stroke-2" />
+				Bagikan
+			</DropdownMenu.Item>
+		{/if}
 		<DropdownMenu.Separator />
 		<DropdownMenu.Item variant="destructive" class="gap-2" onclick={() => onDelete(entry)}>
 			<Trash2 class="size-4 stroke-2" />

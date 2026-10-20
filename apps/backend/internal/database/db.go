@@ -25,7 +25,7 @@ func Connect(dataDir string) (*bun.DB, error) {
 
 // Open opens SQLite with specified path and runs migrations.
 func Open(ctx context.Context, dbPath string) (*bun.DB, error) {
-	dsn := fmt.Sprintf("file:%s?_busy_timeout=5000", dbPath)
+	dsn := fmt.Sprintf("file:%s?_busy_timeout=5000&_pragma=foreign_keys(1)", dbPath)
 	
 	sqldb, err := sql.Open("sqlite", dsn)
 	if err != nil {
@@ -44,6 +44,10 @@ func Open(ctx context.Context, dbPath string) (*bun.DB, error) {
 	if _, err := sqldb.ExecContext(ctx, "PRAGMA synchronous=NORMAL"); err != nil {
 		sqldb.Close()
 		return nil, fmt.Errorf("set synchronous: %w", err)
+	}
+	if _, err := sqldb.ExecContext(ctx, "PRAGMA foreign_keys = ON;"); err != nil {
+		sqldb.Close()
+		return nil, fmt.Errorf("set foreign keys: %w", err)
 	}
 
 	db := bun.NewDB(sqldb, sqlitedialect.New())

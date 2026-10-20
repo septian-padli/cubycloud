@@ -46,9 +46,11 @@ func setupTestDB(t *testing.T) *bun.DB {
 			password_hash TEXT NOT NULL,
 			recovery_key_hash TEXT,
 			role TEXT NOT NULL,
+			quota_mode TEXT NOT NULL DEFAULT 'DEFAULT',
 			quota_bytes INTEGER NOT NULL DEFAULT -1,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			deleted_at DATETIME
 		)
 	`)
 	if err != nil {

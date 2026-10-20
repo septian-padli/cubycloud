@@ -3,15 +3,15 @@ package mystorage
 import (
 	"encoding/json"
 	"errors"
+	"github.com/cubycloud/backend/internal/storage"
+	"github.com/labstack/echo/v4"
+	"github.com/uptrace/bun"
 	"io"
 	"mime"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
-
-	"github.com/cubycloud/backend/internal/storage"
-	"github.com/labstack/echo/v4"
-	"github.com/uptrace/bun"
 )
 
 type Handler struct {
@@ -23,12 +23,22 @@ func RegisterRoutes(e *echo.Echo, db *bun.DB, driver storage.StorageDriver, jwtA
 	g := e.Group("/api/v1/drive/my-storage", jwtAuth)
 	g.GET("", h.list)
 	g.GET("/folders", h.folders)
+	g.GET("/largest-files", h.largestFiles)
+	g.GET("/category-usage", h.categoryUsage)
+	g.GET("/categories", h.categoryUsage)
 	g.POST("/folders", h.createFolder)
 	g.POST("/upload", h.upload)
+	g.POST("/upload-intent", h.uploadIntent)
+	h.registerTusRoutes(g)
+	g.POST("/sync-cloud", h.syncCloud)
+	g.DELETE("/upload-intent/:id", h.cancelUploadIntent)
 	g.GET("/:id/download", h.download)
+	g.GET("/:id/download-url", h.downloadURL)
+	g.POST("/batch/download-zip", h.batchDownloadZip)
 	g.PATCH("/:id", h.update)
 	g.POST("/:id/duplicate", h.duplicate)
 	g.DELETE("/:id", h.delete)
+	g.GET("/items/:id", h.getItem)
 	g.PATCH("/items/:id/move", h.MoveItem)
 	g.POST("/items/:id/star", h.ToggleStar)
 	g.PUT("/items/:id/star", h.ToggleStar)
@@ -67,13 +77,53 @@ func (h *Handler) list(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, map[string]any{"items": items, "breadcrumbs": breadcrumbs})
 }
+func (h *Handler) getItem(c echo.Context) error {
+	item, err := h.service.Get(c.Request().Context(), owner(c), c.Param("id"))
+	if err != nil {
+		return respond(c, err)
+	}
+	return c.JSON(http.StatusOK, item)
+}
+
+func (h *Handler) largestFiles(c echo.Context) error {
+	limit := 20
+	if l := c.QueryParam("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil {
+			limit = parsed
+		}
+	}
+	offset := 0
+	if o := c.QueryParam("offset"); o != "" {
+		if parsed, err := strconv.Atoi(o); err == nil {
+			offset = parsed
+		}
+	}
+	res, err := h.service.ListLargestFiles(c.Request().Context(), owner(c), limit, offset)
+	if err != nil {
+		return respond(c, err)
+	}
+	return c.JSON(http.StatusOK, res)
+}
+func (h *Handler) categoryUsage(c echo.Context) error {
+	res, err := h.service.CategoryUsage(c.Request().Context(), owner(c))
+	if err != nil {
+		return respond(c, err)
+	}
+	return c.JSON(http.StatusOK, res)
+}
 
 func (h *Handler) download(c echo.Context) error {
 	item, r, err := h.service.Download(c.Request().Context(), owner(c), c.Param("id"))
 	if err != nil {
 		return respond(c, err)
 	}
+	_ = h.service.RecordAccess(c.Request().Context(), owner(c), item.ID, "my-storage")
 	defer r.Close()
+	if item.Kind == "file" {
+		if served, err := ServePreview(c, item.Name, r); served {
+			return err
+		}
+	}
 	name := item.Name
 	if item.Kind == "folder" {
 		name += ".zip"
@@ -353,4 +403,75 @@ func (h *Handler) ListStarred(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{
 		"items": items,
 	})
+}
+
+func (h *Handler) batchDownloadZip(c echo.Context) error {
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if err := c.Bind(&req); err != nil || len(req.IDs) == 0 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "ids is required"})
+	}
+	r, err := h.service.BatchDownloadZip(c.Request().Context(), owner(c), req.IDs)
+	if err != nil {
+		return respond(c, err)
+	}
+	defer r.Close()
+	c.Response().Header().Set(echo.HeaderContentType, "application/zip")
+	c.Response().Header().Set(echo.HeaderContentDisposition, `attachment; filename="cubycloud-archive.zip"`)
+	return c.Stream(http.StatusOK, "application/zip", r)
+}
+
+func (h *Handler) SyncCloud(c echo.Context) error {
+	return h.syncCloud(c)
+}
+
+func (h *Handler) uploadIntent(c echo.Context) error {
+	var req struct {
+		Filename   string  `json:"filename"`
+		Size       int64   `json:"size"`
+		ParentID   *string `json:"parent_id"`
+		UniqueName bool    `json:"unique_name"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": "invalid request"})
+	}
+	res, err := h.service.UploadIntent(c.Request().Context(), owner(c), req.Filename, req.Size, req.ParentID, req.UniqueName)
+	if err != nil {
+		return respond(c, err)
+	}
+	return c.JSON(http.StatusOK, res)
+}
+
+func (h *Handler) cancelUploadIntent(c echo.Context) error {
+	deleted, err := h.service.CancelUploadIntent(c.Request().Context(), owner(c), c.Param("id"))
+	if err != nil {
+		return respond(c, err)
+	}
+	if !deleted {
+		return echo.NewHTTPError(http.StatusNotFound, map[string]string{"error": "upload intent not found"})
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (h *Handler) syncCloud(c echo.Context) error {
+	var req struct {
+		UploadID string `json:"upload_id"`
+	}
+	if err := c.Bind(&req); err != nil || req.UploadID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": "upload_id is required"})
+	}
+	item, err := h.service.SyncCloud(c.Request().Context(), owner(c), req.UploadID)
+	if err != nil {
+		return respond(c, err)
+	}
+	return c.JSON(http.StatusCreated, item)
+}
+
+func (h *Handler) downloadURL(c echo.Context) error {
+	res, err := h.service.GetDownloadURL(c.Request().Context(), owner(c), c.Param("id"))
+	if err != nil {
+		return respond(c, err)
+	}
+	return c.JSON(http.StatusOK, res)
 }

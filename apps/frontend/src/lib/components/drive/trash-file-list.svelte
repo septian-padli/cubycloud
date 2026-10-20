@@ -16,7 +16,9 @@
 	import FileGridCard from './file-grid-card.svelte';
 	import DriveViewToggle from './drive-view-toggle.svelte';
 	import { trashAPI } from '$lib/api/trash.js';
+	import { getDriveChrome } from '$lib/drive-context.svelte.js';
 
+	const chrome = getDriveChrome();
 	let {
 		initialItems
 	}: {
@@ -71,6 +73,7 @@
 			actionLoading = true;
 			const res = await trashAPI.restore(entry.id, toRoot);
 			removeItem(entry.id);
+			void chrome?.refreshQuota();
 			if (res.restored_to_root) {
 				toast.success(`“${entry.name}” dipulihkan ke Root My Storage`);
 			} else {
@@ -105,6 +108,7 @@
 			actionLoading = true;
 			await trashAPI.purgeOne(target.id);
 			removeItem(target.id);
+			void chrome?.refreshQuota();
 			toast.success(`“${target.name}” dihapus permanen`);
 		} catch (err: unknown) {
 			const msg = err instanceof Error ? err.message : 'Gagal menghapus permanen';
@@ -122,6 +126,7 @@
 			await trashAPI.purgeAll();
 			items = [];
 			selectedId = null;
+			void chrome?.refreshQuota();
 			toast.success('Semua item di Trash berhasil dihapus permanen');
 		} catch (err: unknown) {
 			const msg = err instanceof Error ? err.message : 'Gagal mengosongkan Trash';

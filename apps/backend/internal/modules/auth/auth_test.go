@@ -50,7 +50,7 @@ func setupTestDB(t *testing.T) (*echo.Echo, string) {
 		PasswordHash:    string(passwordHash),
 		RecoveryKeyHash: &recoveryHashStr,
 		Role:            "SUPER_ADMIN",
-		QuotaBytes:      -1,
+		QuotaBytes:      1, // Simulate stale stored quota; role must keep API quota unlimited.
 		CreatedAt:       time.Now(),
 		UpdatedAt:       time.Now(),
 	}
@@ -90,6 +90,10 @@ func TestLogin_Success(t *testing.T) {
 
 	if res.User.Username != "admin" {
 		t.Errorf("expected username 'admin', got '%s'", res.User.Username)
+	}
+
+	if res.User.QuotaBytes != -1 {
+		t.Errorf("Super Admin quota_bytes = %d, want -1", res.User.QuotaBytes)
 	}
 
 	// Check cookie
@@ -232,5 +236,132 @@ func TestResetPasswordMigratesLegacyBcryptKey(t *testing.T) {
 	e.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("legacy reset status = %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestMe_Success(t *testing.T) {
+	e, tempDir := setupTestDB(t)
+	defer os.RemoveAll(tempDir)
+
+	// 1. Login to obtain auth cookie and user info
+	loginBody, _ := json.Marshal(auth.LoginRequest{
+		Identifier: "admin",
+		Password:   "password123",
+	})
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(loginBody))
+	loginReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	loginRec := httptest.NewRecorder()
+	e.ServeHTTP(loginRec, loginReq)
+
+	if loginRec.Code != http.StatusOK {
+		t.Fatalf("expected login status 200, got %d: %s", loginRec.Code, loginRec.Body.String())
+	}
+
+	var loginRes auth.LoginResponse
+	if err := json.Unmarshal(loginRec.Body.Bytes(), &loginRes); err != nil {
+		t.Fatalf("failed to parse login response: %v", err)
+	}
+
+	userID := loginRes.User.ID
+	if userID == "" {
+		t.Fatalf("expected non-empty user ID")
+	}
+
+	// 2. Insert items into my_storage_items to verify deduplicated usage calculation
+	db, err := database.Connect(tempDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	_, err = db.ExecContext(ctx, `INSERT INTO users (id, username, email, password_hash, role) VALUES ('other-user', 'other', 'other@example.com', 'hash', 'REGULAR')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO my_storage_items (id, owner_id, name, kind, size_bytes, disk_key, modified_at)
+		VALUES
+			('item-1', ?, 'file1.bin', 'file', 1000, 'blob-a', CURRENT_TIMESTAMP),
+			('item-2', ?, 'file1_copy.bin', 'file', 1000, 'blob-a', CURRENT_TIMESTAMP),
+			('item-3', ?, 'file2.bin', 'file', 2500, 'blob-b', CURRENT_TIMESTAMP),
+			('item-4', ?, 'file3.bin', 'file', 500, NULL, CURRENT_TIMESTAMP),
+			('item-5', ?, 'folder1', 'folder', 9999, NULL, CURRENT_TIMESTAMP),
+			('item-6', 'other-user', 'other.bin', 'file', 10000, 'blob-other', CURRENT_TIMESTAMP)
+	`, userID, userID, userID, userID, userID)
+	if err != nil {
+		t.Fatalf("failed to insert test storage items: %v", err)
+	}
+
+	// 3. Request GET /api/v1/auth/me with auth cookies
+	meReq := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	for _, c := range loginRec.Result().Cookies() {
+		meReq.AddCookie(c)
+	}
+	meRec := httptest.NewRecorder()
+	e.ServeHTTP(meRec, meReq)
+
+	if meRec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", meRec.Code, meRec.Body.String())
+	}
+
+	var userRes auth.UserResponse
+	if err := json.Unmarshal(meRec.Body.Bytes(), &userRes); err != nil {
+		t.Fatalf("failed to parse me response: %v", err)
+	}
+
+	if userRes.ID != userID {
+		t.Errorf("expected user ID '%s', got '%s'", userID, userRes.ID)
+	}
+
+	if userRes.QuotaBytes != -1 {
+		t.Errorf("Super Admin quota_bytes = %d, want -1", userRes.QuotaBytes)
+	}
+
+	// Deduplicated usage: blob-a (1000) + blob-b (2500) + item-4 (500) = 4000
+	if userRes.UsedBytes != 4000 {
+		t.Errorf("expected used_bytes 4000, got %d", userRes.UsedBytes)
+	}
+
+	// Verify raw JSON response contains used_bytes key
+	var raw map[string]any
+	if err := json.Unmarshal(meRec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("failed to parse raw json: %v", err)
+	}
+	if _, ok := raw["used_bytes"]; !ok {
+		t.Errorf("expected response to contain 'used_bytes' field")
+	}
+}
+
+func TestLogin_RateLimiter(t *testing.T) {
+	e, tempDir := setupTestDB(t)
+	defer os.RemoveAll(tempDir)
+
+	loginBody, _ := json.Marshal(auth.LoginRequest{
+		Identifier: "nonexistent",
+		Password:   "wrongpassword",
+	})
+
+	// The rate limiter is set to 10 requests per minute
+	for range 10 {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(loginBody))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Real-IP", "99.88.77.66")
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		// Should be 401 (invalid credentials), not 429 yet
+		if rec.Code != http.StatusUnauthorized {
+			t.Fatalf("expected 401 Unauthorized for request within limit, got %d", rec.Code)
+		}
+	}
+
+	// 11th request from same IP must be rejected with 429 Too Many Requests
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(loginBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Real-IP", "99.88.77.66")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 Too Many Requests for 11th request, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

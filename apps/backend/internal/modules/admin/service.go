@@ -2,17 +2,22 @@ package admin
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/cubycloud/backend/internal/database"
 	"github.com/cubycloud/backend/internal/storage"
 	"github.com/oklog/ulid/v2"
 	"github.com/uptrace/bun"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -133,6 +138,16 @@ func (s *Service) UpdateSystemSettings(ctx context.Context, req *UpdateSettingsR
 		}
 	}
 
+	if req.PlacementStrategy != nil {
+		strategy := *req.PlacementStrategy
+		if strategy != "FILL_FIRST" && strategy != "ROUND_ROBIN" && strategy != "MOST_FREE_SPACE" {
+			return fmt.Errorf("invalid placement strategy: %s", strategy)
+		}
+		if err := s.repo.SetSetting(ctx, SettingPlacementStrategy, strategy); err != nil {
+			return fmt.Errorf("set placement strategy: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -212,6 +227,15 @@ func (s *Service) GetStorageNodes(ctx context.Context) ([]StorageNodeResponse, e
 		} else if node.Type == "S3" {
 			nodeResp.Path = ""
 			nodeResp.Kind = "S3"
+			if node.Endpoint != nil {
+				nodeResp.Endpoint = *node.Endpoint
+			}
+			if node.Bucket != nil {
+				nodeResp.Bucket = *node.Bucket
+			}
+			if node.Region != nil {
+				nodeResp.Region = *node.Region
+			}
 		}
 		response = append(response, nodeResp)
 	}
@@ -386,18 +410,33 @@ func (s *Service) CreateCloudNode(ctx context.Context, req *CreateCloudNodeReque
 	if existing != nil {
 		return nil, fmt.Errorf("node with bucket %s already exists", req.Bucket)
 	}
+
+	if err := s.storage.ValidateCloudCredentials(ctx, req.Endpoint, req.Region, req.Bucket, req.AccessKey, req.SecretKey); err != nil {
+		return nil, fmt.Errorf("validate cloud credentials: %w", err)
+	}
+
+	keyMaterial := []byte(s.dataDirPath)
+	accessEnc, err := storage.EncryptCredential([]byte(req.AccessKey), keyMaterial)
+	if err != nil {
+		return nil, fmt.Errorf("encrypt access key: %w", err)
+	}
+	secretEnc, err := storage.EncryptCredential([]byte(req.SecretKey), keyMaterial)
+	if err != nil {
+		return nil, fmt.Errorf("encrypt secret key: %w", err)
+	}
+
 	node := &database.StorageNode{
 		ID: ulid.Make().String(), Name: name, Type: "S3", Endpoint: &req.Endpoint,
-		Bucket: &req.Bucket, Region: &req.Region, AccessKeyEncrypted: []byte(req.AccessKey),
-		SecretKeyEncrypted: []byte(req.SecretKey),
+		Bucket: &req.Bucket, Region: &req.Region, AccessKeyEncrypted: accessEnc,
+		SecretKeyEncrypted: secretEnc,
 		CapacityBytes:      req.CapacityCapGB * 1024 * 1024 * 1024, Enabled: req.Enabled,
 	}
 	if err := s.repo.CreateNode(ctx, node); err != nil {
 		return nil, fmt.Errorf("create node: %w", err)
 	}
 	return &StorageNodeResponse{
-		ID: node.ID, Type: "S3", Name: name, Kind: "S3", TotalGB: req.CapacityCapGB,
-		FreeGB: req.CapacityCapGB, CapacityCapGB: req.CapacityCapGB, Enabled: req.Enabled,
+		ID: node.ID, Type: "S3", Name: name, Kind: "S3", Endpoint: req.Endpoint, Bucket: req.Bucket, Region: req.Region,
+		TotalGB: req.CapacityCapGB, FreeGB: req.CapacityCapGB, CapacityCapGB: req.CapacityCapGB, Enabled: req.Enabled,
 	}, nil
 }
 
@@ -470,4 +509,655 @@ func (s *Service) DeleteNode(ctx context.Context, nodeID string) error {
 	}
 
 	return nil
+}
+
+// GetDefaultQuotaBytes returns snapshot quota bytes for default user quota from settings
+func (s *Service) GetDefaultQuotaBytes(ctx context.Context) (int64, error) {
+	val, err := s.repo.GetSetting(ctx, SettingDefaultQuotaGB)
+	if err != nil || val == "" {
+		return -1, nil
+	}
+	quotaValue, err := strconv.ParseInt(val, 10, 64)
+	if err != nil || quotaValue <= 0 {
+		return -1, nil
+	}
+	return quotaValue * 1024 * 1024 * 1024, nil
+}
+
+// ListUsers lists all registered users with their quota and storage usage
+func (s *Service) ListUsers(ctx context.Context) (*AdminUsersListResponse, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, username, email, role, COALESCE(quota_mode, 'DEFAULT'), quota_bytes, created_at FROM users WHERE deleted_at IS NULL ORDER BY created_at ASC, id ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("query users: %w", err)
+	}
+	defer rows.Close()
+
+	type rawUser struct {
+		ID         string
+		Username   string
+		Email      string
+		Role       string
+		QuotaMode  string
+		QuotaBytes int64
+		CreatedAt  time.Time
+	}
+	var rawUsers []rawUser
+	for rows.Next() {
+		var u rawUser
+		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.Role, &u.QuotaMode, &u.QuotaBytes, &u.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan user: %w", err)
+		}
+		rawUsers = append(rawUsers, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows err: %w", err)
+	}
+
+	usageMap := make(map[string]int64)
+	usageRows, err := s.db.QueryContext(ctx, `
+		SELECT owner_id, COALESCE(SUM(size_bytes), 0)
+		FROM (
+			SELECT owner_id, disk_key, MAX(size_bytes) AS size_bytes
+			FROM my_storage_items
+			WHERE kind = 'file' AND disk_key IS NOT NULL
+			GROUP BY owner_id, disk_key
+		)
+		GROUP BY owner_id
+	`)
+	if err == nil {
+		defer usageRows.Close()
+		for usageRows.Next() {
+			var ownerID string
+			var used int64
+			if err := usageRows.Scan(&ownerID, &used); err == nil {
+				usageMap[ownerID] = used
+			}
+		}
+	}
+
+	users := make([]AdminUserResponse, 0, len(rawUsers))
+	for _, u := range rawUsers {
+		usedBytes := usageMap[u.ID]
+		usedGB := float64(usedBytes) / (1024.0 * 1024.0 * 1024.0)
+		quotaMode := u.QuotaMode
+		quotaBytes := u.QuotaBytes
+		if u.Role == "SUPER_ADMIN" {
+			quotaMode = "UNLIMITED"
+			quotaBytes = -1
+		}
+		var quotaGB *float64
+		if quotaBytes >= 0 {
+			q := float64(quotaBytes) / (1024.0 * 1024.0 * 1024.0)
+			quotaGB = &q
+		}
+		users = append(users, AdminUserResponse{
+			ID:         u.ID,
+			Username:   u.Username,
+			Email:      u.Email,
+			Role:       u.Role,
+			QuotaMode:  quotaMode,
+			QuotaBytes: quotaBytes,
+			QuotaGB:    quotaGB,
+			UsedBytes:  usedBytes,
+			UsedGB:     usedGB,
+			CreatedAt:  u.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	return &AdminUsersListResponse{Users: users}, nil
+}
+
+// CreateUser creates a new regular user with snapshot quota
+func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*AdminUserResponse, error) {
+	username := strings.TrimSpace(req.Username)
+	if username == "" {
+		return nil, fmt.Errorf("username is required")
+	}
+	email := strings.TrimSpace(req.Email)
+	if email == "" {
+		return nil, fmt.Errorf("email is required")
+	}
+	if !strings.Contains(email, "@") || !strings.Contains(email, ".") {
+		return nil, fmt.Errorf("invalid email format")
+	}
+	if len(req.Password) < 8 {
+		return nil, fmt.Errorf("password must be at least 8 characters")
+	}
+
+	var count int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE LOWER(username) = LOWER(?)`, username).Scan(&count); err != nil {
+		return nil, fmt.Errorf("check username: %w", err)
+	}
+	if count > 0 {
+		return nil, fmt.Errorf("username already exists")
+	}
+
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE LOWER(email) = LOWER(?)`, email).Scan(&count); err != nil {
+		return nil, fmt.Errorf("check email: %w", err)
+	}
+	if count > 0 {
+		return nil, fmt.Errorf("email already exists")
+	}
+
+	mode := strings.ToUpper(strings.TrimSpace(req.QuotaMode))
+	if mode == "" {
+		mode = "DEFAULT"
+	}
+
+	var quotaBytes int64
+	switch mode {
+	case "DEFAULT":
+		defaultBytes, err := s.GetDefaultQuotaBytes(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("get default quota: %w", err)
+		}
+		quotaBytes = defaultBytes
+	case "CUSTOM":
+		if req.QuotaGB == nil || *req.QuotaGB < 0 {
+			return nil, fmt.Errorf("quota_gb must be greater than or equal to 0")
+		}
+		quotaBytes = int64(math.Round(*req.QuotaGB * 1024 * 1024 * 1024))
+	case "UNLIMITED":
+		quotaBytes = -1
+	default:
+		return nil, fmt.Errorf("invalid quota mode: %s", req.QuotaMode)
+	}
+
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 10)
+	if err != nil {
+		return nil, fmt.Errorf("hash password: %w", err)
+	}
+
+	id := ulid.Make().String()
+	now := time.Now()
+	_, err = s.db.ExecContext(ctx, `
+		INSERT INTO users(id, username, email, password_hash, role, quota_mode, quota_bytes, created_at, updated_at)
+		VALUES(?, ?, ?, ?, 'REGULAR', ?, ?, ?, ?)
+	`, id, username, email, string(passwordHash), mode, quotaBytes, now, now)
+	if err != nil {
+		return nil, fmt.Errorf("insert user: %w", err)
+	}
+
+	var quotaGB *float64
+	if quotaBytes >= 0 {
+		q := float64(quotaBytes) / (1024.0 * 1024.0 * 1024.0)
+		quotaGB = &q
+	}
+
+	return &AdminUserResponse{
+		ID:         id,
+		Username:   username,
+		Email:      email,
+		Role:       "REGULAR",
+		QuotaMode:  mode,
+		QuotaBytes: quotaBytes,
+		QuotaGB:    quotaGB,
+		UsedBytes:  0,
+		UsedGB:     0,
+		CreatedAt:  now.Format(time.RFC3339),
+	}, nil
+}
+
+// UpdateUserQuota updates quota mode and quota bytes for a regular user
+func (s *Service) UpdateUserQuota(ctx context.Context, userID string, req *UpdateUserQuotaRequest) (*AdminUserResponse, error) {
+	var user struct {
+		ID         string
+		Username   string
+		Email      string
+		Role       string
+		QuotaMode  string
+		QuotaBytes int64
+		CreatedAt  time.Time
+	}
+	err := s.db.QueryRowContext(ctx, `SELECT id, username, email, role, COALESCE(quota_mode, 'DEFAULT'), quota_bytes, created_at FROM users WHERE id = ?`, userID).
+		Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.QuotaMode, &user.QuotaBytes, &user.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("user not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("query user: %w", err)
+	}
+
+	if user.Role == "SUPER_ADMIN" {
+		return nil, fmt.Errorf("super admin quota is locked to unlimited")
+	}
+
+	mode := strings.ToUpper(strings.TrimSpace(req.QuotaMode))
+	var quotaBytes int64
+	switch mode {
+	case "DEFAULT":
+		defaultBytes, err := s.GetDefaultQuotaBytes(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("get default quota: %w", err)
+		}
+		quotaBytes = defaultBytes
+	case "CUSTOM":
+		if req.QuotaGB == nil || *req.QuotaGB < 0 {
+			return nil, fmt.Errorf("quota_gb must be greater than or equal to 0")
+		}
+		quotaBytes = int64(math.Round(*req.QuotaGB * 1024 * 1024 * 1024))
+	case "UNLIMITED":
+		quotaBytes = -1
+	default:
+		return nil, fmt.Errorf("invalid quota mode: %s", req.QuotaMode)
+	}
+
+	_, err = s.db.ExecContext(ctx, `UPDATE users SET quota_mode = ?, quota_bytes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, mode, quotaBytes, userID)
+	if err != nil {
+		return nil, fmt.Errorf("update user quota: %w", err)
+	}
+
+	var usedBytes int64
+	_ = s.db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(size_bytes), 0)
+		FROM (
+			SELECT disk_key, MAX(size_bytes) AS size_bytes
+			FROM my_storage_items
+			WHERE owner_id = ? AND kind = 'file' AND disk_key IS NOT NULL
+			GROUP BY disk_key
+		)
+	`, userID).Scan(&usedBytes)
+	usedGB := float64(usedBytes) / (1024.0 * 1024.0 * 1024.0)
+
+	var quotaGB *float64
+	if quotaBytes >= 0 {
+		q := float64(quotaBytes) / (1024.0 * 1024.0 * 1024.0)
+		quotaGB = &q
+	}
+
+	return &AdminUserResponse{
+		ID:         user.ID,
+		Username:   user.Username,
+		Email:      user.Email,
+		Role:       user.Role,
+		QuotaMode:  mode,
+		QuotaBytes: quotaBytes,
+		QuotaGB:    quotaGB,
+		UsedBytes:  usedBytes,
+		UsedGB:     usedGB,
+		CreatedAt:  user.CreatedAt.Format(time.RFC3339),
+	}, nil
+}
+
+// DeleteUser tombstones a user, invalidates access, and permanently purges their personal files
+func (s *Service) DeleteUser(ctx context.Context, actorID, targetID string, req *DeleteUserRequest) error {
+	if actorID != "" && actorID == targetID {
+		return fmt.Errorf("cannot delete your own account")
+	}
+
+	var role, email string
+	err := s.db.QueryRowContext(ctx, `SELECT role, email FROM users WHERE id = ? AND deleted_at IS NULL`, targetID).Scan(&role, &email)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("user not found")
+	}
+	if err != nil {
+		return fmt.Errorf("query user: %w", err)
+	}
+
+	if role == "SUPER_ADMIN" {
+		return fmt.Errorf("super admin cannot be deleted")
+	}
+
+	if req == nil || req.Email != email {
+		return fmt.Errorf("confirmation email does not match")
+	}
+
+	type blobCandidate struct {
+		diskKey  string
+		nodeID   string
+		nodePath string
+	}
+	var candidates []blobCandidate
+	bRows, err := s.db.QueryContext(ctx, `
+		SELECT DISTINCT i.disk_key, COALESCE(i.storage_node_id, '') AS node_id, COALESCE(sn.path, '') AS node_path
+		FROM my_storage_items i
+		LEFT JOIN storage_nodes sn ON sn.id = i.storage_node_id
+		WHERE i.owner_id = ? AND i.kind = 'file' AND i.disk_key IS NOT NULL AND i.disk_key != ''
+	`, targetID)
+	if err == nil {
+		for bRows.Next() {
+			var bc blobCandidate
+			if err := bRows.Scan(&bc.diskKey, &bc.nodeID, &bc.nodePath); err == nil && bc.diskKey != "" {
+				candidates = append(candidates, bc)
+			}
+		}
+		bRows.Close()
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Clean up stars on user's items or created by user
+	_, _ = tx.ExecContext(ctx, `DELETE FROM vfs_starred WHERE user_id = ? OR node_id IN (SELECT id FROM my_storage_items WHERE owner_id = ?)`, targetID, targetID)
+
+	// Permanently delete all personal files & folders (including trash)
+	if _, err := tx.ExecContext(ctx, `DELETE FROM my_storage_items WHERE owner_id = ?`, targetID); err != nil {
+		return fmt.Errorf("delete user items: %w", err)
+	}
+
+	// Tombstone the user: scramble credentials, mark deleted_at, preserve ID for organization_items foreign keys
+	tombstoneEmail := fmt.Sprintf("deleted_%s@cubycloud.local", targetID)
+	tombstoneUsername := fmt.Sprintf("deleted_user_%s", targetID)
+	_, err = tx.ExecContext(ctx, `
+		UPDATE users
+		SET deleted_at = CURRENT_TIMESTAMP,
+		    username = ?,
+		    email = ?,
+		    password_hash = '',
+		    recovery_key_hash = NULL,
+		    quota_bytes = 0,
+		    quota_mode = 'DEFAULT',
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`, tombstoneUsername, tombstoneEmail, targetID)
+	if err != nil {
+		return fmt.Errorf("tombstone user: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit tx: %w", err)
+	}
+
+	// Physical blob cleanup: delete only if unreferenced by any other my_storage_items or organization_items
+	if s.storage != nil {
+		deletedKeys := make(map[string]bool)
+		for _, bc := range candidates {
+			if deletedKeys[bc.diskKey] {
+				continue
+			}
+			var refCount int
+			err := s.db.QueryRowContext(ctx, `
+				SELECT (SELECT COUNT(*) FROM my_storage_items WHERE disk_key = ?) +
+				       (SELECT COUNT(*) FROM organization_items WHERE disk_key = ?)
+			`, bc.diskKey, bc.diskKey).Scan(&refCount)
+			if err == nil && refCount == 0 {
+				deletedKeys[bc.diskKey] = true
+				_ = storage.DeleteBlob(ctx, s.db, s.storage, bc.nodeID, bc.nodePath, bc.diskKey)
+			}
+		}
+	}
+
+	return nil
+}
+
+func detectFileCategory(name string) string {
+	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(name)), ".")
+	switch ext {
+	case "mp4", "mkv", "avi", "mov", "wmv", "flv", "webm", "m4v", "3gp", "ts", "mpg", "mpeg":
+		return "video"
+	case "jpg", "jpeg", "png", "gif", "bmp", "webp", "svg", "heic", "heif", "tiff", "tif", "ico", "avif":
+		return "image"
+	case "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "rtf", "odt", "ods", "odp", "md", "html", "htm", "xml", "json", "yaml", "yml":
+		return "document"
+	case "zip", "rar", "7z", "tar", "gz", "bz2", "xz", "tgz", "iso", "dmg":
+		return "archive"
+	default:
+		return "other"
+	}
+}
+
+// GetAdminStorageStats returns system-wide storage stats: total allocated capacity across all nodes,
+// total usage across all users' files, category breakdown (including isolated trash), free space, and node count.
+func (s *Service) GetAdminStorageStats(ctx context.Context) (*AdminStorageStatsResponse, error) {
+	var totalCapacityBytes int64
+	var nodesCount int
+	err := s.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(capacity_bytes), 0), COUNT(*) FROM storage_nodes`).Scan(&totalCapacityBytes, &nodesCount)
+	if err != nil {
+		return nil, fmt.Errorf("query storage nodes stats: %w", err)
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT
+			COALESCE(disk_key, id) AS k,
+			MAX(size_bytes) AS size_bytes,
+			MAX(CASE WHEN deleted_at IS NULL THEN name ELSE '' END) AS active_name,
+			MAX(name) AS any_name,
+			COUNT(CASE WHEN deleted_at IS NULL THEN 1 END) AS active_count
+		FROM my_storage_items
+		WHERE kind = 'file' AND disk_key IS NOT NULL
+		GROUP BY k
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("query storage usage stats: %w", err)
+	}
+	defer rows.Close()
+
+	var (
+		videoBytes     int64
+		imageBytes     int64
+		documentBytes  int64
+		archiveBytes   int64
+		otherBytes     int64
+		trashBytes     int64
+		totalUsedBytes int64
+	)
+
+	for rows.Next() {
+		var (
+			k           string
+			sizeBytes   int64
+			activeName  string
+			anyName     string
+			activeCount int
+		)
+		if err := rows.Scan(&k, &sizeBytes, &activeName, &anyName, &activeCount); err != nil {
+			return nil, fmt.Errorf("scan category usage: %w", err)
+		}
+		totalUsedBytes += sizeBytes
+
+		if activeCount == 0 {
+			trashBytes += sizeBytes
+			continue
+		}
+
+		name := activeName
+		if name == "" {
+			name = anyName
+		}
+		cat := detectFileCategory(name)
+		switch cat {
+		case "video":
+			videoBytes += sizeBytes
+		case "image":
+			imageBytes += sizeBytes
+		case "document":
+			documentBytes += sizeBytes
+		case "archive":
+			archiveBytes += sizeBytes
+		default:
+			otherBytes += sizeBytes
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows category usage: %w", err)
+	}
+
+	const bytesInGB = 1024.0 * 1024.0 * 1024.0
+	toGB := func(b int64) float64 {
+		return float64(b) / bytesInGB
+	}
+
+	categories := []AdminStorageCategoryUsage{
+		{ID: "video", Label: "Video", Bytes: videoBytes, UsedGB: toGB(videoBytes)},
+		{ID: "image", Label: "Gambar", Bytes: imageBytes, UsedGB: toGB(imageBytes)},
+		{ID: "document", Label: "Dokumen", Bytes: documentBytes, UsedGB: toGB(documentBytes)},
+		{ID: "archive", Label: "Arsip", Bytes: archiveBytes, UsedGB: toGB(archiveBytes)},
+	}
+	if otherBytes > 0 {
+		categories = append(categories, AdminStorageCategoryUsage{
+			ID:     "other",
+			Label:  "Lainnya",
+			Bytes:  otherBytes,
+			UsedGB: toGB(otherBytes),
+		})
+	}
+	categories = append(categories, AdminStorageCategoryUsage{
+		ID:     "trash",
+		Label:  "Trash",
+		Bytes:  trashBytes,
+		UsedGB: toGB(trashBytes),
+	})
+
+	totalCapacityGB := float64(totalCapacityBytes) / bytesInGB
+	totalUsedGB := float64(totalUsedBytes) / bytesInGB
+	freeBytes := totalCapacityBytes - totalUsedBytes
+	if freeBytes < 0 {
+		freeBytes = 0
+	}
+	freeGB := float64(freeBytes) / bytesInGB
+
+	return &AdminStorageStatsResponse{
+		TotalCapacityBytes: totalCapacityBytes,
+		TotalCapacityGB:    totalCapacityGB,
+		TotalUsedBytes:     totalUsedBytes,
+		TotalUsedGB:        totalUsedGB,
+		FreeBytes:          freeBytes,
+		FreeGB:             freeGB,
+		NodesCount:         nodesCount,
+		Categories:         categories,
+	}, nil
+}
+
+// GetAdminTopStorageUsers returns paginated non-deleted users sorted by storage usage descending.
+func (s *Service) GetAdminTopStorageUsers(ctx context.Context, limit, offset int) (*AdminTopStorageUsersResponse, error) {
+	if limit <= 0 {
+		limit = 20
+	} else if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	var total int64
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE deleted_at IS NULL`).Scan(&total)
+	if err != nil {
+		return nil, fmt.Errorf("count users: %w", err)
+	}
+
+	if total == 0 || int64(offset) >= total {
+		return &AdminTopStorageUsersResponse{
+			Items:      make([]AdminTopStorageUserItem, 0),
+			Total:      total,
+			HasMore:    false,
+			NextOffset: offset,
+		}, nil
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT
+			u.id,
+			u.username,
+			u.email,
+			u.role,
+			COALESCE(u.quota_mode, 'DEFAULT') AS quota_mode,
+			u.quota_bytes,
+			u.created_at,
+			COALESCE(usage.used_bytes, 0) AS used_bytes
+		FROM users u
+		LEFT JOIN (
+			SELECT owner_id, COALESCE(SUM(size_bytes), 0) AS used_bytes
+			FROM (
+				SELECT owner_id, disk_key, MAX(size_bytes) AS size_bytes
+				FROM my_storage_items
+				WHERE kind = 'file' AND disk_key IS NOT NULL
+				GROUP BY owner_id, disk_key
+			)
+			GROUP BY owner_id
+		) usage ON usage.owner_id = u.id
+		WHERE u.deleted_at IS NULL
+		ORDER BY used_bytes DESC, u.created_at ASC, u.id ASC
+		LIMIT ? OFFSET ?
+	`, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("query top storage users: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]AdminTopStorageUserItem, 0, limit)
+	const bytesInGB = 1024.0 * 1024.0 * 1024.0
+
+	for rows.Next() {
+		var (
+			id           string
+			username     string
+			email        string
+			role         string
+			quotaMode    string
+			quotaBytes   int64
+			rawCreatedAt any
+			usedBytes    int64
+		)
+		if err := rows.Scan(&id, &username, &email, &role, &quotaMode, &quotaBytes, &rawCreatedAt, &usedBytes); err != nil {
+			return nil, fmt.Errorf("scan top storage user: %w", err)
+		}
+
+		if role == "SUPER_ADMIN" {
+			quotaMode = "UNLIMITED"
+			quotaBytes = -1
+		}
+
+		var quotaGB *float64
+		if quotaBytes >= 0 {
+			q := float64(quotaBytes) / bytesInGB
+			quotaGB = &q
+		}
+
+		usedGB := float64(usedBytes) / bytesInGB
+
+		items = append(items, AdminTopStorageUserItem{
+			ID:         id,
+			Username:   username,
+			Email:      email,
+			Role:       role,
+			QuotaMode:  quotaMode,
+			QuotaBytes: quotaBytes,
+			QuotaGB:    quotaGB,
+			UsedBytes:  usedBytes,
+			UsedGB:     usedGB,
+			CreatedAt:  formatCreatedAt(rawCreatedAt),
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+
+	nextOffset := offset + len(items)
+	hasMore := int64(nextOffset) < total
+
+	return &AdminTopStorageUsersResponse{
+		Items:      items,
+		Total:      total,
+		HasMore:    hasMore,
+		NextOffset: nextOffset,
+	}, nil
+}
+
+func formatCreatedAt(v any) string {
+	switch t := v.(type) {
+	case time.Time:
+		return t.Format(time.RFC3339)
+	case string:
+		if parsed, err := time.Parse(time.RFC3339, t); err == nil {
+			return parsed.Format(time.RFC3339)
+		}
+		if parsed, err := time.Parse("2006-01-02 15:04:05", t); err == nil {
+			return parsed.Format(time.RFC3339)
+		}
+		return t
+	case []byte:
+		s := string(t)
+		if parsed, err := time.Parse(time.RFC3339, s); err == nil {
+			return parsed.Format(time.RFC3339)
+		}
+		if parsed, err := time.Parse("2006-01-02 15:04:05", s); err == nil {
+			return parsed.Format(time.RFC3339)
+		}
+		return s
+	default:
+		return ""
+	}
 }

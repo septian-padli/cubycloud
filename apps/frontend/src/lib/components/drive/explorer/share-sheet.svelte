@@ -1,18 +1,28 @@
 <script lang="ts">
-	import type { FileEntry, ShareGrant, SharePermission } from '$lib/types/drive.js';
-	import { getGrants, setGrants, shareableUsers } from '$lib/mocks/share-grants.js';
-	import { createShareLink, shareUrl } from '$lib/mocks/share-links.js';
+	import type { FileEntry } from '$lib/types/drive.js';
+	import {
+		searchShareUsers,
+		getItemShares,
+		updateItemGrants,
+		deleteUserGrant,
+		createShareLink,
+		deleteShareLink,
+		type SharePermission,
+		type ShareUserItem,
+		type ShareGrantItem,
+		type ShareLinkItem
+	} from '$lib/api/share.js';
 	import * as Sheet from '$lib/components/ui/sheet/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import { Switch } from '$lib/components/ui/switch/index.js';
+	import * as Select from '$lib/components/ui/select/index.js';
 	import { toast } from 'svelte-sonner';
 	import { cn } from '$lib/utils.js';
-	import { Copy, Search, X } from '@lucide/svelte';
+	import { Copy, Lock, Loader2, Search, Trash2, X } from '@lucide/svelte';
 
 	type TabId = 'users' | 'link';
-	type ShareCandidate = ReturnType<typeof shareableUsers>[number];
 
 	let {
 		open = $bindable(false),
@@ -23,98 +33,187 @@
 	} = $props();
 
 	let tab = $state<TabId>('users');
-	let grants = $state<ShareGrant[]>([]);
+	let grants = $state<ShareGrantItem[]>([]);
+	let links = $state<ShareLinkItem[]>([]);
+	let loading = $state(false);
+	let saving = $state(false);
+	let creatingLink = $state(false);
+
 	let query = $state('');
+	let userSuggestions = $state<ShareUserItem[]>([]);
+	let searchingUsers = $state(false);
+
 	let usePassword = $state(false);
 	let password = $state('');
 	let expiresInDays = $state('7');
+	let linkPermission = $state<SharePermission>('viewer');
 	let createdUrl = $state('');
 
-	const candidates = shareableUsers();
+	let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
-	const suggestions = $derived.by(() => {
-		const q = query.trim().toLowerCase();
-		if (!q) return [];
-		const taken = new Set(grants.map((g) => g.userId));
-		return candidates.filter(
-			(u) =>
-				!taken.has(u.userId) &&
-				(u.displayName.toLowerCase().includes(q) || u.username.toLowerCase().includes(q))
-		);
+	$effect(() => {
+		const q = query.trim();
+		if (searchTimer) clearTimeout(searchTimer);
+		if (!q) {
+			userSuggestions = [];
+			searchingUsers = false;
+			return;
+		}
+		searchingUsers = true;
+		searchTimer = setTimeout(async () => {
+			try {
+				const users = await searchShareUsers(q);
+				const taken = new Set(grants.map((g) => g.user_id));
+				userSuggestions = users.filter((u) => !taken.has(u.id));
+			} catch {
+				userSuggestions = [];
+			} finally {
+				searchingUsers = false;
+			}
+		}, 250);
 	});
 
 	$effect(() => {
 		if (open && entry) {
 			tab = 'users';
-			grants = getGrants(entry.id);
 			query = '';
+			userSuggestions = [];
 			usePassword = false;
 			password = '';
 			expiresInDays = '7';
+			linkPermission = 'viewer';
 			createdUrl = '';
+			void loadShares();
 		}
 	});
 
-	function addUser(user: ShareCandidate) {
-		if (grants.some((g) => g.userId === user.userId)) return;
+	async function loadShares() {
+		if (!entry) return;
+		loading = true;
+		try {
+			const res = await getItemShares(entry.id);
+			grants = res.grants ?? [];
+			links = res.links ?? [];
+		} catch (err) {
+			console.error('Failed to load item shares', err);
+			toast.error('Gagal memuat daftar berbagi.');
+		} finally {
+			loading = false;
+		}
+	}
+
+	function addUser(user: ShareUserItem) {
+		if (grants.some((g) => g.user_id === user.id)) return;
 		grants = [
 			...grants,
 			{
-				userId: user.userId,
+				id: '',
+				user_id: user.id,
 				username: user.username,
-				displayName: user.displayName,
+				email: user.email,
 				permission: 'viewer'
 			}
 		];
 		query = '';
+		userSuggestions = [];
 	}
 
-	function removeUser(userId: string) {
-		grants = grants.filter((g) => g.userId !== userId);
+	async function removeUser(userId: string) {
+		grants = grants.filter((g) => g.user_id !== userId);
+		if (entry) {
+			try {
+				await deleteUserGrant(entry.id, userId);
+			} catch {
+				// Handled on saveUsers sync
+			}
+		}
 	}
 
 	function setPermission(userId: string, permission: SharePermission) {
-		grants = grants.map((g) => (g.userId === userId ? { ...g, permission } : g));
+		grants = grants.map((g) => (g.user_id === userId ? { ...g, permission } : g));
 	}
 
-	function saveUsers() {
+	async function saveUsers() {
 		if (!entry) return;
-		setGrants(entry.id, grants);
-		const count = grants.length;
-		toast.success(
-			count === 0
-				? `Akses pengguna untuk “${entry.name}” dikosongkan (mock)`
-				: `Dibagikan ke ${count} pengguna (mock)`
-		);
-		open = false;
+		saving = true;
+		try {
+			const payload = grants.map((g) => ({ user_id: g.user_id, permission: g.permission }));
+			const res = await updateItemGrants(entry.id, payload);
+			grants = res.grants ?? [];
+			const count = grants.length;
+			toast.success(
+				count === 0
+					? `Akses pengguna untuk “${entry.name}” dikosongkan`
+					: `Hak akses untuk “${entry.name}” berhasil disimpan`
+			);
+			open = false;
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Gagal menyimpan akses pengguna.');
+		} finally {
+			saving = false;
+		}
 	}
 
-	function submitLink() {
+	async function submitLink() {
 		if (!entry) return;
 		if (usePassword && password.trim().length === 0) {
 			toast.error('Masukkan kata sandi tautan.');
 			return;
 		}
-		const days = Number(expiresInDays);
-		const expiresAt = Number.isFinite(days)
-			? new Date(Date.now() + days * 86_400_000).toISOString()
-			: null;
-		const record = createShareLink(entry, {
-			access: 'public',
-			password: usePassword ? password : null,
-			expiresAt
-		});
-		createdUrl = `${window.location.origin}${shareUrl(record.token)}`;
-		toast.success('Tautan berbagi dibuat (mock)', { description: entry.name });
+		creatingLink = true;
+		try {
+			const days = expiresInDays === 'never' ? null : Number(expiresInDays);
+			const res = await createShareLink(entry.id, {
+				permission: linkPermission,
+				password: usePassword ? password.trim() : undefined,
+				expires_days: days
+			});
+			const fullUrl = `${window.location.origin}/s/${res.link.token}`;
+			createdUrl = fullUrl;
+			links = [res.link, ...links.filter((l) => l.id !== res.link.id)];
+			password = '';
+			usePassword = false;
+			toast.success('Tautan berbagi dibuat');
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Gagal membuat tautan.');
+		} finally {
+			creatingLink = false;
+		}
 	}
 
-	async function copyUrl() {
-		if (!createdUrl) return;
+	async function removeLink(linkId: string) {
+		if (!entry) return;
 		try {
-			await navigator.clipboard.writeText(createdUrl);
-			toast.success('Tautan disalin');
+			await deleteShareLink(entry.id, linkId);
+			links = links.filter((l) => l.id !== linkId);
+			toast.success('Tautan berhasil dicabut');
+		} catch (err) {
+			toast.error(err instanceof Error ? err.message : 'Gagal mencabut tautan.');
+		}
+	}
+
+	async function copyUrl(urlToCopy: string) {
+		if (!urlToCopy) return;
+		try {
+			await navigator.clipboard.writeText(urlToCopy);
+			toast.success('Tautan disalin ke clipboard');
 		} catch {
 			toast.error('Gagal menyalin tautan');
+		}
+	}
+
+	function formatExpiry(iso: string | null): string {
+		if (!iso) return 'Tanpa batas waktu';
+		try {
+			const d = new Date(iso);
+			if (isNaN(d.getTime())) return iso;
+			return `Kedaluwarsa ${d.toLocaleDateString('id-ID', {
+				day: 'numeric',
+				month: 'short',
+				year: 'numeric'
+			})}`;
+		} catch {
+			return iso;
 		}
 	}
 </script>
@@ -151,7 +250,12 @@
 			</button>
 		</div>
 
-		{#if tab === 'users'}
+		{#if loading}
+			<div class="flex flex-1 items-center justify-center py-12 text-muted">
+				<Loader2 class="size-6 animate-spin text-primary" />
+				<span class="ms-2 text-sm font-medium">Memuat info berbagi...</span>
+			</div>
+		{:else if tab === 'users'}
 			<div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4">
 				<div class="relative">
 					<Search
@@ -160,82 +264,85 @@
 					<Input
 						id="share-user-search"
 						bind:value={query}
-						placeholder="Tambahkan orang"
+						placeholder="Tambahkan pengguna (nama atau email)"
 						autocomplete="off"
 						class="ps-9"
 						aria-label="Cari pengguna CubyCloud"
 					/>
+					{#if searchingUsers}
+						<div class="absolute end-3 top-1/2 -translate-y-1/2">
+							<Loader2 class="size-4 animate-spin text-muted" />
+						</div>
+					{/if}
 					{#if query.trim().length > 0}
 						<ul
-							class="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border border-subtle bg-surface"
+							class="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border border-subtle bg-surface shadow-md"
 							role="listbox"
 						>
-							{#each suggestions as user (user.userId)}
+							{#each userSuggestions as user (user.id)}
 								<li>
 									<button
 										type="button"
 										class="flex w-full flex-col px-3 py-2 text-left hover:bg-primary/10"
 										onclick={() => addUser(user)}
 									>
-										<span class="truncate text-sm font-medium text-main">{user.displayName}</span>
-										<span class="truncate text-xs text-muted">@{user.username}</span>
+										<span class="truncate text-sm font-medium text-main">{user.username}</span>
+										<span class="truncate text-xs text-muted">{user.email}</span>
 									</button>
 								</li>
 							{:else}
-								<li class="px-3 py-2 text-xs text-muted">Tidak ada pengguna yang cocok.</li>
+								{#if !searchingUsers}
+									<li class="px-3 py-2 text-xs text-muted">Tidak ada pengguna yang cocok.</li>
+								{/if}
 							{/each}
 						</ul>
 					{/if}
 				</div>
 
 				<div class="space-y-2">
-					<p class="text-xs font-medium text-muted">Orang yang memiliki akses</p>
+					<p class="text-xs font-medium text-muted">Pengguna dengan akses ({grants.length})</p>
 					{#if grants.length === 0}
 						<p class="text-xs text-muted">Belum ada pengguna. Cari nama lalu klik untuk menambahkan.</p>
 					{:else}
-						{#each grants as grant (grant.userId)}
-							<div class="rounded-xl border border-subtle bg-app px-3 py-3">
-								<div class="flex items-start justify-between gap-2">
-									<div class="min-w-0">
-										<p class="truncate text-sm font-medium text-main">{grant.displayName}</p>
-										<p class="truncate text-xs text-muted">@{grant.username}</p>
+						{#each grants as grant (grant.user_id)}
+							<div class="rounded-xl border border-subtle bg-app p-3">
+								<div class="flex items-center justify-between gap-3">
+									<div class="min-w-0 flex-1">
+										<p class="truncate text-sm font-medium text-main">{grant.username}</p>
+										<p class="truncate text-xs text-muted">{grant.email}</p>
 									</div>
-									<Button
-										type="button"
-										variant="ghost"
-										size="icon"
-										class="text-muted hover:bg-primary hover:text-white"
-										aria-label="Hapus {grant.displayName}"
-										onclick={() => removeUser(grant.userId)}
-									>
-										<X class="size-4 stroke-2" />
-									</Button>
-								</div>
-								<div class="mt-3 flex gap-1">
-									<button
-										type="button"
-										class={cn(
-											'rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
-											grant.permission === 'viewer'
-												? 'bg-secondary text-main'
-												: 'text-muted hover:bg-primary/10'
-										)}
-										onclick={() => setPermission(grant.userId, 'viewer')}
-									>
-										Viewer
-									</button>
-									<button
-										type="button"
-										class={cn(
-											'rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
-											grant.permission === 'editor'
-												? 'bg-primary/15 text-primary'
-												: 'text-muted hover:bg-primary/10'
-										)}
-										onclick={() => setPermission(grant.userId, 'editor')}
-									>
-										Editor
-									</button>
+									<div class="flex items-center gap-1.5 shrink-0">
+										<Select.Root
+											type="single"
+											value={grant.permission}
+											onValueChange={(val) => {
+												if (val === 'viewer' || val === 'editor') {
+													setPermission(grant.user_id, val);
+												}
+											}}
+										>
+											<Select.Trigger
+												aria-label="Pilih hak akses {grant.username}"
+												class="h-8 w-24 rounded-lg border-subtle bg-surface text-xs text-main"
+											>
+												<span>{grant.permission === 'editor' ? 'Ubah' : 'Lihat'}</span>
+											</Select.Trigger>
+											<Select.Content class="border-subtle bg-surface">
+												<Select.Item value="viewer" label="Lihat">Lihat</Select.Item>
+												<Select.Item value="editor" label="Ubah">Ubah</Select.Item>
+											</Select.Content>
+										</Select.Root>
+										<Button
+											type="button"
+											variant="ghost"
+											size="icon"
+											class="size-8 text-muted hover:bg-danger/10 hover:text-danger"
+											aria-label="Hapus {grant.username}"
+											onclick={() => removeUser(grant.user_id)}
+										>
+											<X class="size-4 stroke-2" />
+										</Button>
+									</div>
 								</div>
 							</div>
 						{/each}
@@ -244,67 +351,166 @@
 			</div>
 			<Sheet.Footer>
 				<Button type="button" variant="secondary" onclick={() => (open = false)}>Batal</Button>
-				<Button type="button" onclick={saveUsers}>Simpan</Button>
+				<Button type="button" onclick={saveUsers} disabled={saving}>
+					{#if saving}
+						<Loader2 class="size-4 animate-spin stroke-2" />
+					{/if}
+					Simpan
+				</Button>
 			</Sheet.Footer>
 		{:else}
-			<div class="flex flex-1 flex-col gap-5 px-4">
-				<div class="flex items-center justify-between gap-3">
-					<div>
-						<p class="text-sm font-medium text-main">Lindungi kata sandi</p>
-						<p class="text-xs text-muted">Opsional. Siapa saja dengan tautan dapat mengakses.</p>
-					</div>
-					<Switch bind:checked={usePassword} aria-label="Aktifkan kata sandi" />
-				</div>
+			<div class="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4">
+				<div class="rounded-xl border border-subtle bg-app p-4 space-y-4">
+					<p class="text-xs font-semibold uppercase tracking-wider text-muted">Buat Tautan Baru</p>
 
-				{#if usePassword}
 					<div class="grid gap-2">
-						<Label for="share-password">Kata sandi</Label>
-						<Input
-							id="share-password"
-							type="password"
-							bind:value={password}
-							placeholder="••••••••"
-						/>
+						<Label for="share-permission">Hak Akses</Label>
+						<Select.Root type="single" bind:value={linkPermission}>
+							<Select.Trigger id="share-permission">
+								<span>{linkPermission === 'editor' ? 'Editor (Bisa Ubah & Unggah)' : 'Viewer (Hanya Lihat & Unduh)'}</span>
+							</Select.Trigger>
+							<Select.Content>
+								<Select.Item value="viewer" label="Viewer (Hanya Lihat & Unduh)">
+									Viewer (Hanya Lihat & Unduh)
+								</Select.Item>
+								<Select.Item value="editor" label="Editor (Bisa Ubah & Unggah)">
+									Editor (Bisa Ubah & Unggah)
+								</Select.Item>
+							</Select.Content>
+						</Select.Root>
 					</div>
-				{/if}
 
-				<div class="grid gap-2">
-					<Label for="share-expiry">Kedaluwarsa (hari)</Label>
-					<select
-						id="share-expiry"
-						bind:value={expiresInDays}
-						class="h-9 w-full rounded-full border border-subtle bg-surface px-3 text-sm text-main shadow-none outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+					<div class="flex items-center justify-between gap-3">
+						<div>
+							<p class="text-sm font-medium text-main">Lindungi kata sandi</p>
+							<p class="text-xs text-muted">Pengunjung harus memasukkan sandi untuk membuka.</p>
+						</div>
+						<Switch bind:checked={usePassword} aria-label="Aktifkan kata sandi" />
+					</div>
+
+					{#if usePassword}
+						<div class="grid gap-2">
+							<Label for="share-password">Kata sandi</Label>
+							<Input
+								id="share-password"
+								type="password"
+								bind:value={password}
+								placeholder="••••••••"
+							/>
+						</div>
+					{/if}
+
+					<div class="grid gap-2">
+						<Label for="share-expiry">Masa Berlaku Kedaluwarsa</Label>
+						<Select.Root type="single" bind:value={expiresInDays}>
+							<Select.Trigger id="share-expiry">
+								<span>{expiresInDays === 'never' ? 'Tanpa kedaluwarsa' : `${expiresInDays} hari`}</span>
+							</Select.Trigger>
+							<Select.Content>
+								<Select.Item value="1" label="1 hari">1 hari</Select.Item>
+								<Select.Item value="7" label="7 hari">7 hari</Select.Item>
+								<Select.Item value="30" label="30 hari">30 hari</Select.Item>
+								<Select.Item value="90" label="90 hari">90 hari</Select.Item>
+								<Select.Item value="never" label="Tanpa kedaluwarsa">Tanpa kedaluwarsa</Select.Item>
+							</Select.Content>
+						</Select.Root>
+					</div>
+
+					<Button
+						type="button"
+						class="w-full"
+						onclick={submitLink}
+						disabled={creatingLink}
 					>
-						<option value="1">1 hari</option>
-						<option value="7">7 hari</option>
-						<option value="30">30 hari</option>
-						<option value="90">90 hari</option>
-					</select>
+						{#if creatingLink}
+							<Loader2 class="size-4 animate-spin stroke-2" />
+						{/if}
+						Buat tautan
+					</Button>
 				</div>
 
 				{#if createdUrl}
-					<div class="grid gap-2">
-						<Label for="share-url">Tautan</Label>
+					<div class="grid gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
+						<Label for="share-url" class="text-xs font-semibold text-primary">Tautan baru berhasil dibuat</Label>
 						<div class="flex gap-2">
-							<Input id="share-url" value={createdUrl} readonly class="text-muted" />
+							<Input id="share-url" value={createdUrl} readonly class="text-xs text-main bg-surface" />
 							<Button
 								type="button"
 								variant="secondary"
 								size="icon"
-								onclick={copyUrl}
-								aria-label="Salin tautan"
+								onclick={() => copyUrl(createdUrl)}
+								aria-label="Salin tautan baru"
 							>
 								<Copy class="size-4 stroke-2" />
 							</Button>
 						</div>
 					</div>
 				{/if}
+
+				<div class="space-y-3 pb-4">
+					<p class="text-xs font-medium text-muted">Daftar tautan aktif ({links.length})</p>
+					{#if links.length === 0}
+						<p class="text-xs text-muted">Belum ada tautan aktif untuk berkas/folder ini.</p>
+					{:else}
+						<div class="space-y-2">
+							{#each links as link (link.id)}
+								{@const linkUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/s/${link.token}`}
+								<div class="rounded-xl border border-subtle bg-app p-3">
+									<div class="flex items-start justify-between gap-2">
+										<div class="min-w-0 flex-1">
+											<div class="flex items-center gap-2">
+												<span
+													class={cn(
+														'rounded-full px-2 py-0.5 text-[11px] font-medium',
+														link.permission === 'editor'
+															? 'bg-primary/15 text-primary'
+															: 'bg-secondary text-main'
+													)}
+												>
+													{link.permission === 'editor' ? 'Editor' : 'Viewer'}
+												</span>
+												{#if link.has_password}
+													<span class="inline-flex items-center gap-1 text-[11px] text-muted">
+														<Lock class="size-3" /> Sandi
+													</span>
+												{/if}
+											</div>
+											<p class="mt-1 truncate font-mono text-xs text-muted">/s/{link.token}</p>
+											<p class="mt-0.5 text-[11px] text-muted">
+												{formatExpiry(link.expires_at)}
+											</p>
+										</div>
+										<div class="flex items-center gap-1">
+											<Button
+												type="button"
+												variant="ghost"
+												size="icon"
+												class="size-8 text-muted hover:bg-primary/10 hover:text-main"
+												aria-label="Salin tautan"
+												onclick={() => copyUrl(linkUrl)}
+											>
+												<Copy class="size-3.5 stroke-2" />
+											</Button>
+											<Button
+												type="button"
+												variant="ghost"
+												size="icon"
+												class="size-8 text-muted hover:bg-danger/10 hover:text-danger"
+												aria-label="Cabut tautan"
+												onclick={() => removeLink(link.id)}
+											>
+												<Trash2 class="size-3.5 stroke-2" />
+											</Button>
+										</div>
+									</div>
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</div>
 			</div>
 			<Sheet.Footer>
-				<Button type="button" variant="secondary" onclick={() => (open = false)}>Batal</Button>
-				<Button type="button" onclick={submitLink}>
-					{createdUrl ? 'Buat tautan baru' : 'Buat tautan'}
-				</Button>
+				<Button type="button" variant="secondary" onclick={() => (open = false)}>Tutup</Button>
 			</Sheet.Footer>
 		{/if}
 	</Sheet.Content>

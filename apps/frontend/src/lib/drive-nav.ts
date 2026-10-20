@@ -8,7 +8,7 @@ const PATH_TO_NAV_ID: Record<string, string> = {
 	'/drive/storage-stats': 'storage-stats',
 	'/admin/settings': 'admin-settings',
 	'/admin/users': 'admin-users',
-	'/admin/addons': 'admin-addons'
+	'/admin/storage': 'admin-storage'
 };
 
 /** Map current pathname to sidebar `activeId`. */

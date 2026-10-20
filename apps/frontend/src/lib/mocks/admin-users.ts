@@ -65,11 +65,23 @@ export function effectiveQuotaLabel(
 	user: AdminUser,
 	defaultQuota: DefaultQuotaPolicy = MOCK_DEFAULT_QUOTA
 ): string {
-	if (user.role === 'super_admin' || user.quotaMode === 'unlimited') {
+	const role = String(user.role).toLowerCase();
+	const mode = String(user.quotaMode).toLowerCase();
+	if (role === 'super_admin' || mode === 'unlimited') {
 		return 'Unlimited';
 	}
-	if (user.quotaMode === 'override_gb' && user.quotaGb != null) {
+	if (mode === 'override_gb' || mode === 'custom') {
+		if (user.quotaGb != null) {
+			return `${user.quotaGb} GB`;
+		}
+	}
+	if (user.quotaGb != null) {
 		return `${user.quotaGb} GB`;
+	}
+	if (user.quotaBytes != null) {
+		if (user.quotaBytes < 0) return 'Unlimited';
+		const gb = user.quotaBytes / (1024 * 1024 * 1024);
+		return `${Number(gb.toFixed(2))} GB`;
 	}
 	if (defaultQuota.mode === 'unlimited') {
 		return 'Unlimited';

@@ -22,12 +22,11 @@ type StorageDriver interface {
 	ValidateCloudCredentials(ctx context.Context, endpoint, region, bucket, accessKey, secretKey string) error
 }
 
-// NewStorageDriver returns a StorageDriver wrapping LocalDriver.
-// db will hold encrypted cloud credentials in future modules.
+// NewStorageDriver returns a local driver with node-scoped S3 I/O backed by encrypted credentials.
 func NewStorageDriver(db *bun.DB, basePath ...string) StorageDriver {
 	path := "/app/data/storage"
 	if len(basePath) > 0 && basePath[0] != "" {
 		path = basePath[0]
 	}
-	return NewLocalDriver(path)
+	return newNodeDriver(db, path)
 }

@@ -7,10 +7,10 @@
 	import {
 		Download,
 		Eye,
+		FolderOpen,
 		Info,
 		MoreVertical,
 		Pencil,
-		Share2,
 		Trash2
 	} from '@lucide/svelte';
 	import DriveListRow from './drive-list-row.svelte';
@@ -20,26 +20,26 @@
 	let {
 		entry,
 		selected = false,
+		canEdit = false,
 		onSelect,
-		onPreview,
+		onOpen,
 		onDownload,
 		onDetails,
-		onShare,
-		onEdit,
+		onRename,
 		onDelete
 	}: {
 		entry: SharedFileItem;
 		selected?: boolean;
+		canEdit?: boolean;
 		onSelect: (entry: SharedFileItem) => void;
-		onPreview: (entry: SharedFileItem) => void;
+		onOpen: (entry: SharedFileItem) => void;
 		onDownload: (entry: SharedFileItem) => void;
 		onDetails: (entry: SharedFileItem) => void;
-		onShare: (entry: SharedFileItem) => void;
-		onEdit: (entry: SharedFileItem) => void;
-		onDelete: (entry: SharedFileItem) => void;
+		onRename?: (entry: SharedFileItem) => void;
+		onDelete?: (entry: SharedFileItem) => void;
 	} = $props();
 
-	const isEditor = $derived(entry.permission === 'editor');
+	const isFolder = $derived(entry.kind === 'folder');
 </script>
 
 <ContextMenu.Root>
@@ -47,7 +47,7 @@
 		<DriveListRow
 			{selected}
 			onSelect={() => onSelect(entry)}
-			onOpen={() => onPreview(entry)}
+			onOpen={() => onOpen(entry)}
 		>
 			{#snippet leading()}
 				<FileKindIcon kind={entry.kind} />
@@ -55,7 +55,11 @@
 			{#snippet meta()}
 				<p class="truncate text-sm font-medium text-main">{entry.name}</p>
 				<p class="text-xs text-muted">
-					{formatSize(entry.sizeBytes)} · Dari {entry.ownerName} · {entry.modifiedAt}
+					{#if isFolder}
+						Folder · Dari {entry.ownerName} · {entry.modifiedAt}
+					{:else}
+						{formatSize(entry.sizeBytes)} · Dari {entry.ownerName} · {entry.modifiedAt}
+					{/if}
 				</p>
 			{/snippet}
 			{#snippet trailing()}
@@ -76,11 +80,18 @@
 							</Button>
 						{/snippet}
 					</DropdownMenu.Trigger>
-					<DropdownMenu.Content align="end" class="min-w-48">
-						<DropdownMenu.Item class="gap-2" onclick={() => onPreview(entry)}>
-							<Eye class="size-4 stroke-2" />
-							Pratinjau
-						</DropdownMenu.Item>
+					<DropdownMenu.Content align="end" class="min-w-48 bg-surface border-subtle">
+						{#if isFolder}
+							<DropdownMenu.Item class="gap-2" onclick={() => onOpen(entry)}>
+								<FolderOpen class="size-4 stroke-2" />
+								Buka folder
+							</DropdownMenu.Item>
+						{:else}
+							<DropdownMenu.Item class="gap-2" onclick={() => onOpen(entry)}>
+								<Eye class="size-4 stroke-2" />
+								Pratinjau
+							</DropdownMenu.Item>
+						{/if}
 						<DropdownMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 							<Download class="size-4 stroke-2" />
 							Unduh
@@ -89,35 +100,42 @@
 							<Info class="size-4 stroke-2" />
 							Detail berbagi
 						</DropdownMenu.Item>
-						{#if isEditor}
+						{#if canEdit}
 							<DropdownMenu.Separator />
-							<DropdownMenu.Item class="gap-2" onclick={() => onShare(entry)}>
-								<Share2 class="size-4 stroke-2" />
-								Bagikan
-							</DropdownMenu.Item>
-							<DropdownMenu.Item class="gap-2" onclick={() => onEdit(entry)}>
-								<Pencil class="size-4 stroke-2" />
-								Edit
-							</DropdownMenu.Item>
-							<DropdownMenu.Item
-								variant="destructive"
-								class="gap-2"
-								onclick={() => onDelete(entry)}
-							>
-								<Trash2 class="size-4 stroke-2" />
-								Hapus
-							</DropdownMenu.Item>
+							{#if onRename}
+								<DropdownMenu.Item class="gap-2" onclick={() => onRename(entry)}>
+									<Pencil class="size-4 stroke-2" />
+									Ubah nama
+								</DropdownMenu.Item>
+							{/if}
+							{#if onDelete}
+								<DropdownMenu.Item
+									variant="destructive"
+									class="gap-2"
+									onclick={() => onDelete(entry)}
+								>
+									<Trash2 class="size-4 stroke-2" />
+									Hapus
+								</DropdownMenu.Item>
+							{/if}
 						{/if}
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
 			{/snippet}
 		</DriveListRow>
 	</ContextMenu.Trigger>
-	<ContextMenu.Content class="min-w-48">
-		<ContextMenu.Item class="gap-2" onclick={() => onPreview(entry)}>
-			<Eye class="size-4 stroke-2" />
-			Pratinjau
-		</ContextMenu.Item>
+	<ContextMenu.Content class="min-w-48 bg-surface border-subtle">
+		{#if isFolder}
+			<ContextMenu.Item class="gap-2" onclick={() => onOpen(entry)}>
+				<FolderOpen class="size-4 stroke-2" />
+				Buka folder
+			</ContextMenu.Item>
+		{:else}
+			<ContextMenu.Item class="gap-2" onclick={() => onOpen(entry)}>
+				<Eye class="size-4 stroke-2" />
+				Pratinjau
+			</ContextMenu.Item>
+		{/if}
 		<ContextMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 			<Download class="size-4 stroke-2" />
 			Unduh
@@ -126,20 +144,20 @@
 			<Info class="size-4 stroke-2" />
 			Detail berbagi
 		</ContextMenu.Item>
-		{#if isEditor}
+		{#if canEdit}
 			<ContextMenu.Separator />
-			<ContextMenu.Item class="gap-2" onclick={() => onShare(entry)}>
-				<Share2 class="size-4 stroke-2" />
-				Bagikan
-			</ContextMenu.Item>
-			<ContextMenu.Item class="gap-2" onclick={() => onEdit(entry)}>
-				<Pencil class="size-4 stroke-2" />
-				Edit
-			</ContextMenu.Item>
-			<ContextMenu.Item variant="destructive" class="gap-2" onclick={() => onDelete(entry)}>
-				<Trash2 class="size-4 stroke-2" />
-				Hapus
-			</ContextMenu.Item>
+			{#if onRename}
+				<ContextMenu.Item class="gap-2" onclick={() => onRename(entry)}>
+					<Pencil class="size-4 stroke-2" />
+					Ubah nama
+				</ContextMenu.Item>
+			{/if}
+			{#if onDelete}
+				<ContextMenu.Item variant="destructive" class="gap-2" onclick={() => onDelete(entry)}>
+					<Trash2 class="size-4 stroke-2" />
+					Hapus
+				</ContextMenu.Item>
+			{/if}
 		{/if}
 	</ContextMenu.Content>
 </ContextMenu.Root>

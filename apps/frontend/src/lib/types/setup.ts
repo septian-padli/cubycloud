@@ -8,7 +8,10 @@ export interface StorageNode {
 	id: string;
 	name: string;
 	path: string;
-	kind: 'SSD' | 'HDD';
+	kind: 'SSD' | 'HDD' | 'S3';
+	type?: 'LOCAL' | 'S3';
+	endpoint?: string;
+	bucket?: string;
 	totalGb: number;
 	freeGb: number;
 	usedBytes: number;

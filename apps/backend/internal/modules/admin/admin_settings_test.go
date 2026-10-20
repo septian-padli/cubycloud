@@ -251,7 +251,48 @@ func TestStorageNodeNamesAndUsage(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO storage_nodes(id,name,type,capacity_bytes,enabled) VALUES('usage-s3','S3','S3',1048576,1)`); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range []struct {
+		id, key, node string
+		size          int64
+	}{
+		{"org-local", "local-org-blob", nodeID, 100},
+		{"org-local-shared", "same-physical-blob", nodeID, used},
+		{"org-s3", "s3-blob", "usage-s3", 4096},
+	} {
+		if _, err := db.ExecContext(ctx, `INSERT INTO organization_items(id,created_by,name,kind,size_bytes,disk_key,storage_node_id) VALUES(?,'usage-user',?,'file',?,?,?)`,
+			item.id, item.id, item.size, item.key, item.node); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Organization files count toward S3 node usage even when no My Storage reference exists.
 	nodes, err := handler.service.GetStorageNodes(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, node := range nodes {
+		if node.ID == "usage-s3" && node.UsedBytes != 4096 {
+			t.Fatalf("S3 used_bytes = %d, want organization-only usage 4096", node.UsedBytes)
+		}
+		if node.ID == nodeID && node.UsedBytes != used+100 {
+			t.Fatalf("local used_bytes = %d, want My Storage plus organization usage with shared disk_key deduplicated (%d)", node.UsedBytes, used+100)
+		}
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO my_storage_items(id,owner_id,name,kind,size_bytes,disk_key,storage_node_id) VALUES('s3-personal','usage-user','s3-personal.bin','file',4096,'s3-blob','usage-s3')`); err != nil {
+		t.Fatal(err)
+	}
+	nodes, err = handler.service.GetStorageNodes(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, node := range nodes {
+		if node.ID == "usage-s3" && node.UsedBytes != 4096 {
+			t.Fatalf("S3 used_bytes = %d, want shared My Storage/Organization disk_key counted once (4096)", node.UsedBytes)
+		}
+	}
+	nodes, err = handler.service.GetStorageNodes(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,8 +303,8 @@ func TestStorageNodeNamesAndUsage(t *testing.T) {
 			break
 		}
 	}
-	if reported != used {
-		t.Fatalf("used_bytes = %d, want deduplicated trash-inclusive %d", reported, used)
+	if reported != used+100 {
+		t.Fatalf("used_bytes = %d, want My Storage plus organization usage with shared disk_key deduplicated (%d)", reported, used+100)
 	}
 	if err := handler.service.UpdateNode(ctx, nodeID, &UpdateNodeRequest{CapacityCapGB: int64Ptr(1)}); err == nil {
 		t.Fatal("expected capacity below node usage to be rejected")

@@ -207,8 +207,8 @@ CubyCloud ditujukan untuk ekosistem pengguna _self-hosted_ dan tim skala kecil/m
 │ • Resumable Upload/Download (TUS)    │ • Real-time Office Editing       │
 │ • Duplicate Handling (Numeric Suffix) │ • Email / SMTP Notifications     │
 │ • Auto-Purge Trash (30 Days)         │ • Heavy Background Transcoding   │
-│ • Native Preview (Pic/Vid/Aud/Text)  │ • SaaS Billing & Payment Gateway │
-│ • Bundled Add-ons (ZIP, WebP, PDF)   │                                  │
+│ • Preview (Pic/Vid/Aud/Text/PDF)     │ • SaaS Billing & Payment Gateway │
+│ • Core Archive (Download as ZIP)     │                                  │
 │ • User-to-User & Share Link Engine   │                                  │
 │ • Drive Home / Org / Starred / Stats │                                  │
 │ • Per-User Storage Quota (My Storage)│                                  │
@@ -254,12 +254,12 @@ Seluruh fitur di bawah ini **wajib ada, teruji, dan berfungsi penuh** pada rilis
 - **Storage Node Badge Visibility:** Badge `[R2]` / `[SSD-n]` **hanya untuk Super Admin**. Regular User tidak melihat lokasi fisik node.
 - Konflik nama mengikuti kebijakan same-path di §4.4: upload/duplicate memilih suffix angka otomatis; rename/move menawarkan suffix yang tersedia atau membatalkan; tidak ada overwrite atau merge folder.
 
-- **Native Media Previewer:** Fitur pratinjau instan bawaan terbatas untuk 4 jenis format:
-- 📄 **Text/Code:** TXT, Markdown (.md), JSON, CSV, Log.
-- 🖼️ **Gambar:** PNG, JPEG, WebP, GIF, SVG.
-- 🎥 **Video:** MP4, WebM (HTML5 player bawaan browser).
-- 🎵 **Audio:** MP3, WAV, OGG.
-- **Catatan:** Preview **PDF** bukan bagian core previewer; tersedia sebagai add-on opsional (lihat §3.1.7).
+- **File Previewer bawaan:** Pratinjau tersedia di My Storage, Organization, Shared, dan tautan publik/restricted sesuai izin akses masing-masing:
+- 📄 **Text/Code:** TXT, Markdown (.md), JSON, CSV, Log; tampilkan sebagai teks biasa dengan syntax highlighting PrismJS untuk format kode yang didukung.
+- 🖼️ **Gambar:** PNG, JPEG, WebP, GIF, SVG; tampilkan langsung secara native.
+- 🎥 **Video:** MP4, WebM; gunakan Vidstack dengan pemutaran media native browser.
+- 🎵 **Audio:** MP3, WAV, OGG; perilaku pemutar audio yang sudah ada tetap berlaku.
+- 📑 **PDF:** tampilkan menggunakan PDF.js (`pdfjs-dist`); selalu tersedia tanpa aktivasi add-on Admin.
 
 #### 5. Per-User Storage Quota (My Storage Only)
 
@@ -288,14 +288,12 @@ Seluruh fitur di bawah ini **wajib ada, teruji, dan berfungsi penuh** pada rilis
 - _Public:_ Dapat dibuka/diunduh oleh siapa saja di internet yang memiliki link/password.
 - **Quota on Share (Owner Pays):** Ukuran file tetap dihitung ke quota **owner** asli; berbagi ke user lain tidak menduplikasi pemakaian quota.
 
-#### 8. Bundled Phase-1 Add-ons (`/admin/addons`)
+#### 8. Core File Operations & Compression (Download as ZIP)
 
-Fase 1 mencakup 4 modul add-on dasar yang sudah terintegrasi dan siap diaktifkan:
+Fitur Download as ZIP adalah fitur core file manager yang tetap aktif dan terpasang secara bawaan tanpa memerlukan modul Add-on Manager:
 
-- 🖼️ **Image Converter on Download:** Opsi klik-kanan / menu download untuk mengubah format gambar secara langsung (contoh: download gambar PNG sebagai WebP atau JPEG).
-- 🗜️ **Compress to ZIP:** Fitur untuk mengarsip/meminimalkan beberapa berkas atau folder terpilih menjadi file `.zip` di dalam storage.
 - 📥 **Download as ZIP:** Mengunduh beberapa file atau folder sekaligus yang dipaketkan secara langsung sebagai satu berkas `.zip`.
-- 📄 **PDF Previewer (Optional Add-on):** Pratinjau PDF di browser (lightbox). Nonaktif secara default agar core tetap ringan; Admin dapat mengaktifkannya di `/admin/addons`.
+- 🗜️ **Compress to ZIP:** Fitur untuk mengarsip beberapa berkas atau folder terpilih menjadi file `.zip` di dalam storage.
 
 #### 9. Notifications & Feedback
 
@@ -445,8 +443,8 @@ Landing default untuk pengguna terautentikasi setelah login atau selesai setup.
 
 #### Functional Specifications:
 
-1. **Quick Access Cards:** 4–6 berkas yang paling sering / terakhir dibuka.
-2. **Recent Activities List:** Riwayat singkat (upload, edit, share).
+1. **Quick Access Cards:** 5 berkas/folder terakhir dibuka oleh akun aktif (tersimpan per akun lintas perangkat).
+2. **Recent Activities List:** 5 berkas/folder berbeda dengan aksi upload atau ubah terbaru (termasuk rename dan pindah folder) di My Storage dan Organization yang dilakukan oleh akun aktif; deduplikasi satu entri per berkas/folder.
 3. **Storage Summary Widget:** Ringkasan kuota My Storage (used / limit GB, atau `Used: X GB` jika Unlimited).
 4. **Quick Upload Drawer:** Unggah instan ke My Storage (tetap enforce user quota + node capacity).
 
@@ -500,10 +498,11 @@ Antarmuka file pribadi berbasis **SvelteKit SPA** dengan **Flat Earthy Design Sy
 - 📄 _Dokumen_ (PDF, TXT, MD, CSV, DOCX)
 - 🗜️ _Arsip_ (ZIP, RAR, 7Z)
 
-5. **Native Media Previewer:**
+5. **File Previewer bawaan:**
 
-- _Double-click_ pada file membuka _lightbox modal_ untuk pratinjau instan berkas Gambar, Video MP4/WebM, Audio MP3/WAV/OGG, serta Teks/Code/Markdown.
-- **PDF:** pratinjau tersedia hanya jika add-on **PDF Previewer** diaktifkan Admin; jika nonaktif, PDF hanya dapat diunduh.
+- _Double-click_ pada file membuka _lightbox modal_ untuk Gambar native, Video MP4/WebM dengan Vidstack, Audio MP3/WAV/OGG dengan perilaku yang sudah ada, Teks/Code/Markdown sebagai teks biasa dengan syntax highlighting PrismJS untuk kode yang didukung, dan PDF dengan PDF.js (`pdfjs-dist`).
+- Pratinjau berlaku di My Storage, Organization, Shared, dan tautan publik/restricted sesuai izin berkas; PDF selalu tersedia tanpa add-on atau toggle Admin.
+- Endpoint unduh yang sama menyediakan pratinjau hanya saat `?preview=1`: respons menggunakan `Content-Disposition: inline` dengan MIME yang diizinkan untuk preview dan mendukung HTTP Range bila tersedia pada storage. Tanpa parameter tersebut, perilaku unduh sebagai attachment tetap berlaku; otorisasi dan proteksi password share link tidak berubah.
 
 6. **Network Resiliency & Resumable Transfer:**
 
@@ -656,19 +655,16 @@ Modul untuk membagikan file/folder melalui tautan, dengan mode **Public** atau *
 
 ---
 
-### 4.12 Module 12: Add-ons System & Worker Queue (`/admin/addons`)
+### 4.12 Module 12: Core Archive & Worker Queue
 
-Modul untuk mengelola ekstensi tambahan tanpa membebani performa _core system_.
+Fitur pengarsipan dan kompresi (termasuk Download as ZIP) merupakan kapabilitas inti (_core file manager_) yang selalu aktif dan terpasang secara bawaan. Route `/admin/addons` (Add-on Manager) ditiadakan.
 
 #### Functional Specifications:
 
-1. **Phase-1 Bundled Add-ons:**
+1. **Core Archive & Download as ZIP:**
 
-- 🖼️ **Image Converter on Download:** Menu kontekstual saat mengunduh gambar untuk dikonversi secara langsung (misal: Download berkas PNG sebagai WebP/JPEG).
+- 📥 **Download as ZIP:** Mengunduh beberapa file/folder sekaligus yang di-stream secara langsung sebagai berkas `.zip` (fitur core bawaan).
 - 🗜️ **Compress to ZIP:** Membuat arsip `.zip` dari beberapa file/folder terpilih di dalam storage.
-- 📥 **Download as ZIP:** Mengunduh beberapa file/folder sekaligus yang di-stream secara langsung sebagai berkas `.zip`.
-- 📄 **PDF Previewer:** Add-on opsional untuk pratinjau PDF di lightbox. Default: **disabled**; Admin mengaktifkannya di `/admin/addons`.
-
 2. **Configurable Worker Concurrency Limit:**
 
 - Di halaman `/admin/settings`, Admin dapat mengatur jumlah maksimal proses konversi/kompresi berat yang boleh berjalan bersamaan (_Concurrent Worker Limit_).
@@ -698,7 +694,6 @@ Modul untuk mengelola ekstensi tambahan tanpa membebani performa _core system_.
 | **Share Link (`/s/:token`)** | Public / Restricted Guest | Viewer + Password & Expiration |
 | **Admin Settings (`/admin/settings`)** | Super Admin Only | Nodes, workers, **default user quota**, DB backup |
 | **Admin Users (`/admin/users`)** | Super Admin Only | Create users, **per-user quota override** |
-| **Add-ons (`/admin/addons`)** | Super Admin Only | Enable/Disable module, queue monitor |
 
 ---
 

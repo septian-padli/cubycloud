@@ -17,7 +17,9 @@ import (
 	"github.com/cubycloud/backend/internal/modules/auth"
 	"github.com/cubycloud/backend/internal/jobs"
 	"github.com/cubycloud/backend/internal/modules/mystorage"
+	"github.com/cubycloud/backend/internal/modules/organization"
 	"github.com/cubycloud/backend/internal/modules/setup"
+	"github.com/cubycloud/backend/internal/modules/share"
 	"github.com/cubycloud/backend/internal/storage"
 	"github.com/cubycloud/backend/web"
 	"github.com/labstack/echo/v4"
@@ -72,7 +74,7 @@ func main() {
 
 	// Admin routes (JWT auth + Super Admin guard, bypasses setup guard)
 	dbPath := cfg.DataDirPath + "/db/cubycloud.db"
-	jwtAuth := middleware.JWTAuth(cfg.JWTSecret)
+	jwtAuth := middleware.JWTAuth(cfg.JWTSecret, db)
 	adminGuard := middleware.SuperAdminGuard(db)
 	admin.RegisterRoutes(e, db, driver, cfg.DataDirPath, dbPath, jwtAuth, adminGuard)
 
@@ -86,6 +88,12 @@ func main() {
 	driveGroup.POST("/items/:id/star", myStorageHandler.ToggleStar)
 	driveGroup.PUT("/items/:id/star", myStorageHandler.ToggleStar)
 	driveGroup.GET("/starred", myStorageHandler.ListStarred)
+	driveGroup.POST("/sync-cloud", myStorageHandler.SyncCloud)
+	driveGroup.GET("/home", myStorageHandler.GetHome)
+	driveGroup.POST("/access", myStorageHandler.RecordAccess)
+	organization.RegisterRoutes(e, db, driver, jwtAuth)
+	// Share endpoints (internal user grants & public share links)
+	share.RegisterRoutes(e, db, driver, jwtAuth)
 	// Background cron worker for 30-day trash auto-purge
 	trashPurgeJob := jobs.StartTrashPurgeJob(context.Background(), db, driver, 1*time.Hour, 30*24*time.Hour)
 	defer trashPurgeJob.Stop()

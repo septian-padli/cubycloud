@@ -2,12 +2,13 @@
 	import type { AdminQuotaMode, AdminUser, DefaultQuotaPolicy } from '$lib/types/admin.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import * as RadioGroup from '$lib/components/ui/radio-group/index.js';
+	import { ConfirmDialog } from '$lib/components/ui/confirm-dialog/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import { cn } from '$lib/utils.js';
 
-	type EditQuotaChoice = AdminQuotaMode;
+	type EditQuotaChoice = 'default' | 'override_gb' | 'unlimited';
 
 	let {
 		open = $bindable(false),
@@ -23,8 +24,9 @@
 
 	let quotaChoice = $state<EditQuotaChoice>('default');
 	let quotaGb = $state('50');
+	let confirmOpen = $state(false);
 
-	const isSuperAdmin = $derived(user?.role === 'super_admin');
+	const isSuperAdmin = $derived(String(user?.role).toLowerCase() === 'super_admin');
 
 	const defaultLabel = $derived(
 		defaultQuota.mode === 'unlimited' ? 'Unlimited' : `${defaultQuota.gb} GB`
@@ -33,27 +35,61 @@
 	const canSubmit = $derived(
 		!isSuperAdmin &&
 			user != null &&
-			(quotaChoice !== 'override_gb' || Number(quotaGb) > 0)
+			(quotaChoice !== 'override_gb' ||
+				(String(quotaGb).trim() !== '' && !isNaN(Number(quotaGb)) && Number(quotaGb) >= 0))
 	);
 
 	$effect(() => {
 		if (open && user) {
-			quotaChoice = user.quotaMode;
+			const mode = String(user.quotaMode).toLowerCase();
+			if (mode === 'unlimited') {
+				quotaChoice = 'unlimited';
+			} else if (mode === 'override_gb' || mode === 'custom') {
+				quotaChoice = 'override_gb';
+			} else {
+				quotaChoice = 'default';
+			}
 			quotaGb = String(
-				user.quotaMode === 'override_gb' && user.quotaGb != null
+				user.quotaGb != null
 					? user.quotaGb
-					: defaultQuota.gb
+					: defaultQuota.mode === 'limited'
+						? defaultQuota.gb
+						: '50'
 			);
 		}
 	});
 
-	function submit() {
-		if (!canSubmit || !user) return;
+	function getTargetQuotaGb(): number {
+		if (quotaChoice === 'unlimited') return Infinity;
+		if (quotaChoice === 'default') {
+			return defaultQuota.mode === 'unlimited' ? Infinity : defaultQuota.gb;
+		}
+		return Number(quotaGb);
+	}
+
+	function getTargetLabel(): string {
+		if (quotaChoice === 'unlimited') return 'Unlimited';
+		if (quotaChoice === 'default') return defaultLabel;
+		return `${Number(quotaGb)} GB`;
+	}
+
+	function executeSave() {
+		if (!user) return;
 		onSave({
 			quotaMode: quotaChoice,
 			quotaGb: quotaChoice === 'override_gb' ? Number(quotaGb) : undefined
 		});
 		open = false;
+	}
+
+	function submit() {
+		if (!canSubmit || !user) return;
+		const targetQuota = getTargetQuotaGb();
+		if (targetQuota < user.usedGb) {
+			confirmOpen = true;
+			return;
+		}
+		executeSave();
 	}
 </script>
 
@@ -100,15 +136,22 @@
 								Atur GB
 							</Label>
 							{#if quotaChoice === 'override_gb'}
-								<Input
-									id="edit-quota-gb-value"
-									type="number"
-									min="1"
-									step="1"
-									bind:value={quotaGb}
-									class="max-w-32"
-									aria-label="Kuota dalam GB"
-								/>
+								<div class="relative flex w-full items-center">
+									<Input
+										id="edit-quota-gb-value"
+										type="number"
+										min="0"
+										step="any"
+										bind:value={quotaGb}
+										class="w-full pe-9"
+										aria-label="Kuota dalam GB"
+									/>
+									<span
+										class="pointer-events-none absolute end-3 text-xs font-semibold text-muted"
+									>
+										GB
+									</span>
+								</div>
 							{/if}
 						</div>
 					</label>
@@ -155,3 +198,16 @@
 		{/if}
 	</Dialog.Content>
 </Dialog.Root>
+
+<ConfirmDialog
+	bind:open={confirmOpen}
+	title="Konfirmasi Penurunan Kuota"
+	description={`Kuota baru (${getTargetLabel()}) lebih kecil dari pemakaian saat ini (${user?.usedGb.toFixed(1)} GB). Pengguna tidak akan dapat mengunggah file baru sampai pemakaian berada di bawah kuota. Apakah Anda yakin ingin melanjutkan?`}
+	confirmText="Ya, Simpan"
+	cancelText="Batal"
+	variant="destructive"
+	onConfirm={executeSave}
+	onCancel={() => {
+		confirmOpen = false;
+	}}
+/>

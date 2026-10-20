@@ -3,7 +3,6 @@
 	import FileExplorer from '$lib/components/drive/explorer/file-explorer.svelte';
 	import * as Alert from '$lib/components/ui/alert/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
-	import { MOCK_ORG_TREE } from '$lib/mocks/file-tree.js';
 	import { Building2 } from '@lucide/svelte';
 
 	const orgBadgeClass = 'bg-primary/15 text-primary border-transparent font-medium';
@@ -35,7 +34,7 @@
 
 	<FileExplorer
 		variant="organization"
-		initialTree={MOCK_ORG_TREE}
+		initialTree={[]}
 		rootLabel="Organization"
 	/>
 </div>

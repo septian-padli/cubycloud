@@ -23,7 +23,7 @@ func (r *Repository) GetUserByUsername(ctx context.Context, username string) (*d
 	var user database.User
 	err := r.db.NewSelect().
 		Model(&user).
-		Where("username = ?", username).
+		Where("username = ? AND deleted_at IS NULL", username).
 		Scan(ctx)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -39,7 +39,7 @@ func (r *Repository) GetUserByIdentifier(ctx context.Context, identifier string)
 	var user database.User
 	err := r.db.NewSelect().
 		Model(&user).
-		Where("username = ? OR email = ?", identifier, identifier).
+		Where("(username = ? OR email = ?) AND deleted_at IS NULL", identifier, identifier).
 		Scan(ctx)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -55,7 +55,7 @@ func (r *Repository) GetUserByID(ctx context.Context, id string) (*database.User
 	var user database.User
 	err := r.db.NewSelect().
 		Model(&user).
-		Where("id = ?", id).
+		Where("id = ? AND deleted_at IS NULL", id).
 		Scan(ctx)
 	if err == sql.ErrNoRows {
 		return nil, nil

@@ -1,13 +1,17 @@
-import { mkdirSync, mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
+import { restartControlDir } from './e2e/restart-control.js';
 import { defineConfig } from '@playwright/test';
 
 const backendPort = Number(process.env.MY_STORAGE_E2E_BACKEND_PORT ?? 18383);
 const frontendPort = Number(process.env.MY_STORAGE_E2E_FRONTEND_PORT ?? 15188);
 const dataDir = mkdtempSync(resolve(tmpdir(), 'cubycloud-my-storage-e2e-'));
 mkdirSync(resolve(dataDir, 'storage', 'default'), { recursive: true });
+rmSync(restartControlDir, { recursive: true, force: true });
+mkdirSync(restartControlDir, { recursive: true });
 process.env.MY_STORAGE_E2E_DATA_DIR = dataDir;
+process.env.MY_STORAGE_E2E_BACKEND_PORT = String(backendPort);
 
 const backendURL = `http://127.0.0.1:${backendPort}`;
 const frontendURL = `http://127.0.0.1:${frontendPort}`;
@@ -27,8 +31,8 @@ export default defineConfig({
 	globalTeardown: './e2e/global-teardown.ts',
 	webServer: [
 		{
-			command: 'go run ./cmd/server',
-			cwd: resolve(import.meta.dirname, '../backend'),
+			command: 'bun run e2e/backend-supervisor.ts',
+			cwd: resolve(import.meta.dirname),
 			env: {
 				PORT: String(backendPort),
 				DATA_DIR_PATH: dataDir,

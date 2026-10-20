@@ -167,10 +167,18 @@ func (r *Repository) StorageNodeUsedBytes(ctx context.Context, nodeID, legacyNod
 	err := r.db.NewRaw(`
 		SELECT COALESCE(SUM(size_bytes), 0) FROM (
 			SELECT disk_key, MAX(size_bytes) AS size_bytes
-			FROM my_storage_items
-			WHERE kind = 'file' AND disk_key IS NOT NULL
-				AND (storage_node_id = ? OR (storage_node_id IS NULL AND ? = ?))
+			FROM (
+				SELECT disk_key, size_bytes
+				FROM my_storage_items
+				WHERE kind = 'file' AND disk_key IS NOT NULL
+					AND (storage_node_id = ? OR (storage_node_id IS NULL AND ? = ?))
+				UNION ALL
+				SELECT disk_key, size_bytes
+				FROM organization_items
+				WHERE kind = 'file' AND disk_key IS NOT NULL
+					AND (storage_node_id = ? OR (storage_node_id IS NULL AND ? = ?))
+			)
 			GROUP BY disk_key
-		)`, nodeID, nodeID, legacyNodeID).Scan(ctx, &used)
+		)`, nodeID, nodeID, legacyNodeID, nodeID, nodeID, legacyNodeID).Scan(ctx, &used)
 	return used, err
 }

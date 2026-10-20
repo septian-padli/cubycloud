@@ -56,6 +56,24 @@ func (s *Service) GetUserByID(ctx context.Context, id string) (*database.User, e
 	return s.repo.GetUserByID(ctx, id)
 }
 
+// GetUserUsage calculates total deduplicated file size for user
+func (s *Service) GetUserUsage(ctx context.Context, userID string) (int64, error) {
+	var usedBytes int64
+	query := `
+SELECT COALESCE(SUM(size_bytes), 0)
+FROM (
+    SELECT COALESCE(disk_key, id) AS k, MAX(size_bytes) AS size_bytes
+    FROM my_storage_items
+    WHERE owner_id = ? AND kind = 'file'
+    GROUP BY k
+)`
+	err := s.db.QueryRowContext(ctx, query, userID).Scan(&usedBytes)
+	if err != nil {
+		return 0, err
+	}
+	return usedBytes, nil
+}
+
 // ResetPassword resets user password using recovery key
 func (s *Service) ResetPassword(ctx context.Context, req *ResetPasswordRequest) (*ResetPasswordResponse, error) {
 	// Get user by username

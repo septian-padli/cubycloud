@@ -6,6 +6,7 @@ export interface UserResponse {
 	email: string;
 	role: string;
 	quota_bytes: number;
+	used_bytes?: number;
 }
 
 export interface LoginResponse {

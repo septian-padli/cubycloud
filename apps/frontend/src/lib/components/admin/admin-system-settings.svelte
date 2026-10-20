@@ -1,13 +1,15 @@
 <script lang="ts">
 	import { adminAPI } from '$lib/api/admin.js';
-	import type { AuditRetentionDays, SystemSettings } from '$lib/types/admin.js';
+	import type { AuditRetentionDays, SystemSettings, PlacementStrategy } from '$lib/types/admin.js';
 	import { AUDIT_RETENTION_OPTIONS } from '$lib/types/admin.js';
+	import { STRATEGY_OPTIONS } from '$lib/types/setup.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import { Switch } from '$lib/components/ui/switch/index.js';
 	import { ConfirmDialog } from '$lib/components/ui/confirm-dialog/index.js';
+	import * as Select from '$lib/components/ui/select/index.js';
 	import { Download, Loader2, Save } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 
@@ -32,6 +34,12 @@
 	let downloadingBackup = $state(false);
 	let showBackupConfirm = $state(false);
 
+	let showSaveConfirm = $state(false);
+
+	function handleSaveClick() {
+		if (!canSave || saving) return;
+		showSaveConfirm = true;
+	}
 	let unlimited = $state(false);
 
 	$effect(() => {
@@ -116,17 +124,66 @@
 			<Label for="audit-retention" class="text-sm font-medium text-main">
 				Retensi log audit
 			</Label>
-			<select
-				id="audit-retention"
-				value={settings.auditRetentionDays}
-				onchange={onRetentionChange}
-				class="flex h-10 w-full max-w-xs rounded-lg border border-subtle bg-app px-3 py-2 text-sm text-main ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-				data-testid="select-audit-retention"
+			<Select.Root
+				type="single"
+				value={String(settings.auditRetentionDays)}
+				onValueChange={(val) => {
+					if (val) {
+						settings.auditRetentionDays = Number(val) as AuditRetentionDays;
+					}
+				}}
 			>
-				{#each AUDIT_RETENTION_OPTIONS as days}
-					<option value={days}>{days} hari</option>
-				{/each}
-			</select>
+				<Select.Trigger
+					id="audit-retention"
+					class="max-w-xs"
+					data-testid="select-audit-retention"
+				>
+					<span>{settings.auditRetentionDays} hari</span>
+				</Select.Trigger>
+				<Select.Content>
+					{#each AUDIT_RETENTION_OPTIONS as days}
+						<Select.Item value={String(days)} label="{days} hari">
+							{days} hari
+						</Select.Item>
+					{/each}
+				</Select.Content>
+			</Select.Root>
+		</div>
+
+		<div class="space-y-2">
+			<Label for="placement-strategy" class="text-sm font-medium text-main">
+				Strategi pemilihan node
+			</Label>
+			<Select.Root
+				type="single"
+				value={settings.placementStrategy}
+				onValueChange={(val) => {
+					if (val) {
+						settings.placementStrategy = val as PlacementStrategy;
+					}
+				}}
+			>
+				<Select.Trigger
+					id="placement-strategy"
+					class="max-w-xs"
+					data-testid="select-placement-strategy"
+				>
+					<span>
+						{STRATEGY_OPTIONS.find((opt) => opt.value === settings.placementStrategy)?.label ??
+							settings.placementStrategy}
+					</span>
+				</Select.Trigger>
+				<Select.Content>
+					{#each STRATEGY_OPTIONS as opt}
+						<Select.Item value={opt.value} label={opt.label}>
+							{opt.label}
+						</Select.Item>
+					{/each}
+				</Select.Content>
+			</Select.Root>
+			<p class="text-xs text-muted">
+				{STRATEGY_OPTIONS.find((opt) => opt.value === settings.placementStrategy)?.description ?? ''}
+			</p>
 		</div>
 
 		<div class="space-y-2">
@@ -174,7 +231,7 @@
 	<Card.Footer class="justify-end border-t border-subtle">
 		<Button
 			type="button"
-			onclick={onSave}
+			onclick={handleSaveClick}
 			disabled={!canSave || saving}
 			class="gap-1.5"
 			data-testid="btn-save-settings"
@@ -196,4 +253,14 @@
 	confirmText="Lanjutkan Unduh"
 	cancelText="Batal"
 	onConfirm={doDownloadBackup}
+/>
+
+<ConfirmDialog
+	bind:open={showSaveConfirm}
+	title="Simpan Perubahan Pengaturan?"
+	description="Apakah Anda yakin ingin menyimpan perubahan pengaturan sistem dan strategi pemilihan node?"
+	confirmText="Simpan"
+	cancelText="Batal"
+	loading={saving}
+	onConfirm={onSave}
 />

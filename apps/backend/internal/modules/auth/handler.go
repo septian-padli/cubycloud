@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/cubycloud/backend/internal/middleware"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/uptrace/bun"
@@ -55,14 +56,19 @@ func (h *Handler) Login(c echo.Context) error {
 		MaxAge:   7 * 24 * 3600, // 7 days
 	}
 	c.SetCookie(cookie)
-
+	usedBytes, _ := h.service.GetUserUsage(c.Request().Context(), user.ID)
+	quotaBytes := user.QuotaBytes
+	if user.Role == "SUPER_ADMIN" {
+		quotaBytes = -1
+	}
 	return c.JSON(http.StatusOK, LoginResponse{
 		User: UserResponse{
 			ID:         user.ID,
 			Username:   user.Username,
 			Email:      user.Email,
 			Role:       user.Role,
-			QuotaBytes: user.QuotaBytes,
+			QuotaBytes: quotaBytes,
+			UsedBytes:  usedBytes,
 		},
 		Message: "login successful",
 	})
@@ -100,13 +106,18 @@ func (h *Handler) Me(c echo.Context) error {
 	if user == nil {
 		return echo.NewHTTPError(http.StatusNotFound, map[string]string{"error": "user not found"})
 	}
-
+	usedBytes, _ := h.service.GetUserUsage(c.Request().Context(), user.ID)
+	quotaBytes := user.QuotaBytes
+	if user.Role == "SUPER_ADMIN" {
+		quotaBytes = -1
+	}
 	return c.JSON(http.StatusOK, UserResponse{
 		ID:         user.ID,
 		Username:   user.Username,
 		Email:      user.Email,
 		Role:       user.Role,
-		QuotaBytes: user.QuotaBytes,
+		QuotaBytes: quotaBytes,
+		UsedBytes:  usedBytes,
 	})
 }
 
@@ -143,7 +154,7 @@ func RegisterRoutes(e *echo.Echo, db *bun.DB, jwtSecret string, jwtAuth echo.Mid
 	handler := NewHandler(service, jwtSecret)
 
 	authGroup := e.Group("/api/v1/auth")
-	authGroup.POST("/login", handler.Login)
+	authGroup.POST("/login", handler.Login, middleware.RateLimiter(10, time.Minute))
 	authGroup.POST("/logout", handler.Logout)
 	authGroup.POST("/reset-password", handler.ResetPassword)
 	authGroup.GET("/me", handler.Me, jwtAuth)

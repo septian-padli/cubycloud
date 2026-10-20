@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { HardDrive, Settings } from '@lucide/svelte';
+	import { Cloud, HardDrive, Settings } from '@lucide/svelte';
 	import type { StorageNode } from '$lib/types/setup.js';
 	import { isNodeCritical } from '$lib/mocks/admin-settings.js';
 	import * as Card from '$lib/components/ui/card/index.js';
@@ -41,16 +41,27 @@
 							<span
 								class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10"
 							>
-								<HardDrive class="size-4 stroke-2 text-primary" />
+								{#if node.kind === 'S3'}
+									<Cloud class="size-4 stroke-2 text-secondary-accent" />
+								{:else}
+									<HardDrive class="size-4 stroke-2 text-primary" />
+								{/if}
 							</span>
 							<div class="min-w-0">
 								<p class="truncate text-sm font-medium text-main">{node.name}</p>
-								<p class="truncate text-xs text-muted">{node.path}</p>
+								{#if node.kind === 'S3'}
+									<p class="truncate text-xs text-muted" title={node.endpoint}>{node.endpoint}</p>
+									<p class="truncate text-xs text-muted" title={node.bucket}>Bucket: {node.bucket}</p>
+								{:else}
+									<p class="truncate text-xs text-muted">{node.path}</p>
+								{/if}
 							</div>
 						</div>
 						<div class="flex shrink-0 flex-wrap justify-end gap-1.5">
 							<Badge
-								class="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-main dark:text-app hover:bg-secondary"
+								class="rounded-full px-2.5 py-0.5 text-xs font-medium {node.kind === 'S3'
+									? 'bg-secondary-accent text-white dark:text-app hover:bg-secondary-accent'
+									: 'bg-secondary text-main dark:text-app hover:bg-secondary'}"
 							>
 								{node.kind}
 							</Badge>

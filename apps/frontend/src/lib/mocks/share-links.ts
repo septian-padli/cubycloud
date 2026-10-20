@@ -1,6 +1,5 @@
 import type { FileEntry, ShareLinkRecord } from '$lib/types/drive.js';
 import { MOCK_DRIVE_USER } from '$lib/mocks/drive.js';
-import { MOCK_ADDONS } from '$lib/mocks/addons.js';
 import {
 	MOCK_MY_STORAGE_TREE,
 	MOCK_ORG_TREE,
@@ -140,7 +139,7 @@ export function shareUrl(token: string): string {
 }
 
 export function isDownloadZipEnabled(): boolean {
-	return MOCK_ADDONS.find((a) => a.id === 'download_zip')?.enabled === true;
+	return true;
 }
 
 export const DEMO_SHARE_PASSWORD = 'demo123';

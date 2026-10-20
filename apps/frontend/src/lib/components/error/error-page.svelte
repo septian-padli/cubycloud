@@ -7,11 +7,13 @@
 	let {
 		status,
 		message,
-		showHeader = true
+		showHeader = true,
+		homeHref = '/drive/my-storage'
 	}: {
 		status: number;
 		message?: string;
 		showHeader?: boolean;
+		homeHref?: string;
 	} = $props();
 
 	const content = $derived(errorPageContent(status, message));
@@ -44,7 +46,7 @@
 				<p class="text-base leading-relaxed text-muted">{content.description}</p>
 			</div>
 
-			<Button href="/" size="lg" class="gap-1.5">
+			<Button href={homeHref} size="lg" class="gap-1.5">
 				<ArrowLeft class="size-4 stroke-2" aria-hidden="true" />
 				Kembali ke beranda
 			</Button>
@@ -66,7 +68,7 @@
 			<p class="text-base leading-relaxed text-muted">{content.description}</p>
 		</div>
 
-		<Button href="/" size="lg" class="gap-1.5">
+		<Button href={homeHref} size="lg" class="gap-1.5">
 			<ArrowLeft class="size-4 stroke-2" aria-hidden="true" />
 			Kembali ke beranda
 		</Button>

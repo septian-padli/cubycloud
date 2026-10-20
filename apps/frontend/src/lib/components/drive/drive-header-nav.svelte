@@ -4,7 +4,8 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import ThemeToggle from '$lib/components/theme-toggle.svelte';
 	import { getDriveChrome } from '$lib/drive-context.svelte.js';
-	import { Menu, Search, Upload } from '@lucide/svelte';
+	import { myStorageAPI } from '$lib/api/my-storage.js';
+	import { Loader2, Menu, Search, Upload } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 
 	let {
@@ -15,26 +16,74 @@
 
 	const chrome = getDriveChrome();
 	let search = $state('');
-
+	let fileInput = $state<HTMLInputElement>();
+	let isUploading = $state(false);
 	const onExplorerPage = $derived(
 		page.url.pathname === '/drive/my-storage' || page.url.pathname === '/drive/organization'
 	);
 
 	function onUploadClick() {
+		if (isUploading) return;
 		if (onExplorerPage) {
 			chrome.requestUpload();
 			return;
 		}
-		toast.info('Buka My Storage atau Organization untuk mengunggah berkas.');
+		fileInput?.click();
 	}
 
-	function toggleRole() {
-		const next = chrome.user.role === 'super_admin' ? 'regular' : 'super_admin';
-		chrome.setRole(next);
-		toast.message(
-			next === 'super_admin' ? 'Mode demo: Super Admin' : 'Mode demo: Regular User',
-			{ description: 'Badge storage node mengikuti role.' }
-		);
+	async function handleFilesSelected(event: Event) {
+		const target = event.currentTarget as HTMLInputElement;
+		const files = target.files;
+		if (!files || files.length === 0) return;
+
+		const fileList = Array.from(files);
+		target.value = '';
+
+		isUploading = true;
+		let successCount = 0;
+		let failedCount = 0;
+		let lastError = '';
+
+		for (const file of fileList) {
+			try {
+				// Upload automatically to root of My Drive (parentId = null)
+				await myStorageAPI.upload(file, null, () => {});
+				successCount += 1;
+				void chrome.refreshQuota();
+				chrome.notifyStorageChange?.();
+			} catch (err: unknown) {
+				failedCount += 1;
+				const errorObj = err as { message?: string; status?: number; code?: string };
+				const isQuota =
+					errorObj?.status === 413 ||
+					errorObj?.code === 'USER_QUOTA_EXCEEDED' ||
+					errorObj?.code === 'STORAGE_POOL_FULL' ||
+					(errorObj?.message && errorObj.message.toLowerCase().includes('kuota'));
+
+				lastError = isQuota ? 'Kuota My Storage penuh' : (errorObj?.message ?? 'Gagal mengunggah berkas');
+				if (isQuota) break;
+			}
+		}
+
+		isUploading = false;
+		await chrome.refreshQuota();
+		chrome.notifyStorageChange?.();
+
+		if (failedCount === 0 && successCount > 0) {
+			if (successCount === 1) {
+				toast.success(`“${fileList[0].name}” berhasil diunggah ke My Drive`);
+			} else {
+				toast.success(`${successCount} berkas berhasil diunggah ke My Drive`);
+			}
+		} else if (successCount > 0 && failedCount > 0) {
+			toast.warning(`${successCount} berhasil, ${failedCount} gagal diunggah`, {
+				description: lastError
+			});
+		} else if (failedCount > 0) {
+			toast.error('Gagal mengunggah berkas ke My Drive', {
+				description: lastError
+			});
+		}
 	}
 </script>
 
@@ -66,20 +115,31 @@
 	</div>
 
 	<div class="ms-auto flex shrink-0 items-center gap-2 sm:gap-3">
-		<!-- ponytail: role toggle demo — hapus saat auth nyata -->
+		{#if !onExplorerPage}
+			<input
+				bind:this={fileInput}
+				type="file"
+				multiple
+				class="hidden"
+				data-testid="topbar-upload-input"
+				onchange={handleFilesSelected}
+			/>
+		{/if}
+
 		<Button
 			type="button"
-			variant="outline"
-			class="hidden text-xs sm:inline-flex"
-			onclick={toggleRole}
-			aria-label="Ganti role demo"
+			class="gap-1.5"
+			disabled={isUploading}
+			onclick={onUploadClick}
+			data-testid="topbar-upload-button"
 		>
-			{chrome.user.role === 'super_admin' ? 'Super Admin' : 'Regular'}
-		</Button>
-
-		<Button type="button" class="gap-1.5" onclick={onUploadClick}>
-			<Upload class="size-4 stroke-2" />
-			<span class="hidden sm:inline">Unggah</span>
+			{#if isUploading}
+				<Loader2 class="size-4 animate-spin" />
+				<span class="hidden sm:inline">Mengunggah…</span>
+			{:else}
+				<Upload class="size-4 stroke-2" />
+				<span class="hidden sm:inline">Unggah</span>
+			{/if}
 		</Button>
 
 		<ThemeToggle />

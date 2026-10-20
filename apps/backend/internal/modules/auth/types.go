@@ -11,6 +11,7 @@ type UserResponse struct {
 	Email      string `json:"email"`
 	Role       string `json:"role"`
 	QuotaBytes int64  `json:"quota_bytes"`
+	UsedBytes  int64  `json:"used_bytes"`
 }
 
 type LoginResponse struct {

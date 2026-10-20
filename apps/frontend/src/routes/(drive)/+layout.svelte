@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { page } from '$app/state';
+import { onMount, onDestroy } from 'svelte';
+import { page } from '$app/state';
 	import { getSetupStatus } from '$lib/api/setup';
 	import { goto } from '$app/navigation';
 	import { authAPI } from '$lib/api/auth.js';
@@ -17,7 +17,7 @@
 	let checking = $state(true);
 	let isCompleted = $state(true);
 
-	setDriveChrome({ user: MOCK_DRIVE_USER, quota: MOCK_QUOTA });
+	const driveChrome = setDriveChrome({ user: MOCK_DRIVE_USER, quota: MOCK_QUOTA });
 
 	const activeId = $derived(deriveDriveActiveId(page.url.pathname));
 
@@ -38,6 +38,7 @@
 				return;
 			}
 
+			await driveChrome.refreshQuota(false);
 			setMockLoggedIn(true);
 			driveView.init();
 		} catch (e) {
@@ -45,6 +46,10 @@
 		} finally {
 			checking = false;
 		}
+	});
+
+	onDestroy(() => {
+		driveChrome.destroy?.();
 	});
 </script>
 

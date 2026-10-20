@@ -167,6 +167,7 @@ func (s *Service) CompleteSetup(ctx context.Context, req *CompleteSetupRequest) 
 		PasswordHash:    string(passwordHash),
 		RecoveryKeyHash: &recoveryKeyHashStr,
 		Role:            "SUPER_ADMIN",
+		QuotaMode:       "UNLIMITED",
 		QuotaBytes:      -1,
 		CreatedAt:       time.Now(),
 		UpdatedAt:       time.Now(),

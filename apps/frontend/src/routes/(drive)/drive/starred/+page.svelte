@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { toast } from 'svelte-sonner';
 	import DrivePageHeader from '$lib/components/drive/drive-page-header.svelte';
 	import DriveViewToggle from '$lib/components/drive/drive-view-toggle.svelte';
@@ -8,6 +9,8 @@
 	import FileGridCard from '$lib/components/drive/file-grid-card.svelte';
 	import FileKindIcon from '$lib/components/drive/explorer/file-kind-icon.svelte';
 	import { formatSize } from '$lib/mocks/file-tree.js';
+	import { previewUrl } from '$lib/api/preview.js';
+	import FilePreviewDialog from '$lib/components/drive/explorer/file-preview-dialog.svelte';
 	import { driveView } from '$lib/drive-view.svelte.js';
 	import { getStarredItems, toggleStar, myStorageAPI } from '$lib/api/my-storage.js';
 	import type { FileEntry } from '$lib/types/drive.js';
@@ -15,7 +18,7 @@
 	import * as ContextMenu from '$lib/components/ui/context-menu/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { ConfirmDialog } from '$lib/components/ui/confirm-dialog/index.js';
-	import { Download, FolderOpen, Loader2, MoreVertical, Star, Trash2 } from '@lucide/svelte';
+	import { Download, Eye, FolderOpen, Loader2, MoreVertical, Star, Trash2 } from '@lucide/svelte';
 	import { cn } from '$lib/utils.js';
 
 	let items = $state<FileEntry[]>([]);
@@ -24,6 +27,24 @@
 
 	let deleteConfirmOpen = $state(false);
 	let deleteTargetEntry = $state<FileEntry | null>(null);
+
+	const previewId = $derived(page.url.searchParams.get('preview'));
+	const previewEntry = $derived(
+		previewId ? (items.find((e) => e.id === previewId) ?? null) : null
+	);
+	const previewOpen = $derived(!!previewEntry);
+
+	function syncPreview(id: string | null) {
+		const params = new URLSearchParams(page.url.searchParams);
+		if (id) params.set('preview', id);
+		else params.delete('preview');
+		const qs = params.toString();
+		void goto(`${page.url.pathname}${qs ? `?${qs}` : ''}`, {
+			replaceState: true,
+			keepFocus: true,
+			noScroll: true
+		});
+	}
 
 	async function loadStarred() {
 		try {
@@ -51,6 +72,8 @@
 	function handleItemDblClick(entry: FileEntry) {
 		if (entry.kind === 'folder') {
 			void goto(`/drive/my-storage?folder=${encodeURIComponent(entry.id)}`);
+		} else {
+			syncPreview(entry.id);
 		}
 	}
 
@@ -58,6 +81,7 @@
 		// Remove immediately from starred list
 		items = items.filter((e) => e.id !== entry.id);
 		if (selectedId === entry.id) selectedId = null;
+		if (previewId === entry.id) syncPreview(null);
 		try {
 			await toggleStar(entry.id);
 			toast.success(`Bintang dihapus dari “${entry.name}”`);
@@ -87,6 +111,7 @@
 			await myStorageAPI.remove(entry.id);
 			items = items.filter((e) => e.id !== entry.id);
 			if (selectedId === entry.id) selectedId = null;
+			if (previewId === entry.id) syncPreview(null);
 			toast.success(`“${entry.name}” dipindahkan ke Trash`);
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : 'Gagal memindahkan ke Trash');
@@ -139,6 +164,7 @@
 							subtitle={entry.kind === 'folder'
 								? `Folder · ${entry.modifiedAt}`
 								: `${formatSize(entry.sizeBytes)} · ${entry.modifiedAt}`}
+							previewUrl={entry.kind !== 'folder' ? previewUrl('my-storage', entry.id) : undefined}
 							selected={selectedId === entry.id}
 							onSelect={() => handleItemClick(entry)}
 							onOpen={() => handleItemDblClick(entry)}
@@ -184,6 +210,10 @@
 												Buka Folder
 											</DropdownMenu.Item>
 										{:else}
+											<DropdownMenu.Item class="gap-2" onclick={() => syncPreview(entry.id)}>
+												<Eye class="size-4 stroke-2" />
+												Lihat Pratinjau
+											</DropdownMenu.Item>
 											<DropdownMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 												<Download class="size-4 stroke-2" />
 												Unduh
@@ -217,6 +247,10 @@
 								Buka Folder
 							</ContextMenu.Item>
 						{:else}
+							<ContextMenu.Item class="gap-2" onclick={() => syncPreview(entry.id)}>
+								<Eye class="size-4 stroke-2" />
+								Lihat Pratinjau
+							</ContextMenu.Item>
 							<ContextMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 								<Download class="size-4 stroke-2" />
 								Unduh
@@ -319,6 +353,10 @@
 												Buka Folder
 											</DropdownMenu.Item>
 										{:else}
+											<DropdownMenu.Item class="gap-2" onclick={() => syncPreview(entry.id)}>
+												<Eye class="size-4 stroke-2" />
+												Lihat Pratinjau
+											</DropdownMenu.Item>
 											<DropdownMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 												<Download class="size-4 stroke-2" />
 												Unduh
@@ -352,6 +390,10 @@
 								Buka Folder
 							</ContextMenu.Item>
 						{:else}
+							<ContextMenu.Item class="gap-2" onclick={() => syncPreview(entry.id)}>
+								<Eye class="size-4 stroke-2" />
+								Lihat Pratinjau
+							</ContextMenu.Item>
 							<ContextMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 								<Download class="size-4 stroke-2" />
 								Unduh
@@ -386,4 +428,12 @@
 	confirmText="Hapus ke Trash"
 	variant="destructive"
 	onConfirm={executeDelete}
+/>
+
+<FilePreviewDialog
+	open={previewOpen}
+	entry={previewEntry}
+	source="my-storage"
+	onDownload={onDownload}
+	onClose={() => syncPreview(null)}
 />

@@ -2,6 +2,7 @@
 	import type { FileEntry } from '$lib/types/drive.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import { Input } from '$lib/components/ui/input/index.js';
 	import { isAncestor } from '$lib/mocks/file-tree.js';
 	import { cn } from '$lib/utils.js';
 	import {
@@ -18,12 +19,14 @@
 	let {
 		open = $bindable(false),
 		entry = null,
+		entries = [],
 		folders = [],
 		currentParentId = null,
 		onConfirm
 	}: {
 		open?: boolean;
 		entry?: FileEntry | null;
+		entries?: FileEntry[];
 		folders?: FileEntry[];
 		currentParentId?: string | null;
 		onConfirm: (targetFolderId: string | null) => void;
@@ -41,7 +44,8 @@
 		}
 	});
 
-	const effectiveCurrentParentId = $derived(entry?.parentId ?? currentParentId ?? null);
+	const targetList = $derived(entries && entries.length > 0 ? entries : (entry ? [entry] : []));
+	const effectiveCurrentParentId = $derived(targetList[0]?.parentId ?? currentParentId ?? null);
 
 	const currentLocationName = $derived.by(() => {
 		if (!effectiveCurrentParentId) return 'Drive Saya';
@@ -71,10 +75,11 @@
 	});
 
 	function isFolderInvalid(targetFolder: FileEntry): boolean {
-		if (!entry) return false;
-		if (entry.kind === 'folder') {
-			if (targetFolder.id === entry.id) return true;
-			if (isAncestor(folders, entry.id, targetFolder.id)) return true;
+		for (const e of targetList) {
+			if (e.kind === 'folder') {
+				if (targetFolder.id === e.id) return true;
+				if (isAncestor(folders, e.id, targetFolder.id)) return true;
+			}
 		}
 		return false;
 	}
@@ -84,10 +89,13 @@
 	}
 
 	const canMoveToCurrentFolder = $derived.by(() => {
-		if (currentFolderId === effectiveCurrentParentId) return false;
-		if (entry?.kind === 'folder' && currentFolderId) {
-			if (currentFolderId === entry.id) return false;
-			if (isAncestor(folders, entry.id, currentFolderId)) return false;
+		if (targetList.length === 0) return false;
+		if (targetList.every((e) => (e.parentId ?? null) === currentFolderId)) return false;
+		for (const e of targetList) {
+			if (e.kind === 'folder' && currentFolderId) {
+				if (currentFolderId === e.id) return false;
+				if (isAncestor(folders, e.id, currentFolderId)) return false;
+			}
 		}
 		return true;
 	});
@@ -117,7 +125,11 @@
 						Pindahkan
 					</Dialog.Title>
 					<p class="text-sm text-main/90 font-medium truncate">
-						“{entry?.name ?? 'Berkas'}”
+						{#if targetList.length > 1}
+							{targetList.length} item dipilih
+						{:else}
+							“{targetList[0]?.name ?? 'Berkas'}”
+						{/if}
 					</p>
 					<div class="flex items-center gap-2 pt-1 text-xs text-muted">
 						<span>Lokasi saat ini:</span>
@@ -158,16 +170,20 @@
 
 			<div class="flex items-center">
 				{#if showSearch}
-					<div class="flex items-center gap-1 bg-app rounded-full px-2.5 py-1 border border-subtle">
-						<Search class="size-3.5 text-muted shrink-0" />
-						<input
+					<div class="relative flex items-center">
+						<Search class="pointer-events-none absolute start-2.5 size-3.5 stroke-2 text-muted" />
+						<Input
 							type="text"
 							placeholder="Cari folder..."
 							bind:value={searchQuery}
-							class="w-32 sm:w-40 bg-transparent text-xs text-main outline-none placeholder:text-muted"
+							class="h-8 w-36 pe-7 ps-8 text-xs sm:w-44"
 						/>
 						{#if searchQuery}
-							<button type="button" onclick={() => (searchQuery = '')} class="text-muted hover:text-main">
+							<button
+								type="button"
+								onclick={() => (searchQuery = '')}
+								class="absolute end-6 text-muted hover:text-main"
+							>
 								<X class="size-3" />
 							</button>
 						{/if}
@@ -177,7 +193,7 @@
 								showSearch = false;
 								searchQuery = '';
 							}}
-							class="text-muted hover:text-main ml-1"
+							class="absolute end-2 text-muted hover:text-main"
 						>
 							<X class="size-3.5" />
 						</button>

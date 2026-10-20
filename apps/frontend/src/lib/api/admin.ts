@@ -1,3 +1,5 @@
+import type { AdminStorageStats, AdminTopStorageUsersResponse } from '$lib/types/admin.js';
+
 export const API_BASE = '/api/v1';
 
 export interface QuotaPolicy {
@@ -16,6 +18,7 @@ export interface UpdateSettingsRequest {
 	default_quota?: QuotaPolicy;
 	audit_retention_days?: number;
 	worker_concurrency?: number;
+	placement_strategy?: string;
 }
 
 export interface StorageNode {
@@ -29,12 +32,30 @@ export interface StorageNode {
 	capacity_cap_gb: number;
 	used_bytes: number;
 	enabled: boolean;
+	endpoint?: string;
+	bucket?: string;
 }
 
 export interface StorageNodesResponse {
 	nodes: StorageNode[];
 }
 
+export interface BackendAdminUser {
+	id: string;
+	username: string;
+	email: string;
+	role: string;
+	quota_mode: string;
+	quota_bytes: number;
+	quota_gb?: number;
+	used_bytes: number;
+	used_gb: number;
+	created_at: string;
+}
+
+export interface AdminUsersListResponse {
+	users: BackendAdminUser[];
+}
 class AdminAPI {
 	private async request<T>(
 		endpoint: string,
@@ -128,8 +149,8 @@ class AdminAPI {
 		path: string;
 		capacity_cap_gb: number;
 		enabled: boolean;
-	}): Promise<{ data?: any; error?: string }> {
-		return this.request('/admin/storage-nodes', {
+	}): Promise<{ data?: StorageNode; error?: string }> {
+		return this.request<StorageNode>('/admin/storage-nodes', {
 			method: 'POST',
 			body: JSON.stringify(data)
 		});
@@ -144,8 +165,8 @@ class AdminAPI {
 		secret_key: string;
 		capacity_cap_gb: number;
 		enabled: boolean;
-	}): Promise<{ data?: any; error?: string }> {
-		return this.request('/admin/storage-nodes/cloud', {
+	}): Promise<{ data?: StorageNode; error?: string }> {
+		return this.request<StorageNode>('/admin/storage-nodes/cloud', {
 			method: 'POST',
 			body: JSON.stringify(data)
 		});
@@ -165,6 +186,59 @@ class AdminAPI {
 		return this.request(`/admin/storage-nodes/${nodeId}`, {
 			method: 'DELETE'
 		});
+	}
+
+	async getUsers(): Promise<{ data?: AdminUsersListResponse; error?: string }> {
+		return this.request<AdminUsersListResponse>('/admin/users');
+	}
+
+	async createUser(data: {
+		username: string;
+		email: string;
+		password: string;
+		quota_mode: string;
+		quota_gb?: number;
+	}): Promise<{ data?: BackendAdminUser; error?: string }> {
+		return this.request<BackendAdminUser>('/admin/users', {
+			method: 'POST',
+			body: JSON.stringify(data)
+		});
+	}
+
+	async updateUserQuota(
+		userId: string,
+		data: {
+			quota_mode: string;
+			quota_gb?: number;
+		}
+	): Promise<{ data?: BackendAdminUser; error?: string }> {
+		return this.request<BackendAdminUser>(`/admin/users/${userId}/quota`, {
+			method: 'PUT',
+			body: JSON.stringify(data)
+		});
+	}
+
+	async deleteUser(
+		userId: string,
+		data?: { email: string }
+	): Promise<{ data?: { message: string }; error?: string }> {
+		return this.request(`/admin/users/${userId}`, {
+			method: 'DELETE',
+			body: data ? JSON.stringify(data) : undefined
+		});
+	}
+
+	async getStorageStats(): Promise<{ data?: AdminStorageStats; error?: string }> {
+		return this.request<AdminStorageStats>('/admin/storage/stats');
+	}
+
+	async getTopStorageUsers(
+		limit = 20,
+		offset = 0
+	): Promise<{ data?: AdminTopStorageUsersResponse; error?: string }> {
+		return this.request<AdminTopStorageUsersResponse>(
+			`/admin/storage/top-users?limit=${limit}&offset=${offset}`
+		);
 	}
 }
 

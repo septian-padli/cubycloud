@@ -22,21 +22,23 @@
 	} = $props();
 </script>
 
-<DriveListRow
-	{selected}
-	onSelect={() => onSelect(entry)}
-	onOpen={() => onPreview(entry)}
->
+<DriveListRow {selected} onSelect={() => onSelect(entry)} onOpen={() => onPreview(entry)}>
 	{#snippet leading()}
 		<FileKindIcon kind={entry.kind} />
 	{/snippet}
 	{#snippet meta()}
 		<p class="truncate text-sm font-medium text-main">{entry.name}</p>
-		<p class="text-xs text-muted">
-			{formatSize(entry.sizeBytes)} · Diubah {entry.modifiedAt}
+		<p class="truncate text-xs text-muted">
+			{formatSize(entry.sizeBytes)} · Diubah {entry.modifiedAt} · {entry.location}
 		</p>
 	{/snippet}
 	{#snippet trailing()}
+		<span
+			class="hidden max-w-[180px] truncate text-xs text-muted md:inline-block"
+			title={entry.location}
+		>
+			{entry.location}
+		</span>
 		<span class="text-xs font-medium text-muted">{formatSize(entry.sizeBytes)}</span>
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger>

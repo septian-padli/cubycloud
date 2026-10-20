@@ -4,7 +4,7 @@
 	import { beforeNavigate, goto } from '$app/navigation';
 	import { adminAPI } from '$lib/api/admin.js';
 	import type { StorageNode } from '$lib/types/setup.js';
-	import type { SystemSettings, AuditRetentionDays } from '$lib/types/admin.js';
+	import type { SystemSettings, AuditRetentionDays, PlacementStrategy } from '$lib/types/admin.js';
 	import DrivePageHeader from '$lib/components/drive/drive-page-header.svelte';
 	import AddStorageNodeDialog from '$lib/components/admin/add-storage-node-dialog.svelte';
 	import EditStorageNodeDialog from '$lib/components/admin/edit-storage-node-dialog.svelte';
@@ -19,7 +19,8 @@
 	let settings = $state<SystemSettings>({
 		defaultQuota: { mode: 'unlimited', gb: 0 },
 		auditRetentionDays: 90,
-		workerConcurrency: 2
+		workerConcurrency: 2,
+		placementStrategy: 'FILL_FIRST'
 	});
 	let initialSettings = $state<SystemSettings | null>(null);
 	let loading = $state(true);
@@ -52,7 +53,8 @@
 					gb: settingsResp.data.default_quota.gb
 				},
 				auditRetentionDays: settingsResp.data.audit_retention_days as AuditRetentionDays,
-				workerConcurrency: settingsResp.data.worker_concurrency
+				workerConcurrency: settingsResp.data.worker_concurrency,
+				placementStrategy: (settingsResp.data.placement_strategy as PlacementStrategy) || 'FILL_FIRST'
 			};
 			settings = {
 				...loadedSettings,
@@ -71,10 +73,12 @@
 		} else if (nodesResp.data) {
 			nodes = nodesResp.data.nodes.map((n) => ({
 				id: n.id,
-				type: n.type,
+				type: (n.type === 'S3' ? 'S3' : 'LOCAL') as 'LOCAL' | 'S3',
 				name: n.name,
 				path: n.path,
-				kind: (n.kind === 'SSD' || n.kind === 'HDD' ? n.kind : 'HDD') as 'SSD' | 'HDD',
+				kind: (n.kind === 'SSD' || n.kind === 'HDD' || n.kind === 'S3' ? n.kind : 'HDD') as 'SSD' | 'HDD' | 'S3',
+				endpoint: n.endpoint,
+				bucket: n.bucket,
 				totalGb: n.capacity_cap_gb,
 				freeGb: Math.max(
 					(n.capacity_cap_gb * 1024 ** 3 - n.used_bytes) / 1024 ** 3,
@@ -117,6 +121,9 @@
 		if (Number(settings.workerConcurrency) !== Number(initialSettings.workerConcurrency)) {
 			return true;
 		}
+		if (settings.placementStrategy !== initialSettings.placementStrategy) {
+			return true;
+		}
 		return false;
 	});
 
@@ -134,8 +141,13 @@
 	const isRetentionInvalid = $derived(
 		![7, 14, 30, 60, 90].includes(Number(settings.auditRetentionDays))
 	);
+	const isStrategyInvalid = $derived(
+		!['FILL_FIRST', 'MOST_FREE_SPACE', 'ROUND_ROBIN'].includes(settings.placementStrategy)
+	);
 
-	const isValid = $derived(!isQuotaInvalid && !isConcurrencyInvalid && !isRetentionInvalid);
+	const isValid = $derived(
+		!isQuotaInvalid && !isConcurrencyInvalid && !isRetentionInvalid && !isStrategyInvalid
+	);
 	const canSave = $derived(isDirty && isValid && !savingSettings);
 
 	async function saveSettings() {
@@ -147,7 +159,8 @@
 				gb: Number(settings.defaultQuota.gb)
 			},
 			audit_retention_days: Number(settings.auditRetentionDays),
-			worker_concurrency: Number(settings.workerConcurrency)
+			worker_concurrency: Number(settings.workerConcurrency),
+			placement_strategy: settings.placementStrategy
 		});
 		savingSettings = false;
 
@@ -162,7 +175,8 @@
 						gb: resp.data.default_quota.gb
 					},
 					auditRetentionDays: resp.data.audit_retention_days as AuditRetentionDays,
-					workerConcurrency: resp.data.worker_concurrency
+					workerConcurrency: resp.data.worker_concurrency,
+					placementStrategy: (resp.data.placement_strategy as PlacementStrategy) || 'FILL_FIRST'
 				};
 				settings = { ...synced, defaultQuota: { ...synced.defaultQuota } };
 				initialSettings = { ...synced, defaultQuota: { ...synced.defaultQuota } };
