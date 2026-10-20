@@ -1,8 +1,9 @@
 {
 	"mcpServers": {
-		"graphify": {
-			"command": "graphify-mcp",
-			"args": ["/Users/septianpadli/MyData/SoftwareDev/cubycloud/graphify-out/graph.json"]
+		"codegraph": {
+			"type": "stdio",
+			"command": "codegraph",
+			"args": ["mcp", "serve", "--root", ".", "--stdio"]
 		}
 	}
 }

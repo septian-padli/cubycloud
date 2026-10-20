@@ -1,12 +1,35 @@
+# Air configuration for CubyCloud Go backend
 root = "."
 tmp_dir = "tmp"
 
 [build]
-cmd = "CGO_ENABLED=0 go build -o ./tmp/server ./cmd/server"
-bin = "./tmp/server"
+cmd = "go build -o ./tmp/main ./cmd/server"
+bin = "./tmp/main"
+full_bin = "APP_ENV=dev ./tmp/main"
+log = "build-errors.log"
 include_ext = ["go"]
-exclude_dir = ["tmp", "bin", "data", "web"]
+exclude_dir = ["assets", "tmp", "vendor", "testdata", "web", "data"]
+include_dir = ["cmd", "internal", "pkg"]
+exclude_regex = ["_test.go"]
 delay = 500
+stop_on_error = false
+send_interrupt = true
+kill_delay = "500ms"
+
+[color]
+app = ""
+build = "yellow"
+main = "magenta"
+runner = "green"
+watcher = "cyan"
+
+[log]
+main_only = false
+time = false
 
 [misc]
 clean_on_exit = true
+
+[screen]
+clear_on_rebuild = false
+keep_scroll = true

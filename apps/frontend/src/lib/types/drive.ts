@@ -30,6 +30,7 @@ export interface QuickAccessItem {
 	kind: FileKind;
 	sizeLabel: string;
 	openedAgo: string;
+	source?: 'my-storage' | 'organization';
 }
 
 export interface ActivityItem {
@@ -37,6 +38,9 @@ export interface ActivityItem {
 	action: ActivityAction;
 	fileName: string;
 	at: string;
+	itemKind?: FileKind;
+	source?: 'my-storage' | 'organization';
+	itemId?: string;
 }
 
 export interface FileEntry {
@@ -99,9 +103,10 @@ export interface TrashFileItem extends FileEntry {
 }
 
 export interface CategoryUsage {
-	id: 'video' | 'image' | 'document' | 'archive' | 'trash';
+	id: 'video' | 'image' | 'document' | 'archive' | 'other' | 'trash' | (string & {});
 	label: string;
 	usedGb: number;
+	bytes?: number;
 }
 
 export interface LargestFileItem {
@@ -109,5 +114,6 @@ export interface LargestFileItem {
 	name: string;
 	kind: FileKind;
 	sizeBytes: number;
+	location: string;
 	modifiedAt: string;
 }

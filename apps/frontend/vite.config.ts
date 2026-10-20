@@ -16,5 +16,21 @@ export default defineConfig({
 				fallback: 'index.html'
 			})
 		})
-	]
+	],
+	server: {
+		hmr: {
+			port: Number(process.env.VITE_HMR_PORT ?? 5188),
+			protocol: 'ws',
+			clientPort: Number(process.env.VITE_HMR_PORT ?? 5188),
+			timeout: 30000
+		},
+		port: 5188,
+		proxy: {
+			'/api': {
+				target: process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8383',
+				changeOrigin: true
+			}
+		}
+	}
 });
+

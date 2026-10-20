@@ -14,11 +14,12 @@
 	let openId = $state<string | null>(null);
 	let closeTimer: ReturnType<typeof setTimeout> | null = null;
 
-	const SEGMENT_CLASS: Record<CategoryUsage['id'], string> = {
+	const SEGMENT_CLASS: Record<string, string> = {
 		video: 'bg-primary',
 		image: 'bg-secondary-accent',
 		document: 'bg-primary/75',
 		archive: 'bg-secondary-accent/75',
+		other: 'bg-muted-foreground',
 		trash: 'bg-primary/50'
 	};
 

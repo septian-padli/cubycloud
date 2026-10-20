@@ -33,15 +33,22 @@
 
 	{#if active}
 		<div
-			class="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-xl bg-primary/10"
+			class="pointer-events-none fixed inset-0 top-16 z-40 flex flex-col items-center justify-center gap-3 bg-primary/10 backdrop-blur-[1px] md:start-64"
 			aria-hidden="true"
 		>
 			<div
-				class="flex size-12 items-center justify-center rounded-xl border border-dashed border-primary bg-surface text-primary"
+				class="m-6 flex h-[calc(100%-3rem)] w-[calc(100%-3rem)] flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed border-primary bg-surface/95 p-8 text-primary shadow-none"
 			>
-				<Upload class="size-6 stroke-2" />
+				<div
+					class="flex size-16 items-center justify-center rounded-2xl border border-dashed border-primary bg-primary/10 text-primary"
+				>
+					<Upload class="size-8 stroke-2" />
+				</div>
+				<div class="text-center">
+					<p class="text-base font-semibold text-primary">Lepas berkas di mana saja untuk mengunggah</p>
+					<p class="mt-1 text-xs text-muted">Berkas akan diunggah ke lokasi folder saat ini</p>
+				</div>
 			</div>
-			<p class="text-sm font-medium text-primary">Lepas berkas untuk mengunggah</p>
 		</div>
 	{/if}
 </div>

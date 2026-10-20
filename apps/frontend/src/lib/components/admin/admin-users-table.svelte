@@ -19,7 +19,7 @@
 	} = $props();
 
 	function roleLabel(role: AdminUser['role']): string {
-		return role === 'super_admin' ? 'Super Admin' : 'User';
+		return String(role).toLowerCase() === 'super_admin' ? 'Super Admin' : 'User';
 	}
 </script>
 
@@ -37,7 +37,7 @@
 		</thead>
 		<tbody>
 			{#each users as user (user.id)}
-				{@const isSuperAdmin = user.role === 'super_admin'}
+				{@const isSuperAdmin = String(user.role).toLowerCase() === 'super_admin'}
 				<tr class="border-b border-subtle last:border-b-0">
 					<td class="px-4 py-3 font-medium text-main">{user.username}</td>
 					<td class="px-4 py-3 text-muted">{user.email}</td>
@@ -85,11 +85,10 @@
 										<Pencil class="size-4 stroke-2" />
 										Edit Kuota
 									</DropdownMenu.Item>
-									{#if onDelete}
+									{#if onDelete && !isSuperAdmin}
 										<DropdownMenu.Item
 											variant="destructive"
 											class="gap-2"
-											disabled={isSuperAdmin}
 											onclick={() => onDelete(user)}
 										>
 											<Trash2 class="size-4 stroke-2" />

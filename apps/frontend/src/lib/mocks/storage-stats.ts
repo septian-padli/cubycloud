@@ -16,6 +16,7 @@ export const MOCK_LARGEST_FILES: LargestFileItem[] = [
 		name: 'Demo Setup.mp4',
 		kind: 'video',
 		sizeBytes: 50_331_648,
+		location: 'My Storage / Videos',
 		modifiedAt: '3 hari lalu'
 	},
 	{
@@ -23,6 +24,7 @@ export const MOCK_LARGEST_FILES: LargestFileItem[] = [
 		name: 'Clip Demo.mp4',
 		kind: 'video',
 		sizeBytes: 38_000_000,
+		location: 'My Storage / Videos',
 		modifiedAt: '3 minggu lalu'
 	},
 	{
@@ -30,6 +32,7 @@ export const MOCK_LARGEST_FILES: LargestFileItem[] = [
 		name: 'Foto Lab.jpg',
 		kind: 'image',
 		sizeBytes: 3_250_000,
+		location: 'My Storage / Photos',
 		modifiedAt: 'Kemarin'
 	},
 	{
@@ -37,6 +40,7 @@ export const MOCK_LARGEST_FILES: LargestFileItem[] = [
 		name: 'Laporan_Arsitektur_v1.pdf',
 		kind: 'document',
 		sizeBytes: 2_516_582,
+		location: 'My Storage / Documents',
 		modifiedAt: '2 jam lalu'
 	},
 	{
@@ -44,6 +48,7 @@ export const MOCK_LARGEST_FILES: LargestFileItem[] = [
 		name: 'Old Banner.png',
 		kind: 'image',
 		sizeBytes: 2_200_000,
+		location: 'My Storage / Design',
 		modifiedAt: '1 bulan lalu'
 	},
 	{
@@ -51,6 +56,7 @@ export const MOCK_LARGEST_FILES: LargestFileItem[] = [
 		name: 'Intro Audio.mp3',
 		kind: 'audio',
 		sizeBytes: 4_403_200,
+		location: 'My Storage',
 		modifiedAt: '5 hari lalu'
 	},
 	{
@@ -58,6 +64,7 @@ export const MOCK_LARGEST_FILES: LargestFileItem[] = [
 		name: 'Logs Minggu Lalu.zip',
 		kind: 'archive',
 		sizeBytes: 6_500_000,
+		location: 'My Storage / Archives',
 		modifiedAt: '3 minggu lalu'
 	},
 	{
@@ -65,6 +72,7 @@ export const MOCK_LARGEST_FILES: LargestFileItem[] = [
 		name: 'Backup Config.zip',
 		kind: 'archive',
 		sizeBytes: 1_048_576,
+		location: 'My Storage / Backup',
 		modifiedAt: '5 hari lalu'
 	},
 	{
@@ -72,6 +80,7 @@ export const MOCK_LARGEST_FILES: LargestFileItem[] = [
 		name: 'Wireframe.png',
 		kind: 'image',
 		sizeBytes: 890_000,
+		location: 'My Storage / Design',
 		modifiedAt: 'Kemarin'
 	},
 	{
@@ -79,6 +88,7 @@ export const MOCK_LARGEST_FILES: LargestFileItem[] = [
 		name: 'Brief Produk.pdf',
 		kind: 'document',
 		sizeBytes: 512_000,
+		location: 'My Storage / Documents',
 		modifiedAt: '4 jam lalu'
 	}
 ];

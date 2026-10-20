@@ -42,7 +42,7 @@
 <div class={cn('border-t border-subtle px-4 py-3', className)}>
 	<p class="text-xs font-medium text-muted">My Storage</p>
 	{#if unlimited}
-		<p class="mt-1 text-sm font-medium text-main">Used: {usedLabel} GB</p>
+		<p class="mt-1 text-sm font-medium text-main">{usedLabel} GB terpakai</p>
 	{:else}
 		<div class="mt-1 flex items-baseline justify-between gap-2">
 			<p class="text-sm font-medium text-main">{usedLabel} / {limitLabel} GB</p>

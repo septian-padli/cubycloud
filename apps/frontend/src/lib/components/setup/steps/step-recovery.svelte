@@ -2,99 +2,121 @@
 	import * as Card from '$lib/components/ui/card/index.js';
 	import * as Alert from '$lib/components/ui/alert/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { Checkbox } from '$lib/components/ui/checkbox/index.js';
-	import { Input } from '$lib/components/ui/input/index.js';
-	import { Label } from '$lib/components/ui/label/index.js';
-	import { Check, Copy, Download, KeyRound } from '@lucide/svelte';
+	import { Download, KeyRound, Check } from '@lucide/svelte';
+	import { toast } from 'svelte-sonner';
 
 	let {
-		recoveryKey,
-		acknowledged = $bindable()
+		recoveryKey = $bindable(),
+		downloaded = $bindable()
 	}: {
 		recoveryKey: string;
-		acknowledged: boolean;
+		downloaded: boolean;
 	} = $props();
 
-	let copied = $state(false);
 
-	async function copyKey() {
-		try {
-			await navigator.clipboard.writeText(recoveryKey);
-			copied = true;
-			setTimeout(() => {
-				copied = false;
-			}, 2000);
-		} catch {
-			copied = false;
-		}
-	}
 
 	function downloadKey() {
-		const blob = new Blob([recoveryKey + '\n'], { type: 'text/plain' });
+		if (!recoveryKey || recoveryKey.length !== 35) {
+			toast.error('Recovery key belum di-generate!');
+			return;
+		}
+		
+		const blob = new Blob([recoveryKey], { type: 'text/plain' });
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
 		a.href = url;
-		a.download = 'cubycloud-recovery-key.txt';
+		a.download = `cubycloud-recovery-key-${Date.now()}.txt`;
+		document.body.appendChild(a);
 		a.click();
+		document.body.removeChild(a);
 		URL.revokeObjectURL(url);
+		
+		downloaded = true;
+		toast.success('Recovery key berhasil diunduh');
+	}
+
+	function copyKey() {
+		if (!recoveryKey || recoveryKey.length !== 35) {
+			toast.error('Recovery key belum di-generate!');
+			return;
+		}
+		navigator.clipboard.writeText(recoveryKey).then(() => {
+			downloaded = true;
+			toast.success('Recovery key disalin ke clipboard');
+		});
 	}
 </script>
 
 <Card.Root class="rounded-xl border-subtle bg-surface shadow-none">
 	<Card.Header>
-		<Card.Title class="text-lg font-semibold text-main">Kunci Pemulihan Darurat</Card.Title>
+		<Card.Title class="flex items-center gap-2 text-lg font-semibold text-main">
+			<KeyRound class="size-5 stroke-2" />
+			Recovery Key Anda
+		</Card.Title>
 		<Card.Description class="text-sm text-muted">
-			Simpan kunci 64 karakter ini. Digunakan untuk memulihkan akses Super Admin jika lupa password.
+			Simpan kode ini dengan aman untuk memulihkan password jika lupa
 		</Card.Description>
 	</Card.Header>
 	<Card.Content class="space-y-4">
-		<Alert.Root variant="destructive" class="border-danger/30">
-			<KeyRound class="size-4 stroke-2" />
-			<Alert.Title>Jangan hilangkan kunci ini</Alert.Title>
+		<Alert.Root variant="destructive">
+			<Alert.Title>⚠️ Penting!</Alert.Title>
 			<Alert.Description>
-				CubyCloud v1.0 tidak mengirim email pemulihan. Tanpa kunci ini, akun Super Admin tidak dapat
-				dipulihkan.
+				Recovery key ini <strong>tidak akan ditampilkan lagi</strong> setelah setup selesai.
+				<strong class="block mt-1">Download sekarang atau Anda tidak bisa memulihkan password!</strong>
 			</Alert.Description>
 		</Alert.Root>
 
-		<div class="space-y-2">
-			<Label for="recovery-key">Emergency Recovery Key</Label>
-			<Input
-				id="recovery-key"
-				class="font-mono text-xs"
-				readonly
-				value={recoveryKey}
-			/>
+		<!-- Recovery Key Display -->
+		<div class="rounded-xl border border-subtle bg-app p-4">
+			<div class="mb-2 text-xs font-medium text-muted">RECOVERY KEY (6 × 5 karakter)</div>
+			{#if !recoveryKey || recoveryKey.length === 0}
+				<code class="block break-all rounded-lg bg-surface px-3 py-3 font-mono text-sm text-danger border border-subtle">
+					⚠️ Recovery key belum di-generate! Silakan reload halaman.
+				</code>
+			{:else}
+				<code class="block break-all rounded-lg bg-surface px-3 py-3 font-mono text-sm text-main border border-subtle">
+					{recoveryKey}
+				</code>
+			{/if}
 		</div>
 
-		<div class="flex flex-wrap gap-2">
-			<Button variant="outline" class="gap-1.5" onclick={copyKey}>
-				{#if copied}
-					<Check class="size-4 stroke-2" />
-					Disalin
+		<!-- Action Buttons -->
+		<div class="flex gap-3">
+			<Button
+				onclick={downloadKey}
+				variant="default"
+				class="flex-1 gap-2"
+				disabled={downloaded}
+			>
+				{#if downloaded}
+					<Check class="size-4" />
+					Sudah Disimpan
 				{:else}
-					<Copy class="size-4 stroke-2" />
-					Salin kunci
+					<Download class="size-4" />
+					Download Key
 				{/if}
 			</Button>
-			<Button variant="outline" class="gap-1.5" onclick={downloadKey}>
-				<Download class="size-4 stroke-2" />
-				Unduh .txt
+			<Button
+				onclick={copyKey}
+				variant="outline"
+				class="gap-2"
+			>
+				<svg class="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+					<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+				</svg>
+				Salin
 			</Button>
 		</div>
 
-		<label class="flex cursor-pointer items-start gap-3 rounded-xl border border-subtle bg-app px-4 py-3">
-			<Checkbox
-				id="recovery-ack"
-				class="mt-0.5"
-				checked={acknowledged}
-				onCheckedChange={(v) => {
-					acknowledged = v === true;
-				}}
-			/>
-			<Label for="recovery-ack" class="cursor-pointer text-sm leading-normal text-main">
-				Saya sudah menyimpan kunci pemulihan (salin atau unduh) dan memahami risikonya.
-			</Label>
-		</label>
+		{#if downloaded}
+			<Alert.Root variant="default">
+				<Check class="size-4 stroke-2" />
+				<Alert.Title>Recovery key tersimpan</Alert.Title>
+				<Alert.Description>
+					Recovery key sudah disimpan (diunduh atau disalin). Anda bisa melanjutkan setup.
+				</Alert.Description>
+			</Alert.Root>
+		{/if}
 	</Card.Content>
 </Card.Root>

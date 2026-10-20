@@ -8,6 +8,7 @@ export const MOCK_STORAGE_NODES: StorageNode[] = [
 		kind: 'SSD',
 		totalGb: 500,
 		freeGb: 412,
+		usedBytes: 88 * 1024 ** 3,
 		enabled: true,
 		capacityCapGb: 475
 	},
@@ -18,6 +19,7 @@ export const MOCK_STORAGE_NODES: StorageNode[] = [
 		kind: 'HDD',
 		totalGb: 2000,
 		freeGb: 1680,
+		usedBytes: 320 * 1024 ** 3,
 		enabled: true,
 		capacityCapGb: 1900
 	},
@@ -28,6 +30,7 @@ export const MOCK_STORAGE_NODES: StorageNode[] = [
 		kind: 'SSD',
 		totalGb: 256,
 		freeGb: 240,
+		usedBytes: 16 * 1024 ** 3,
 		enabled: false,
 		capacityCapGb: 243
 	}
@@ -58,11 +61,16 @@ export function cloneMockDevices(): LinuxDevice[] {
 	return MOCK_LINUX_DEVICES.map((d) => ({ ...d }));
 }
 
-/** Cryptographically random 64-char hex (UI mock — not persisted). */
+/** Cryptographically random Recovery Key in the 6×5 format (UI mock — not persisted). */
 export function generateMockRecoveryKey(): string {
-	const bytes = new Uint8Array(32);
-	crypto.getRandomValues(bytes);
-	return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+	const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+	const characters = Array.from(crypto.getRandomValues(new Uint8Array(30)), (value) =>
+		alphabet[value & 31]
+	);
+	return characters.reduce(
+		(key, character, index) => key + (index > 0 && index % 5 === 0 ? '-' : '') + character,
+		''
+	);
 }
 
 export function simulateScan(ms = 900): Promise<void> {

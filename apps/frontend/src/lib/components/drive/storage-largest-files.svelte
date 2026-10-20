@@ -1,10 +1,12 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { toast } from 'svelte-sonner';
 	import type { LargestFileItem } from '$lib/types/drive.js';
 	import { formatSize } from '$lib/mocks/file-tree.js';
 	import { driveView } from '$lib/drive-view.svelte.js';
+	import { myStorageAPI } from '$lib/api/my-storage.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -14,24 +16,82 @@
 	import DriveFileGrid from './drive-file-grid.svelte';
 	import FileGridCard from './file-grid-card.svelte';
 	import DriveViewToggle from './drive-view-toggle.svelte';
-	import { Download, Eye, MoreVertical, Sparkles, Trash2 } from '@lucide/svelte';
+	import { Download, Eye, Loader2, MoreVertical, Sparkles, Trash2 } from '@lucide/svelte';
 
 	let {
-		files,
-		trashCount = 0
+		files: initialFiles,
+		trashCount = 0,
+		fetchFromApi = true
 	}: {
-		files: LargestFileItem[];
+		files?: LargestFileItem[];
 		trashCount?: number;
+		fetchFromApi?: boolean;
 	} = $props();
-
+	let files = $state<LargestFileItem[]>([]);
+	let loading = $state(true);
+	let loadingMore = $state(false);
+	let hasMore = $state(false);
+	let nextOffset = $state(0);
 	let selectedId = $state<string | null>(null);
 	let cleanupOpen = $state(false);
+	let sentinelEl = $state<HTMLDivElement | null>(null);
 
 	const previewId = $derived(page.url.searchParams.get('preview'));
-	const previewEntry = $derived(
-		previewId ? (files.find((e) => e.id === previewId) ?? null) : null
-	);
+	const previewEntry = $derived(previewId ? (files.find((e) => e.id === previewId) ?? null) : null);
 	const previewOpen = $derived(!!previewEntry);
+
+	async function loadInitial() {
+		if (!fetchFromApi && initialFiles) {
+			files = initialFiles;
+			loading = false;
+			return;
+		}
+		try {
+			loading = true;
+			const res = await myStorageAPI.largestFiles(20, 0);
+			files = res.items.map((item) => myStorageAPI.toLargestFileItem(item));
+			hasMore = res.has_more;
+			nextOffset = res.next_offset;
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Gagal memuat berkas terbesar');
+		} finally {
+			loading = false;
+		}
+	}
+
+	async function loadMore() {
+		if (loadingMore || !hasMore) return;
+		try {
+			loadingMore = true;
+			const res = await myStorageAPI.largestFiles(20, nextOffset);
+			const nextItems = res.items.map((item) => myStorageAPI.toLargestFileItem(item));
+			files = [...files, ...nextItems];
+			hasMore = res.has_more;
+			nextOffset = res.next_offset;
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Gagal memuat halaman berikutnya');
+		} finally {
+			loadingMore = false;
+		}
+	}
+
+	onMount(() => {
+		void loadInitial();
+	});
+
+	$effect(() => {
+		if (!sentinelEl || !hasMore) return;
+		const observer = new IntersectionObserver(
+			(entries) => {
+				if (entries[0]?.isIntersecting) {
+					void loadMore();
+				}
+			},
+			{ rootMargin: '200px' }
+		);
+		observer.observe(sentinelEl);
+		return () => observer.disconnect();
+	});
 
 	function syncPreview(id: string | null) {
 		const params = new URLSearchParams(page.url.searchParams);
@@ -46,7 +106,13 @@
 	}
 
 	function onDownload(entry: LargestFileItem) {
-		toast.info(`Mengunduh “${entry.name}” (mock)`, {
+		const link = document.createElement('a');
+		link.href = myStorageAPI.downloadUrl(entry.id);
+		link.download = entry.name;
+		document.body.appendChild(link);
+		link.click();
+		link.remove();
+		toast.info(`Mengunduh “${entry.name}”`, {
 			description: formatSize(entry.sizeBytes)
 		});
 	}
@@ -73,13 +139,33 @@
 		</div>
 	</div>
 
-	{#if driveView.mode === 'grid'}
+	{#if loading && files.length === 0}
+		<div
+			class="flex items-center justify-center rounded-xl border border-subtle bg-surface px-4 py-16 text-muted"
+			data-testid="loading-largest-files"
+		>
+			<Loader2 class="size-6 animate-spin text-primary" />
+			<span class="ms-2 text-sm font-medium">Memuat berkas terbesar...</span>
+		</div>
+	{:else if files.length === 0}
+		<Card.Root
+			class="rounded-xl border-subtle bg-surface shadow-none"
+			data-testid="empty-largest-files"
+		>
+			<Card.Content class="p-8 text-center text-muted">
+				<p class="text-sm font-medium text-main">Tidak ada berkas di My Storage</p>
+				<p class="mt-1 text-xs text-muted">
+					Berkas yang Anda simpan di My Storage akan muncul di sini.
+				</p>
+			</Card.Content>
+		</Card.Root>
+	{:else if driveView.mode === 'grid'}
 		<DriveFileGrid label="Berkas terbesar">
 			{#each files as entry (entry.id)}
 				<FileGridCard
 					kind={entry.kind}
 					name={entry.name}
-					subtitle="{formatSize(entry.sizeBytes)} · {entry.modifiedAt}"
+					subtitle="{formatSize(entry.sizeBytes)} · {entry.location} · {entry.modifiedAt}"
 					selected={selectedId === entry.id}
 					onSelect={() => (selectedId = entry.id)}
 					onOpen={() => syncPreview(entry.id)}
@@ -125,11 +211,36 @@
 						selected={selectedId === entry.id}
 						onSelect={(e) => (selectedId = e.id)}
 						onPreview={(e) => syncPreview(e.id)}
-						onDownload={onDownload}
+						{onDownload}
 					/>
 				{/each}
 			</Card.Content>
 		</Card.Root>
+	{/if}
+
+	{#if hasMore}
+		<div
+			bind:this={sentinelEl}
+			class="flex items-center justify-center py-4"
+			data-testid="infinite-scroll-sentinel"
+		>
+			{#if loadingMore}
+				<div class="flex items-center gap-2 text-xs text-muted">
+					<Loader2 class="size-4 animate-spin text-primary" />
+					<span>Memuat lebih banyak berkas...</span>
+				</div>
+			{:else}
+				<Button
+					type="button"
+					variant="ghost"
+					size="sm"
+					class="text-xs text-muted hover:text-main"
+					onclick={() => void loadMore()}
+				>
+					Muat lebih banyak
+				</Button>
+			{/if}
+		</div>
 	{/if}
 </section>
 
@@ -141,7 +252,8 @@
 				parentId: null
 			}
 		: null}
-	onDownload={(e) => onDownload(e as LargestFileItem)}
+	source="my-storage"
+	onDownload={(e) => onDownload(e as unknown as LargestFileItem)}
 	onClose={() => syncPreview(null)}
 />
 <CleanupAdvisorDialog

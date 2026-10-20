@@ -2,7 +2,6 @@
 	import DrivePageHeader from '$lib/components/drive/drive-page-header.svelte';
 	import DriveViewToggle from '$lib/components/drive/drive-view-toggle.svelte';
 	import SharedFileList from '$lib/components/drive/shared-file-list.svelte';
-	import { MOCK_SHARED_FILES } from '$lib/mocks/shared-files.js';
 </script>
 
 <svelte:head>
@@ -20,5 +19,5 @@
 		{/snippet}
 	</DrivePageHeader>
 
-	<SharedFileList initialItems={MOCK_SHARED_FILES} />
+	<SharedFileList />
 </div>

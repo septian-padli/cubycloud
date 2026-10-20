@@ -11,13 +11,26 @@
 		class: className,
 		...restProps
 	}: WithoutChildrenOrChild<CheckboxPrimitive.RootProps> = $props();
+
+	$effect(() => {
+		if (ref) {
+			Object.defineProperty(ref, 'indeterminate', {
+				get: () => indeterminate === true,
+				configurable: true
+			});
+			Object.defineProperty(ref, 'checked', {
+				get: () => checked === true,
+				configurable: true
+			});
+		}
+	});
 </script>
 
 <CheckboxPrimitive.Root
 	bind:ref
 	data-slot="checkbox"
 	class={cn(
-		"peer relative flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-input shadow-none outline-none transition-shadow after:absolute after:-inset-x-3 after:-inset-y-2 group-has-disabled/field:opacity-50 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 aria-invalid:aria-checked:border-primary data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground dark:bg-input/30 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 dark:data-[state=checked]:bg-primary",
+		"peer relative flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-primary/40 bg-surface shadow-none outline-none transition-all cursor-pointer focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 aria-invalid:aria-checked:border-primary data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground data-[state=indeterminate]:border-primary data-[state=indeterminate]:bg-primary data-[state=indeterminate]:text-primary-foreground dark:bg-surface/50 dark:border-primary/40 dark:data-[state=checked]:bg-primary dark:data-[state=indeterminate]:bg-primary dark:data-[state=checked]:border-primary dark:data-[state=indeterminate]:border-primary dark:data-[state=checked]:text-primary-foreground dark:data-[state=indeterminate]:text-primary-foreground",
 		className
 	)}
 	bind:checked
@@ -30,9 +43,9 @@
 			class="[&>svg]:size-3.5 grid place-content-center text-current transition-none"
 		>
 			{#if checked}
-				<CheckIcon  />
+				<CheckIcon class="size-3.5 stroke-[3]" />
 			{:else if indeterminate}
-				<MinusIcon  />
+				<MinusIcon class="size-3.5 stroke-[3]" />
 			{/if}
 		</div>
 	{/snippet}

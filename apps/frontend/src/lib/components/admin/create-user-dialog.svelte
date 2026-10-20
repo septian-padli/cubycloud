@@ -33,8 +33,9 @@
 	const canSubmit = $derived(
 		username.trim().length > 0 &&
 			email.trim().length > 0 &&
-			password.length > 0 &&
-			(quotaChoice !== 'override_gb' || Number(quotaGb) > 0)
+			password.length >= 8 &&
+			(quotaChoice !== 'override_gb' ||
+				(String(quotaGb).trim() !== '' && !isNaN(Number(quotaGb)) && Number(quotaGb) >= 0))
 	);
 
 	$effect(() => {
@@ -142,15 +143,22 @@
 								Atur GB
 							</Label>
 							{#if quotaChoice === 'override_gb'}
-								<Input
-									id="create-user-quota-gb"
-									type="number"
-									min="1"
-									step="1"
-									bind:value={quotaGb}
-									class="max-w-32"
-									aria-label="Kuota dalam GB"
-								/>
+								<div class="relative flex w-full items-center">
+									<Input
+										id="create-user-quota-gb"
+										type="number"
+										min="0"
+										step="any"
+										bind:value={quotaGb}
+										class="w-full pe-9"
+										aria-label="Kuota dalam GB"
+									/>
+									<span
+										class="pointer-events-none absolute end-3 text-xs font-semibold text-muted"
+									>
+										GB
+									</span>
+								</div>
 							{/if}
 						</div>
 					</label>

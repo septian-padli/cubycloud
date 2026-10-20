@@ -9,24 +9,41 @@
 	import { Progress } from '$lib/components/ui/progress/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
 	import { RefreshCw } from '@lucide/svelte';
-	import { cloneMockDevices, cloneMockNodes, simulateScan } from '$lib/mocks/setup.js';
+	import { scanStorageNodes } from '$lib/api/setup';
+	import { toast } from 'svelte-sonner';
 
 	let {
 		nodes = $bindable(),
-		devices = $bindable()
+		devices = $bindable(),
+		loading = false
 	}: {
 		nodes: StorageNode[];
 		devices: LinuxDevice[];
+		loading?: boolean;
 	} = $props();
 
 	let scanning = $state(false);
 
 	async function rescan() {
 		scanning = true;
-		await simulateScan();
-		nodes = cloneMockNodes();
-		devices = cloneMockDevices();
-		scanning = false;
+		try {
+			const data = await scanStorageNodes();
+			nodes = data.nodes.map((n, i) => ({
+				id: `node-${i}`,
+				name: n.path.split('/').pop() || n.path,
+				path: n.path,
+				kind: (n.kind === 'SSD' || n.kind === 'HDD' ? n.kind : 'HDD') as 'SSD' | 'HDD',
+				totalGb: Math.round(n.capacity_bytes / 1e9),
+				freeGb: Math.round(n.free_bytes / 1e9),
+				enabled: true,
+				usedBytes: 0,
+				capacityCapGb: Math.round(n.capacity_bytes / 1e9)
+			}));
+		} catch {
+			toast.error('Scan gagal');
+		} finally {
+			scanning = false;
+		}
 	}
 
 	function usedPercent(node: StorageNode) {
@@ -38,17 +55,17 @@
 <Card.Root class="rounded-xl border-subtle bg-surface shadow-none">
 	<Card.Header class="flex flex-row items-start justify-between gap-3 space-y-0">
 		<div>
-			<Card.Title class="text-lg font-semibold text-main">Penyimpanan Lokal</Card.Title>
+			<Card.Title class="text-lg font-semibold text-main">Penyimpanan Lokal (Opsional)</Card.Title>
 			<Card.Description class="text-sm text-muted">
 				Pilih volume di <code class="text-xs">/app/data/storage/</code> dan tetapkan batas kapasitas
-				node.
+				node. Bisa dilewati jika hanya memakai penyimpanan cloud.
 			</Card.Description>
 		</div>
 		<Button
 			variant="outline"
 			size="sm"
 			class="shrink-0 gap-1.5"
-			disabled={scanning}
+			disabled={scanning || loading}
 			onclick={rescan}
 		>
 			<RefreshCw class="size-3.5 stroke-2 {scanning ? 'animate-spin' : ''}" />
@@ -56,7 +73,7 @@
 		</Button>
 	</Card.Header>
 	<Card.Content class="space-y-4">
-		{#if scanning}
+		{#if scanning || loading}
 			<div class="space-y-2 rounded-lg border border-subtle bg-app px-4 py-3">
 				<p class="text-xs font-medium text-muted">Memindai volume…</p>
 				<Progress value={66} max={100} />

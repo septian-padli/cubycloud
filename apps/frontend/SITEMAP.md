@@ -51,12 +51,12 @@ src/routes/
 │   │           └── +page.svelte     # /drive/profile/:userId
 │   │
 │   └── admin/                       # Super Admin only (sidebar bottom)
+│       ├── storage/
+│       │   └── +page.svelte         # /admin/storage
 │       ├── settings/
 │       │   └── +page.svelte         # /admin/settings
 │       ├── users/
 │       │   └── +page.svelte         # /admin/users
-│       └── addons/
-│           └── +page.svelte         # /admin/addons
 │
 └── (public)/                        # Share link viewer
     └── s/
@@ -83,9 +83,9 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
 | **Penyimpanan** | `PieChart` | `/drive/storage-stats` | All authenticated |
 | _(Quota Widget)_ | — | — | All authenticated |
 | _(divider)_ | — | — | Super Admin only |
+| **Penyimpanan** | `HardDrive` | `/admin/storage` | Super Admin only |
 | **Admin Settings** | `Settings` | `/admin/settings` | Super Admin only |
 | **Users & Quotas** | `UserCog` | `/admin/users` | Super Admin only |
-| **Add-ons Manager** | `Blocks` | `/admin/addons` | Super Admin only |
 
 ---
 
@@ -99,14 +99,14 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
 - **Access:** Unauthenticated, first-boot only (`is_setup_completed === false`)
 - **Post-complete redirect:** `/drive/home`
 - **Embedded modals:**
-  - _Emergency Key Backup Modal_ — wajib Copy/Download Hex Key 64-karakter sebelum selesai
+  - _Recovery Key Backup Modal_ — show the current key in six groups of five uppercase alphanumeric characters (`XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`); offer Copy/Download and require acknowledgement before continuing
   - _Device Scan Error Modal_ — jika mount volume/device gagal dipindai
 - **Key components & actions:**
   - **Step 1:** Super Admin form (username, email, password; validasi **minimal 8 karakter**)
   - **Step 2:** Scanner disk lokal (`/app/data/storage/*`) + **node capacity cap**; opsional device Linux
   - **Step 3:** Placement strategy (`FILL_FIRST` / `ROUND_ROBIN` / `MOST_FREE_SPACE`)
   - **Step 4 (optional):** Kredensial Cloudflare R2 / AWS S3 / S3 Compatible (endpoint custom)
-  - **Step 5:** Export Emergency Recovery Key
+  - **Step 5:** Generate and export the Recovery Key (30 characters, six groups of five)
   - **CTA:** `Selesaikan Setup & Masuk ke CubyCloud`
 
 ---
@@ -133,7 +133,9 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
 - **Embedded modals:**
   - _Recovery Success Modal_ — sukses lalu minta login ulang
 - **Key components & actions:**
-  - Input 64-char Hex Recovery Key + password baru
+  - Input current 6×5 Recovery Key + new password
+  - UI accepts the current key format only; legacy 64-character hexadecimal keys are not supported by the UI
+  - On successful reset, show and require saving the replacement key returned as `new_recovery_key`; the supplied key is single-use
   - CTA `Reset Password Super Admin`
 
 ---
@@ -148,8 +150,8 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
   - _Quick Upload Drawer_ — unggah ke My Storage (enforce user quota)
   - _File Preview Lightbox_ (`?preview=file_id`)
 - **Key components & actions:**
-  - Quick Access cards (4–6 berkas terakhir / sering dibuka)
-  - Recent activities list (upload, edit, share)
+  - Quick Access cards (5 berkas/folder terakhir dibuka oleh akun aktif, urut terbaru ke terlama, tersimpan per akun)
+  - Recent activities list (5 berkas/folder berbeda dengan aksi upload atau ubah terbaru oleh akun aktif, termasuk rename dan pindah folder di My Storage dan Organization; deduplikasi per berkas/folder)
   - Storage summary widget (same data as sidebar quota)
 
 #### `/drive/my-storage` (My Storage)
@@ -158,17 +160,20 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
 - **URL params:** `?folder=folder_id&preview=file_id`
 - **Access:** Authenticated
 - **Embedded modals / drawers:**
-  - _File Preview Lightbox_ (`?preview=file_id`) — core formats; PDF jika add-on aktif
-  - _Conflict Resolution Modal_ — Replace / Keep Both
-  - _Share Sheet_ — tab Pengguna (cari user lalu tambah Viewer/Editor) + tab Tautan (password, expiration)
+  - _File Preview Lightbox_ (`?preview=file_id`) — gambar native, video Vidstack, teks/kode PrismJS, PDF.js, dan audio yang sudah ada
+  - _Name Conflict Dialog_ — upload/duplicate use the next available numeric suffix automatically; rename/move offer that name or cancel, without overwriting or merging folders
+  - _Folder Delete Confirmation_ — confirm that deleting a folder also sends all of its contents to Trash
+  - _Upload Queue Notification_ — floating top-right, below the top navigation; progress is weighted by file size and reaches 100% only after server success; expandable queued/uploading items remain until closed or swiped right, then a regular completion toast appears at bottom-right
+  - _Share Sheet_ — existing product behavior; unchanged by this file-management scope
   - _New Folder Modal_
   - _Quota Exceeded Toast / Modal_ — `USER_QUOTA_EXCEEDED`
 - **Key components & actions:**
   - Category filter chips
   - File explorer list view — Nama, ukuran, tanggal, aksi
   - **Storage Node Badge:** tampil **hanya** jika role = Super Admin
-  - Drag-and-drop — TUS + presigned cloud; cek user quota sebelum upload
-  - Actions: Download, Rename, Move, Zero-Byte Copy, Star/Unstar, **Bagikan** (file & folder), Delete to Trash
+  - Upload file/folder via picker or drag-and-drop — process each file independently, preserve folder hierarchy, show failed items, and check user quota
+  - Download file/folder; Rename; Move; recursive Duplicate (zero-byte references); Delete to Trash recursively
+  - Preview gambar, video, teks/kode, PDF, dan audio menggunakan akses file sesuai izin; star dan share behavior tetap berlaku
 
 #### `/drive/organization` (Organization Drive)
 
@@ -178,12 +183,11 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
 - **Model v1.0:** Pohon Organization **fixed** (bukan folder My Storage yang di-"mark" admin); semua user CRUD di route ini
 - **Quota:** **Tidak** dihitung ke user quota; tetap cek kapasitas node fisik
 - **Embedded modals / drawers:**
-  - _File Preview Lightbox_
+  - _File Preview Lightbox_ — format dan perilaku sama dengan My Storage
   - _Conflict Resolution Modal_
-  - _Share Sheet_ (internal / tim)
 - **Key components & actions:**
   - Header banner + badge `[🏢 Organization]`
-  - File explorer list view (komponen sama; node badge admin-only)
+  - File explorer list view (komponen sama; node badge admin-only; aksi Bagikan disembunyikan karena sudah dapat diakses bersama secara internal)
 
 #### `/drive/shared` (Dibagikan pada saya)
 
@@ -191,7 +195,7 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
 - **URL params:** `?preview=file_id`
 - **Access:** Authenticated
 - **Embedded modals / drawers:**
-  - _File Preview Lightbox_
+  - _File Preview Lightbox_ — format dan perilaku sama dengan My Storage, termasuk untuk penerima `Viewer`
   - _Share Details Modal_ — pemilik + `Viewer` / `Editor`
   - _Share Sheet_ — hanya jika izin `Editor`
 - **Key components & actions:**
@@ -206,12 +210,12 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
 - **URL params:** `?preview=file_id`
 - **Access:** Authenticated
 - **Embedded modals / drawers:**
-  - _File Preview Lightbox_
+  - _File Preview Lightbox_ (`?preview=file_id`)
   - _Share Sheet_
 - **Key components & actions:**
   - Starred files table (dari `my-storage`, `organization`, `shared`)
+  - Double-click berkas membuka _File Preview Lightbox_, menu aksi menyediakan "Lihat Pratinjau"
   - CTA `Hapus Bintang` (Unstar)
-
 #### `/drive/trash` (Trash Bin)
 
 - **Path:** `/drive/trash`
@@ -241,6 +245,22 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
 
 ### D. Super Admin Module
 
+#### `/admin/storage` (Penyimpanan Sistem)
+
+- **Path:** `/admin/storage`
+- **Access:** Super Admin only
+- **Key components & actions:**
+  - **Detail Kuota & Pemakaian Sistem:** Ringkasan kapasitas akumulasi seluruh storage node yang terdaftar (`SUM capacity_bytes`) dan total pemakaian berkas pengguna (`SUM size_bytes` dedup `disk_key`).
+    - Progress bar visual persentase pemakaian sistem (`(total_used / total_capacity) * 100%`).
+    - Ringkasan statistik: Total Kapasitas Node (jumlah node), Total Pemakaian Berkas, Sisa Kapasitas Bebas.
+  - **Pengguna dengan Konsumsi Terbesar:** Ranking pengguna dengan konsumsi penyimpanan terbesar ke terkecil:
+    - Informasi pengguna: avatar, username, email, role badge (`Super Admin` / `User`), badge kuota (`Unlimited` / `GB`).
+    - Ukuran pemakaian storage (formatted byte & GB) dan persentase terhadap total pemakaian berkas sistem.
+    - Infinite scroll / pagination (`limit=20`, `offset`, `has_more`, `next_offset`) menggunakan Intersection Observer.
+    - Shortcut CTA menuju `/admin/users` untuk mengelola kuota pengguna.
+    - State: loading skeleton, empty state ("Belum ada data pemakaian pengguna"), dan error toast.
+  - Action Segarkan: Memperbarui data statistik penyimpanan secara instan.
+
 #### `/admin/settings` (Storage Nodes & System Settings)
 
 - **Path:** `/admin/settings`
@@ -249,7 +269,8 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
   - _Detach Node Modal_
   - _Rescan Nodes Modal_
 - **Key components & actions:**
-  - Storage nodes grid (kapasitas, free space, badge 5% critical) — node badges selalu visible di sini
+  - Storage nodes grid menampilkan kapasitas, pemakaian fisik per node, free space, dan badge 5% critical; pemakaian tidak berasal dari host filesystem.
+  - Nama node dapat diedit; nama harus terisi dan unik tanpa membedakan kapitalisasi.
   - **Default User Quota Policy** — input GB atau toggle Unlimited for new users
   - **Audit Log Retention** — dropdown 7 / 14 / 30 / 60 / 90 hari (default: **90**)
   - Worker concurrency (default: **2**)
@@ -267,20 +288,7 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
   - Super Admin rows: always Unlimited (not editable as limited)
   - Create Regular User (inherits default quota unless overridden)
 
-#### `/admin/addons` (Add-ons Manager)
-
-- **Path:** `/admin/addons`
-- **Access:** Super Admin only
-- **Embedded modals / drawers:**
-  - _Worker Queue Monitor Drawer_ — `PENDING` → `PROCESSING` → `COMPLETED` / `FAILED`
-- **Key components & actions:**
-  - Add-on cards (toggle ON/OFF):
-    1. Image Converter on Download — default **ON**
-    2. Compress to ZIP — default **ON**
-    3. Download as ZIP — default **ON**
-    4. PDF Previewer — default **OFF**
-  - CTA: `Lihat Antrean Job (SQLite Queue)`
-
+> Catatan: Modul Add-ons Manager (`/admin/addons`) telah ditiadakan sepenuhnya. Fitur **Download as ZIP** dan pengarsipan berkas kini menjadi fitur core file manager yang selalu aktif dan terpasang secara bawaan tanpa memerlukan modul add-on.
 ---
 
 ### E. Public Module
@@ -293,11 +301,11 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
 - **Embedded modals:**
   - _Password Challenge_ (full-page card)
   - _Restricted login prompt_ → `/login?redirect=/s/{token}`
-  - _File Preview Lightbox_
+  - _File Preview Lightbox_ — format yang sama, termasuk PDF tanpa add-on; akses tetap tunduk pada password/restricted link
 - **Key components & actions:**
   - Expired / Not Found view (copy berbeda)
   - Guest file explorer (folder) / single-file card
-  - Actions: Direct Download, Stream Preview, Download as ZIP (jika add-on aktif)
+  - Actions: Direct Download, Stream Preview, Download as ZIP (fitur core terpasang)
 - **Demo tokens (UI mock):** `demo-public`, `demo-folder`, `demo-password` (sandi `demo123`), `demo-restricted`, `demo-expired`
 
 ---
@@ -313,7 +321,8 @@ Lightbox previewer bersifat **URL-driven** via query parameter agar tautan ke sa
 2. **Direct shared file link:**  
    - Internal: `https://domain.com/drive/my-storage?preview=abc-123`  
    - Publik: `https://domain.com/s/token?preview=abc-123`
-3. **Formats:** Text/Code, Gambar, Video, Audio (core); PDF jika add-on aktif.
+3. **Formats:** Gambar native (PNG, JPEG, WebP, GIF, SVG), Video MP4/WebM (Vidstack dengan media native), Text/Code/Markdown (teks biasa, syntax highlighting PrismJS untuk kode), Audio MP3/WAV/OGG (perilaku yang sudah ada), dan PDF (PDF.js melalui `pdfjs-dist`, selalu tersedia tanpa add-on Admin). Berlaku pada My Storage, Organization, Shared, dan `/s/[token]` sesuai izin masing-masing.
+4. **Sumber berkas:** Gunakan endpoint unduh yang sudah ada dengan opt-in `?preview=1` untuk respons inline dan MIME preview yang diizinkan; gunakan HTTP Range bila endpoint/storage mendukung. Tanpa `preview=1`, unduhan tetap attachment. Parameter `?preview=file_id` pada URL halaman tetap hanya mengendalikan lightbox; akses file tetap mengikuti otorisasi route dan password share link.
 
 ### Design notes (DESIGN.md)
 

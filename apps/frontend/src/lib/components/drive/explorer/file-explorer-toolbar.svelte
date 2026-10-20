@@ -1,8 +1,9 @@
 <script lang="ts">
 	import type { FileCategory } from '$lib/types/drive.js';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import DriveViewToggle from '$lib/components/drive/drive-view-toggle.svelte';
-	import { FolderPlus } from '@lucide/svelte';
+	import { Plus, FolderPlus, Upload, ChevronDown, FolderUp } from '@lucide/svelte';
 	import { cn } from '$lib/utils.js';
 
 	const FILTERS: { id: FileCategory; label: string }[] = [
@@ -18,10 +19,16 @@
 
 	let {
 		category = $bindable('all' as FileCategory),
-		onNewFolder
+		onNewFolder,
+		onUpload,
+		onUploadFolder = () => {},
+		showFolderUpload = false
 	}: {
 		category?: FileCategory;
 		onNewFolder: () => void;
+		onUpload: () => void;
+		onUploadFolder?: () => void;
+		showFolderUpload?: boolean;
 	} = $props();
 </script>
 
@@ -48,9 +55,37 @@
 
 	<div class="flex flex-wrap items-center gap-2 self-start">
 		<DriveViewToggle />
-		<Button type="button" variant="secondary" class="gap-1.5" onclick={onNewFolder}>
-			<FolderPlus class="size-4 stroke-2" />
-			Folder Baru
-		</Button>
+		<DropdownMenu.Root>
+			<DropdownMenu.Trigger>
+				{#snippet child({ props })}
+					<Button
+						{...props}
+						type="button"
+						variant="default"
+						class="gap-1.5"
+					>
+						<Plus class="size-4 stroke-2" />
+						Tambah
+						<ChevronDown class="size-3.5 stroke-2" />
+					</Button>
+				{/snippet}
+			</DropdownMenu.Trigger>
+			<DropdownMenu.Content align="end" class="w-48">
+				<DropdownMenu.Item class="gap-2" onclick={onNewFolder}>
+					<FolderPlus class="size-4 stroke-2" />
+					Folder Baru
+				</DropdownMenu.Item>
+				<DropdownMenu.Item class="gap-2" onclick={onUpload}>
+					<Upload class="size-4 stroke-2" />
+					Upload File
+				</DropdownMenu.Item>
+				{#if showFolderUpload}
+					<DropdownMenu.Item class="gap-2" onclick={onUploadFolder}>
+						<FolderUp class="size-4 stroke-2" />
+						Upload Folder
+					</DropdownMenu.Item>
+				{/if}
+			</DropdownMenu.Content>
+		</DropdownMenu.Root>
 	</div>
 </div>

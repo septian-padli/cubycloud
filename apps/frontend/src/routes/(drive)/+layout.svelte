@@ -1,7 +1,11 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { page } from '$app/state';
+import { onMount, onDestroy } from 'svelte';
+import { page } from '$app/state';
+	import { getSetupStatus } from '$lib/api/setup';
+	import { goto } from '$app/navigation';
+	import { authAPI } from '$lib/api/auth.js';
 	import DriveShell from '$lib/components/drive/drive-shell.svelte';
+	import SetupRequiredPage from '$lib/components/setup/setup-required-page.svelte';
 	import { setDriveChrome } from '$lib/drive-context.svelte.js';
 	import { deriveDriveActiveId } from '$lib/drive-nav.js';
 	import { driveView } from '$lib/drive-view.svelte.js';
@@ -10,18 +14,53 @@
 
 	let { children } = $props();
 
-	setDriveChrome({ user: MOCK_DRIVE_USER, quota: MOCK_QUOTA });
+	let checking = $state(true);
+	let isCompleted = $state(true);
+
+	const driveChrome = setDriveChrome({ user: MOCK_DRIVE_USER, quota: MOCK_QUOTA });
 
 	const activeId = $derived(deriveDriveActiveId(page.url.pathname));
 
-	onMount(() => {
-		setMockLoggedIn(true);
-		driveView.init();
+	onMount(async () => {
+		try {
+			const status = await getSetupStatus();
+			isCompleted = status.is_setup_completed;
+			if (!isCompleted) {
+				checking = false;
+				return;
+			}
+
+			// Verify authentication with backend
+			const meResp = await authAPI.getMe();
+			if (meResp.error || !meResp.data) {
+				const currentPath = page.url.pathname + page.url.search;
+				void goto(`/login?redirect=${encodeURIComponent(currentPath)}`);
+				return;
+			}
+
+			await driveChrome.refreshQuota(false);
+			setMockLoggedIn(true);
+			driveView.init();
+		} catch (e) {
+			console.warn('[Drive Guard] Could not verify session:', e);
+		} finally {
+			checking = false;
+		}
+	});
+
+	onDestroy(() => {
+		driveChrome.destroy?.();
 	});
 </script>
 
-<DriveShell {activeId}>
-	{#snippet content()}
-		{@render children()}
-	{/snippet}
-</DriveShell>
+{#if !checking}
+	{#if !isCompleted}
+		<SetupRequiredPage />
+	{:else}
+		<DriveShell {activeId}>
+			{#snippet content()}
+				{@render children()}
+			{/snippet}
+		</DriveShell>
+	{/if}
+{/if}

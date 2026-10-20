@@ -7,27 +7,46 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import PasswordInput from '$lib/components/password-input.svelte';
+	import { authAPI } from '$lib/api/auth.js';
 	import { setMockLoggedIn } from '$lib/mocks/auth-session.js';
+	import { toast } from 'svelte-sonner';
 	import { KeyRound } from '@lucide/svelte';
 
 	let identifier = $state('');
 	let password = $state('');
 	let submitted = $state(false);
+	let loading = $state(false);
+	let errorMessage = $state('');
 	let forgotInfo = $state(false);
 
 	const identifierEmpty = $derived(submitted && identifier.trim().length === 0);
 	const passwordEmpty = $derived(submitted && password.length === 0);
 	const canSubmit = $derived(identifier.trim().length > 0 && password.length > 0);
 
-	function onSubmit(e: Event) {
+	async function onSubmit(e: Event) {
 		e.preventDefault();
 		submitted = true;
-		if (!canSubmit) return;
-		setMockLoggedIn(true);
-		const redirect = page.url.searchParams.get('redirect');
-		const safe =
-			redirect && redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/drive/home';
-		void goto(safe);
+		errorMessage = '';
+		if (!canSubmit || loading) return;
+
+		loading = true;
+		try {
+			const res = await authAPI.login(identifier.trim(), password);
+			if (res.error) {
+				errorMessage = res.error;
+				toast.error('Gagal masuk', { description: res.error });
+				return;
+			}
+
+			setMockLoggedIn(true);
+			toast.success('Berhasil masuk');
+			const redirect = page.url.searchParams.get('redirect');
+			const safe =
+				redirect && redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/drive/home';
+			void goto(safe);
+		} finally {
+			loading = false;
+		}
 	}
 </script>
 
@@ -40,9 +59,9 @@
 	</Card.Header>
 	<Card.Content class="space-y-4">
 		{#if forgotInfo}
-			<Alert.Root class="border-subtle bg-app">
-				<KeyRound class="size-4 stroke-2 text-secondary-accent" />
-				<Alert.Title class="text-main">Pemulihan tanpa email</Alert.Title>
+			<Alert.Root variant="default">
+				<KeyRound class="size-4 stroke-2" />
+				<Alert.Title>Pemulihan tanpa email</Alert.Title>
 				<Alert.Description>
 					CubyCloud v1.0 tidak mengirim reset password lewat SMTP. Super Admin memulihkan akses
 					dengan Emergency Recovery Key di halaman Pulihkan Akses.
@@ -89,7 +108,13 @@
 				{/if}
 			</div>
 
-			<Button type="submit" class="w-full">Masuk</Button>
+			{#if errorMessage}
+				<p class="text-xs text-danger">{errorMessage}</p>
+			{/if}
+
+			<Button type="submit" class="w-full" disabled={loading}>
+				{loading ? 'Sedang masuk...' : 'Masuk'}
+			</Button>
 		</form>
 
 		<p class="text-center text-sm text-muted">

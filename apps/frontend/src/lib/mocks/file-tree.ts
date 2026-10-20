@@ -312,6 +312,15 @@ export function getChildren(tree: FileEntry[], folderId: string | null): FileEnt
 		});
 }
 
+export function isAncestor(tree: FileEntry[], ancestorId: string, targetId: string): boolean {
+	let current = findEntry(tree, targetId);
+	while (current?.parentId) {
+		if (current.parentId === ancestorId) return true;
+		current = findEntry(tree, current.parentId);
+	}
+	return false;
+}
+
 export function getBreadcrumbPath(
 	tree: FileEntry[],
 	folderId: string | null,

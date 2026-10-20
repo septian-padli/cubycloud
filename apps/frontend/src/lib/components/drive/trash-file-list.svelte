@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import type { TrashFileItem } from '$lib/types/drive.js';
 	import { formatSize } from '$lib/mocks/file-tree.js';
@@ -7,25 +7,53 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import * as ContextMenu from '$lib/components/ui/context-menu/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { MoreVertical, RotateCcw, Trash2 } from '@lucide/svelte';
+	import { Loader2, MoreVertical, RotateCcw, Trash2 } from '@lucide/svelte';
 	import TrashFileRow from './trash-file-row.svelte';
 	import MissingParentRestoreDialog from './missing-parent-restore-dialog.svelte';
 	import PurgeTrashDialog from './purge-trash-dialog.svelte';
+	import ConfirmDialog from '$lib/components/ui/confirm-dialog/confirm-dialog.svelte';
 	import DriveFileGrid from './drive-file-grid.svelte';
 	import FileGridCard from './file-grid-card.svelte';
 	import DriveViewToggle from './drive-view-toggle.svelte';
+	import { trashAPI } from '$lib/api/trash.js';
+	import { getDriveChrome } from '$lib/drive-context.svelte.js';
 
+	const chrome = getDriveChrome();
 	let {
 		initialItems
 	}: {
-		initialItems: TrashFileItem[];
+		initialItems?: TrashFileItem[];
 	} = $props();
 
-	let items = $state<TrashFileItem[]>(untrack(() => initialItems.map((e) => ({ ...e }))));
+	let items = $state<TrashFileItem[]>(
+		untrack(() => (initialItems ? initialItems.map((e) => ({ ...e })) : []))
+	);
+	let loading = $state(untrack(() => !initialItems));
 	let selectedId = $state<string | null>(null);
 	let purgeOpen = $state(false);
 	let missingParentOpen = $state(false);
+	let singlePurgeOpen = $state(false);
 	let actionEntry = $state<TrashFileItem | null>(null);
+	let purgeOneTarget = $state<TrashFileItem | null>(null);
+	let actionLoading = $state(false);
+
+	async function loadTrash() {
+		try {
+			loading = true;
+			items = await trashAPI.list();
+		} catch (err: unknown) {
+			const msg = err instanceof Error ? err.message : 'Gagal memuat Trash';
+			toast.error(msg);
+		} finally {
+			loading = false;
+		}
+	}
+
+	onMount(() => {
+		if (!initialItems) {
+			loadTrash();
+		}
+	});
 
 	function openPurge() {
 		if (items.length === 0) {
@@ -40,11 +68,23 @@
 		if (selectedId === id) selectedId = null;
 	}
 
-	function restoreEntry(entry: TrashFileItem, toRoot = false) {
-		removeItem(entry.id);
-		toast.success(
-			toRoot ? `“${entry.name}” dipulihkan ke Root` : `“${entry.name}” dipulihkan (mock)`
-		);
+	async function restoreEntry(entry: TrashFileItem, toRoot = false) {
+		try {
+			actionLoading = true;
+			const res = await trashAPI.restore(entry.id, toRoot);
+			removeItem(entry.id);
+			void chrome?.refreshQuota();
+			if (res.restored_to_root) {
+				toast.success(`“${entry.name}” dipulihkan ke Root My Storage`);
+			} else {
+				toast.success(`“${entry.name}” berhasil dipulihkan`);
+			}
+		} catch (err: unknown) {
+			const msg = err instanceof Error ? err.message : 'Gagal memulihkan item';
+			toast.error(msg);
+		} finally {
+			actionLoading = false;
+		}
 	}
 
 	function onRestore(entry: TrashFileItem) {
@@ -53,19 +93,48 @@
 			missingParentOpen = true;
 			return;
 		}
-		restoreEntry(entry);
+		restoreEntry(entry, false);
 	}
 
 	function onPurgeOne(entry: TrashFileItem) {
-		removeItem(entry.id);
-		toast.success(`“${entry.name}” dihapus permanen`);
+		purgeOneTarget = entry;
+		singlePurgeOpen = true;
 	}
 
-	function onPurgeAll() {
-		const n = items.length;
-		items = [];
-		selectedId = null;
-		toast.success(`${n} item dihapus permanen dari Trash`);
+	async function confirmPurgeOne() {
+		if (!purgeOneTarget) return;
+		const target = purgeOneTarget;
+		try {
+			actionLoading = true;
+			await trashAPI.purgeOne(target.id);
+			removeItem(target.id);
+			void chrome?.refreshQuota();
+			toast.success(`“${target.name}” dihapus permanen`);
+		} catch (err: unknown) {
+			const msg = err instanceof Error ? err.message : 'Gagal menghapus permanen';
+			toast.error(msg);
+		} finally {
+			actionLoading = false;
+			singlePurgeOpen = false;
+			purgeOneTarget = null;
+		}
+	}
+
+	async function onPurgeAll() {
+		try {
+			actionLoading = true;
+			await trashAPI.purgeAll();
+			items = [];
+			selectedId = null;
+			void chrome?.refreshQuota();
+			toast.success('Semua item di Trash berhasil dihapus permanen');
+		} catch (err: unknown) {
+			const msg = err instanceof Error ? err.message : 'Gagal mengosongkan Trash';
+			toast.error(msg);
+		} finally {
+			actionLoading = false;
+			purgeOpen = false;
+		}
 	}
 </script>
 
@@ -75,7 +144,8 @@
 			type="button"
 			variant="destructive"
 			class="gap-1.5"
-			disabled={items.length === 0}
+			data-testid="empty-trash-btn"
+			disabled={items.length === 0 || loading || actionLoading}
 			onclick={() => openPurge()}
 		>
 			<Trash2 class="size-4 stroke-2" />
@@ -84,7 +154,12 @@
 		<DriveViewToggle />
 	</div>
 
-	{#if items.length === 0}
+	{#if loading}
+		<div class="flex items-center justify-center p-12 text-muted">
+			<Loader2 class="mr-2 size-5 animate-spin" />
+			<span class="text-sm">Memuat Trash...</span>
+		</div>
+	{:else if items.length === 0}
 		<div class="overflow-hidden rounded-xl border border-subtle bg-surface px-4 py-12 text-center">
 			<p class="text-sm font-medium text-main">Trash kosong</p>
 			<p class="mt-1 text-xs text-muted">
@@ -185,4 +260,18 @@
 		if (actionEntry) restoreEntry(actionEntry, true);
 	}}
 />
-<PurgeTrashDialog bind:open={purgeOpen} itemCount={items.length} onConfirm={onPurgeAll} />
+<PurgeTrashDialog
+	bind:open={purgeOpen}
+	itemCount={items.length}
+	onConfirm={onPurgeAll}
+/>
+<ConfirmDialog
+	bind:open={singlePurgeOpen}
+	title="Hapus Permanen"
+	description={`Hapus permanen “${purgeOneTarget?.name ?? ''}”? Tindakan ini tidak dapat dibatalkan.`}
+	confirmText="Hapus permanen"
+	cancelText="Batal"
+	variant="destructive"
+	loading={actionLoading}
+	onConfirm={confirmPurgeOne}
+/>

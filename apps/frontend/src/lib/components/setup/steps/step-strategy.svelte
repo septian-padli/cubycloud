@@ -43,9 +43,9 @@
 			{/each}
 		</RadioGroup.Root>
 
-		<Alert.Root class="border border-subtle bg-surface">
-			<Info class="size-4 stroke-2 text-primary" />
-			<Alert.Title class="text-main">Dapat diubah nanti</Alert.Title>
+		<Alert.Root variant="default">
+			<Info class="size-4 stroke-2" />
+			<Alert.Title>Dapat diubah nanti</Alert.Title>
 			<Alert.Description>
 				Strategi default bisa diganti kapan saja di Admin Settings tanpa menjalankan ulang wizard.
 			</Alert.Description>

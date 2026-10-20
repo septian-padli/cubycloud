@@ -1,6 +1,5 @@
 <script lang="ts">
 	import {
-		Blocks,
 		Building2,
 		HardDrive,
 		Home,
@@ -39,7 +38,6 @@
 			id: 'organization',
 			label: 'Organization',
 			icon: Building2,
-			badge: '🏢',
 			href: '/drive/organization'
 		},
 		{ id: 'shared', label: 'Dibagikan pada saya', icon: Users, href: '/drive/shared' },
@@ -49,9 +47,9 @@
 	];
 
 	const adminItems: NavItem[] = [
+		{ id: 'admin-storage', label: 'Penyimpanan', icon: HardDrive, href: '/admin/storage' },
 		{ id: 'admin-settings', label: 'Admin Settings', icon: Settings, href: '/admin/settings' },
 		{ id: 'admin-users', label: 'Users & Quotas', icon: UserCog, href: '/admin/users' },
-		{ id: 'admin-addons', label: 'Add-ons Manager', icon: Blocks, href: '/admin/addons' }
 	];
 
 	const pillClass = (active: boolean, linked: boolean) =>

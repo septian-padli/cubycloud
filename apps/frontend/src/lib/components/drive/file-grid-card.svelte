@@ -13,25 +13,32 @@
 	} from '@lucide/svelte';
 	import type { Component } from 'svelte';
 	import { cn } from '$lib/utils.js';
+	import GridThumbnail from './grid-thumbnail.svelte';
 
 	let {
 		kind,
 		name,
 		subtitle,
 		selected = false,
+		previewUrl,
 		onSelect,
 		onOpen,
 		badges,
-		menu
+		menu,
+		select,
+		star
 	}: {
 		kind: FileKind;
 		name: string;
 		subtitle: string;
 		selected?: boolean;
+		previewUrl?: string;
 		onSelect?: () => void;
 		onOpen?: () => void;
 		badges?: Snippet;
 		menu?: Snippet;
+		select?: Snippet;
+		star?: Snippet;
 	} = $props();
 
 	const icons: Record<FileKind, Component> = {
@@ -65,6 +72,25 @@
 		)}
 	>
 		<Card.Content class="flex flex-col gap-3">
+				{#if select}
+					<div
+						role="presentation"
+						class="absolute start-2 top-2 z-10"
+						onclick={(e) => e.stopPropagation()}
+						onkeydown={(e) => e.stopPropagation()}
+					>
+						{@render select()}
+					</div>
+				{:else if star}
+					<div
+						role="presentation"
+						class="absolute start-2 top-2 z-10"
+						onclick={(e) => e.stopPropagation()}
+						onkeydown={(e) => e.stopPropagation()}
+					>
+						{@render star()}
+					</div>
+				{/if}
 				{#if menu}
 					<div
 						role="presentation"
@@ -76,9 +102,14 @@
 					</div>
 				{/if}
 			<div
-				class="relative flex aspect-video w-full items-center justify-center rounded-lg bg-primary/10 text-primary"
+				class="relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-lg bg-primary/10 text-primary"
+				data-testid="grid-card-thumbnail"
 			>
-				<Icon class="size-12 stroke-2" aria-hidden="true" />
+				{#if previewUrl && kind !== 'folder'}
+					<GridThumbnail url={previewUrl} {name} {kind} fallbackIcon={Icon} />
+				{:else}
+					<Icon class="size-12 stroke-2" aria-hidden="true" data-testid="grid-fallback-icon" />
+				{/if}
 			</div>
 
 			<div class="min-w-0">

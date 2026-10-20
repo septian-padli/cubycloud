@@ -12,6 +12,7 @@
 	import { Eye, MoreVertical, Share2, Star } from '@lucide/svelte';
 	import StarredFileRow from './starred-file-row.svelte';
 	import FilePreviewDialog from './explorer/file-preview-dialog.svelte';
+	import { previewUrl, type PreviewSource } from '$lib/api/preview.js';
 	import ShareSheet from './explorer/share-sheet.svelte';
 	import DriveFileGrid from './drive-file-grid.svelte';
 	import FileGridCard from './file-grid-card.svelte';
@@ -79,6 +80,7 @@
 						subtitle={entry.kind === 'folder'
 							? `Folder · ${entry.modifiedAt}`
 							: `${formatSize(entry.sizeBytes)} · ${entry.modifiedAt}`}
+						previewUrl={entry.kind !== 'folder' ? previewUrl((entry.source as PreviewSource) || 'my-storage', entry.id) : undefined}
 						selected={selectedId === entry.id}
 						onSelect={() => (selectedId = entry.id)}
 						onOpen={() => onPreview(entry)}
@@ -174,4 +176,4 @@
 {/if}
 
 <ShareSheet bind:open={shareOpen} entry={actionEntry} />
-<FilePreviewDialog open={previewOpen} entry={previewEntry} onClose={() => syncPreview(null)} />
+<FilePreviewDialog open={previewOpen} entry={previewEntry} source={previewEntry?.source} onClose={() => syncPreview(null)} />

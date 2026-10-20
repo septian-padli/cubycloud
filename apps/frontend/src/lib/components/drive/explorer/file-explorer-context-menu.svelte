@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { FileEntry } from '$lib/types/drive.js';
+	import type { ExplorerVariant, FileEntry } from '$lib/types/drive.js';
 	import type { Snippet } from 'svelte';
 	import * as ContextMenu from '$lib/components/ui/context-menu/index.js';
 	import {
@@ -12,9 +12,12 @@
 		Star,
 		Trash2
 	} from '@lucide/svelte';
+	import { cn } from '$lib/utils.js';
 
 	let {
 		entry,
+		variant,
+		allowShare = variant !== 'organization',
 		onOpen,
 		onDownload,
 		onRename,
@@ -26,6 +29,8 @@
 		children
 	}: {
 		entry: FileEntry;
+		variant?: ExplorerVariant;
+		allowShare?: boolean;
 		onOpen: (entry: FileEntry) => void;
 		onDownload: (entry: FileEntry) => void;
 		onRename: (entry: FileEntry) => void;
@@ -57,6 +62,10 @@
 				<Eye class="size-4 stroke-2" />
 				Buka
 			</ContextMenu.Item>
+			<ContextMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
+				<Download class="size-4 stroke-2" />
+				Unduh
+			</ContextMenu.Item>
 		{/if}
 		<ContextMenu.Item class="gap-2" onclick={() => onRename(entry)}>
 			<Pencil class="size-4 stroke-2" />
@@ -66,20 +75,20 @@
 			<FolderInput class="size-4 stroke-2" />
 			Pindahkan ke
 		</ContextMenu.Item>
-		{#if entry.kind !== 'folder'}
-			<ContextMenu.Item class="gap-2" onclick={() => onCopy(entry)}>
-				<Copy class="size-4 stroke-2" />
-				Duplikat
+		<ContextMenu.Item class="gap-2" onclick={() => onCopy(entry)}>
+			<Copy class="size-4 stroke-2" />
+			Duplikat
+		</ContextMenu.Item>
+		<ContextMenu.Item class="gap-2" onclick={() => onStar(entry)}>
+			<Star class={cn("size-4 stroke-2", entry.starred ? "fill-amber-400 stroke-amber-500 text-amber-500" : "")} />
+			{entry.starred ? 'Hapus Bintang' : 'Bintang'}
+		</ContextMenu.Item>
+		{#if allowShare}
+			<ContextMenu.Item class="gap-2" onclick={() => onShare(entry)}>
+				<Share2 class="size-4 stroke-2" />
+				Bagikan
 			</ContextMenu.Item>
 		{/if}
-		<ContextMenu.Item class="gap-2" onclick={() => onStar(entry)}>
-			<Star class="size-4 stroke-2" />
-			{entry.starred ? 'Hapus bintang' : 'Bintang'}
-		</ContextMenu.Item>
-		<ContextMenu.Item class="gap-2" onclick={() => onShare(entry)}>
-			<Share2 class="size-4 stroke-2" />
-			Bagikan
-		</ContextMenu.Item>
 		<ContextMenu.Separator />
 		<ContextMenu.Item variant="destructive" class="gap-2" onclick={() => onDelete(entry)}>
 			<Trash2 class="size-4 stroke-2" />

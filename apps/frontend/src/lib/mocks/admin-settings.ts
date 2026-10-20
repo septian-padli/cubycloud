@@ -8,7 +8,8 @@ export const NODE_CRITICAL_FREE_RATIO = 0.05;
 export const MOCK_SYSTEM_SETTINGS: SystemSettings = {
 	defaultQuota: { mode: 'limited', gb: 50 },
 	auditRetentionDays: 90,
-	workerConcurrency: 2
+	workerConcurrency: 2,
+	placementStrategy: 'FILL_FIRST'
 };
 
 /**
@@ -21,20 +22,22 @@ export const MOCK_ADMIN_STORAGE_NODES: StorageNode[] = [
 		...MOCK_STORAGE_NODES[2],
 		enabled: true,
 		freeGb: 8,
+		usedBytes: (243 - 8) * 1024 ** 3,
 		capacityCapGb: 243
 	}
 ];
 
 export function isNodeCritical(node: StorageNode): boolean {
-	if (node.totalGb <= 0) return false;
-	return node.freeGb / node.totalGb < NODE_CRITICAL_FREE_RATIO;
+	if (node.capacityCapGb <= 0) return false;
+	return node.freeGb / node.capacityCapGb < NODE_CRITICAL_FREE_RATIO;
 }
 
 export function cloneMockSystemSettings(): SystemSettings {
 	return {
 		defaultQuota: { ...MOCK_SYSTEM_SETTINGS.defaultQuota },
 		auditRetentionDays: MOCK_SYSTEM_SETTINGS.auditRetentionDays,
-		workerConcurrency: MOCK_SYSTEM_SETTINGS.workerConcurrency
+		workerConcurrency: MOCK_SYSTEM_SETTINGS.workerConcurrency,
+		placementStrategy: MOCK_SYSTEM_SETTINGS.placementStrategy
 	};
 }
 

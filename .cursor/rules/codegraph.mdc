@@ -1,0 +1,29 @@
+---
+description: codegraph knowledge graph context
+alwaysApply: true
+---
+
+This project has a codegraph knowledge graph at `.codegraph/` (lifecycle manifest: `.codegraph/manifest.json`).
+
+**MANDATORY: Before using Read, Grep, Glob, or Bash to explore the codebase, you MUST run codegraph first:**
+
+- `codegraph orient --root . --budget small` — compact first-turn repo packet (structure, hotspots, recommended next commands)
+- `codegraph explore "<question>"` — derive context from one hybrid search
+- `codegraph search "<symbol or query>" --json` — ranked search across files, symbols, chunks, SQL, and graph context
+- `codegraph deps <file>` / `codegraph rdeps <file>` — file dependencies and reverse dependencies
+- `codegraph path "<file A>" "<file B>"` — shortest dependency path between two files
+- `codegraph refs <handle>` / `codegraph goto <handle>` — references and definitions by symbol
+- `codegraph impact --base <ref> --head <ref>` — PR/change impact context
+- `codegraph explain "<file or symbol>"` — explain a file, symbol, SQL object, or search handle
+
+This applies to YOU and to every subagent you spawn. Include this rule explicitly in every subagent prompt that involves code exploration. Do not skip codegraph because files are "already known" or because you are executing a plan — the graph surfaces cross-file dependencies that grep and Read cannot find.
+
+Only use Read/Grep/Glob directly when:
+
+1. codegraph has already oriented you and you need to modify or debug specific lines
+2. `.codegraph/manifest.json` does not exist yet
+
+- Prefer the codegraph MCP tools over shelling out when the MCP server is available: `orient`, `packet_get`, `search`, `goto`, `refs`, `deps`, `rdeps`, `path`, `impact`, `review`, `query_sqlite`
+- After pull/merge or a large branch switch, run `codegraph sync .` to refresh the lifecycle metadata; the index cache otherwise auto-invalidates on demand
+- Run `codegraph doctor` when results look stale or the CLI reports missing artifacts
+- Git tracks no graph artifacts: `.codegraph/` is gitignored
