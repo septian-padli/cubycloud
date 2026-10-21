@@ -5,13 +5,17 @@ import { authAPI } from '$lib/api/auth.js';
 const KEY = Symbol('cubycloud-drive-chrome');
 const QUOTA_CHANNEL_NAME = 'cubycloud-quota-sync';
 
+export type SharedUploadPermission = 'viewer' | 'editor' | null;
+
 export type DriveChrome = {
 	user: DriveUser;
 	quota: QuotaState;
+	sharedUploadContext: { folderId: string | null; permission: SharedUploadPermission };
 	setUserAndQuota: (user: DriveUser, quota: QuotaState) => void;
 	updateProfile: (patch: Pick<DriveUser, 'displayName' | 'email'>) => void;
 	requestUpload: () => void;
 	registerUploadHandler: (handler: (() => void) | null) => void;
+	setSharedUploadContext: (folderId: string | null, permission: SharedUploadPermission) => void;
 	refreshQuota: (broadcast?: boolean) => Promise<void>;
 	notifyStorageChange?: () => void;
 	registerStorageChangeHandler?: (handler: (() => void) | null) => void;
@@ -21,11 +25,13 @@ export type DriveChrome = {
 class DriveChromeState implements DriveChrome {
 	user = $state({} as DriveUser);
 	quota = $state({} as QuotaState);
+	sharedUploadContext = $state({ folderId: null as string | null, permission: null as SharedUploadPermission });
 	#uploadHandler: (() => void) | null = null;
 	#storageChangeHandler: (() => void) | null = null;
 	#channel: BroadcastChannel | null = null;
 	#isRefreshing = false;
 	#queuedRefresh = false;
+
 
 	constructor(user: DriveUser, quota: QuotaState) {
 		this.user = { ...user };
@@ -70,9 +76,15 @@ class DriveChromeState implements DriveChrome {
 		}
 	}
 
-	updateProfile(patch: Pick<DriveUser, 'displayName' | 'email'>) {
-		this.user = { ...this.user, ...patch };
+	updateProfile(patch: Partial<Pick<DriveUser, 'displayName' | 'email'>>) {
+		if (this.user) {
+			Object.assign(this.user, patch);
+		}
 	}
+	setSharedUploadContext(folderId: string | null, permission: SharedUploadPermission) {
+		this.sharedUploadContext = { folderId, permission };
+	}
+
 
 	requestUpload() {
 		this.#uploadHandler?.();
@@ -113,7 +125,7 @@ class DriveChromeState implements DriveChrome {
 					{
 						id: u.id,
 						username: u.username,
-						displayName: u.username,
+						displayName: u.display_name || u.username,
 						email: u.email,
 						role
 					},

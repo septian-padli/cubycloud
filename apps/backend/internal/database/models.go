@@ -12,9 +12,11 @@ type User struct {
 	ID              string    `bun:"id,pk"`
 	Username        string    `bun:"username,notnull,unique"`
 	Email           string    `bun:"email,notnull,unique"`
+	DisplayName     string    `bun:"display_name,notnull,default:''"`
 	PasswordHash    string    `bun:"password_hash,notnull"`
 	RecoveryKeyHash *string   `bun:"recovery_key_hash"`
 	Role            string    `bun:"role,notnull"`
+	TokenVersion    int       `bun:"token_version,notnull,default:0"`
 	QuotaMode       string    `bun:"quota_mode,notnull,default:'DEFAULT'"`
 	QuotaBytes      int64     `bun:"quota_bytes,notnull,default:-1"`
 	CreatedAt       time.Time `bun:"created_at,notnull,default:current_timestamp"`

@@ -1,5 +1,12 @@
 <script lang="ts">
-	import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '$lib/components/ui/dialog/index.js';
+	import {
+		Dialog,
+		DialogContent,
+		DialogDescription,
+		DialogFooter,
+		DialogHeader,
+		DialogTitle
+	} from '$lib/components/ui/dialog/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
@@ -8,7 +15,6 @@
 	import { toast } from 'svelte-sonner';
 	import { adminAPI } from '$lib/api/admin.js';
 	import { HardDrive, Cloud } from '@lucide/svelte';
-
 
 	let {
 		open = $bindable(false),
@@ -117,7 +123,8 @@
 		adding = false;
 
 		if (resp.error) {
-			if (/name.*(?:required|already exists)|nama.*(?:wajib|sudah|digunakan)/i.test(resp.error)) cloudNameError = resp.error;
+			if (/name.*(?:required|already exists)|nama.*(?:wajib|sudah|digunakan)/i.test(resp.error))
+				cloudNameError = resp.error;
 			else toast.error('Gagal menambah node cloud', { description: resp.error });
 		} else {
 			toast.success('Node cloud berhasil ditambahkan');
@@ -142,13 +149,11 @@
 	<DialogContent class="max-w-lg">
 		<DialogHeader>
 			<DialogTitle>Tambah Node Penyimpanan</DialogTitle>
-			<DialogDescription>
-				Tambahkan disk lokal atau cloud storage S3-compatible
-			</DialogDescription>
+			<DialogDescription>Tambahkan disk lokal atau cloud storage S3-compatible</DialogDescription>
 		</DialogHeader>
 
 		<Tabs bind:value={activeTab} class="w-full">
-			<TabsList class="grid w-full grid-cols-2">
+			<TabsList variant="line" class="grid w-full grid-cols-2">
 				<TabsTrigger value="local" class="gap-1.5">
 					<HardDrive class="size-3.5" />
 					Disk Lokal
@@ -173,7 +178,14 @@
 						aria-describedby={localNameError ? 'local-name-error' : undefined}
 					/>
 					{#if localNameError}
-						<p id="local-name-error" data-testid="error-local-node-name" class="text-xs text-destructive" role="alert">{localNameError}</p>
+						<p
+							id="local-name-error"
+							data-testid="error-local-node-name"
+							class="text-xs text-destructive"
+							role="alert"
+						>
+							{localNameError}
+						</p>
 					{/if}
 				</div>
 
@@ -227,7 +239,9 @@
 						aria-describedby={cloudNameError ? 'cloud-name-error' : undefined}
 					/>
 					{#if cloudNameError}
-						<p id="cloud-name-error" class="text-xs text-destructive" role="alert">{cloudNameError}</p>
+						<p id="cloud-name-error" class="text-xs text-destructive" role="alert">
+							{cloudNameError}
+						</p>
 					{/if}
 				</div>
 
@@ -292,9 +306,7 @@
 						bind:value={cloudCapacity}
 						disabled={adding}
 					/>
-					<p class="text-xs text-muted">
-						Batas kapasitas untuk cloud storage ini (minimal 1 GB).
-					</p>
+					<p class="text-xs text-muted">Batas kapasitas untuk cloud storage ini (minimal 1 GB).</p>
 				</div>
 
 				<div class="flex items-center justify-between">
@@ -308,9 +320,7 @@
 		</Tabs>
 
 		<DialogFooter>
-			<Button variant="outline" onclick={() => (open = false)} disabled={adding}>
-				Batal
-			</Button>
+			<Button variant="outline" onclick={() => (open = false)} disabled={adding}>Batal</Button>
 			{#if activeTab === 'local'}
 				<Button onclick={handleAddLocal} disabled={!canAddLocal || adding}>
 					{adding ? 'Menambahkan...' : 'Tambah Node Lokal'}

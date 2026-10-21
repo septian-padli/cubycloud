@@ -20,6 +20,35 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { restartControlDir } from './restart-control.js';
 
+async function expectTabColors(tab: Locator, selected: boolean) {
+	const colors = await tab.evaluate((element) => {
+		const style = getComputedStyle(element);
+		const tokenColor = (token: string) => {
+			const probe = document.createElement('span');
+			probe.style.color = `var(${token})`;
+			document.body.append(probe);
+			const color = getComputedStyle(probe).color;
+			probe.remove();
+			return color;
+		};
+		return {
+			color: style.color,
+			primary: tokenColor('--primary'),
+			muted: tokenColor('--text-muted'),
+			borderBottomColor: style.borderBottomColor,
+			borderBottomWidth: style.borderBottomWidth
+		};
+	});
+	expect(colors.color).toBe(selected ? colors.primary : colors.muted);
+	if (selected) {
+		expect(colors.borderBottomColor).toBe(colors.primary);
+		expect(colors.borderBottomWidth).toBe('2px');
+	} else {
+		expect(colors.borderBottomColor).toBe('rgba(0, 0, 0, 0)');
+		expect(colors.borderBottomWidth).toBe('2px');
+	}
+}
+
 const username = 'storage-e2e-admin';
 const password = 'StorageE2E-password-2026';
 const recoveryKey = 'ABCDE-FGHKL-MNPQR-STUVW-XYZ23-45678';
@@ -453,6 +482,21 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 		await expect(moveDialog1.getByRole('heading', { name: 'Pindahkan' })).toBeVisible();
 		await expect(moveDialog1.getByText('renamed.txt')).toBeVisible();
 		await expect(moveDialog1.getByTestId('move-tab-organisasi')).toBeDisabled();
+		const moveTabs = moveDialog1.getByRole('tablist');
+		const driveTab = moveTabs.getByRole('tab', { name: 'Drive Saya' });
+		const organizationTab = moveTabs.getByRole('tab', { name: 'Organisasi' });
+		await expect(moveTabs).toBeVisible();
+		await expect(driveTab).toHaveAttribute('aria-selected', 'true');
+		await expect(organizationTab).toHaveAttribute('aria-selected', 'false');
+		await expect(organizationTab).toBeDisabled();
+		await expectTabColors(driveTab, true);
+		await expectTabColors(organizationTab, false);
+		await driveTab.click();
+		await expect(driveTab).toHaveAttribute('aria-selected', 'true');
+		await expect(organizationTab).toHaveAttribute('aria-selected', 'false');
+		await expectTabColors(driveTab, true);
+		await expectTabColors(organizationTab, false);
+		await expect(moveDialog1.getByText('Drive Saya', { exact: true })).toBeVisible();
 		// Drill down into project folder
 		await moveDialog1.getByTestId(`move-folder-${project!.id}`).click();
 		// Click Pindahkan on nested folder row

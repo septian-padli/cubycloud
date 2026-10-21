@@ -30,10 +30,12 @@ src/routes/
 │   └── recovery/
 │       └── +page.svelte             # /recovery
 │
-├── (drive)/                         # Authenticated + main app chrome (sidebar, header, search)
+├── (drive)/                         # Authenticated + main app chrome (sidebar, global search, upload)
 │   ├── drive/
 │   │   ├── home/
 │   │   │   └── +page.svelte         # /drive/home (default landing)
+│   │   ├── search/
+│   │   │   └── +page.svelte         # /drive/search?q=...&page=...
 │   │   ├── my-storage/
 │   │   │   └── +page.svelte         # /drive/my-storage
 │   │   ├── organization/
@@ -48,7 +50,8 @@ src/routes/
 │   │   │   └── +page.svelte         # /drive/storage-stats
 │   │   └── profile/
 │   │       └── [userId]/
-│   │           └── +page.svelte     # /drive/profile/:userId
+│   │           ├── +page.svelte     # /drive/profile/:userId
+│   │           └── +page.ts         # Authenticated profile loader
 │   │
 │   └── admin/                       # Super Admin only (sidebar bottom)
 │       ├── storage/
@@ -142,6 +145,8 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
 
 ### C. Drive & Workspace Module (`(drive)` layout)
 
+**Global authenticated header:** Pencarian nama file/folder menampilkan pratinjau dan membuka hasil penuh di `/drive/search`. Tombol `Unggah` selalu ada; tujuannya akar My Storage kecuali pengguna sedang membuka folder Shared With Me dengan izin efektif `Editor`, saat file masuk ke folder itu. Daftar Shared atau izin `Viewer` menampilkan penolakan tanpa fallback ke My Storage.
+
 #### `/drive/home` (Beranda — default landing)
 
 - **Path:** `/drive/home`
@@ -153,6 +158,18 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
   - Quick Access cards (5 berkas/folder terakhir dibuka oleh akun aktif, urut terbaru ke terlama, tersimpan per akun)
   - Recent activities list (5 berkas/folder berbeda dengan aksi upload atau ubah terbaru oleh akun aktif, termasuk rename dan pindah folder di My Storage dan Organization; deduplikasi per berkas/folder)
   - Storage summary widget (same data as sidebar quota)
+
+
+#### `/drive/search` (Pencarian Berkas)
+
+- **Path:** `/drive/search`
+- **URL params:** `?q=query&page=number`
+- **Access:** Authenticated
+- **Key components & actions:**
+  - Halaman hasil penuh dengan paginasi; header menyediakan pratinjau hasil dan tautan ke halaman ini
+  - Cari nama file/folder yang dapat diakses di My Storage milik pengguna, Organization, dan subtree Shared yang diberikan kepadanya; file di Trash dan isi file tidak dicari
+  - Tampilkan sumber, lokasi, tipe, ukuran, dan waktu perubahan; lokasi Shared tidak mengungkap ancestor privat di atas akar share
+  - Memilih folder membuka folder pada sumbernya; memilih file membuka pratinjau pada folder induknya
 
 #### `/drive/my-storage` (My Storage)
 
@@ -192,7 +209,7 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
 #### `/drive/shared` (Dibagikan pada saya)
 
 - **Path:** `/drive/shared`
-- **URL params:** `?preview=file_id`
+- **URL params:** `?folder=folder_id&preview=file_id`
 - **Access:** Authenticated
 - **Embedded modals / drawers:**
   - _File Preview Lightbox_ — format dan perilaku sama dengan My Storage, termasuk untuk penerima `Viewer`
@@ -202,6 +219,7 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
   - Shared files table
   - Permission badge — `Viewer` (`secondary` / Ochre), `Editor` (`primary` / Moss)
   - Actions: Download, Preview; Edit/Delete/**Bagikan** jika `Editor`
+  - Upload dari header dalam folder bersama hanya tersedia untuk izin efektif `Editor`; Viewer dan daftar akar menampilkan dialog penolakan tanpa fallback
   - Quota: owner pays (tidak menambah usage penerima share)
 
 #### `/drive/starred` (Berbintang)
@@ -216,6 +234,7 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
   - Starred files table (dari `my-storage`, `organization`, `shared`)
   - Double-click berkas membuka _File Preview Lightbox_, menu aksi menyediakan "Lihat Pratinjau"
   - CTA `Hapus Bintang` (Unstar)
+
 #### `/drive/trash` (Trash Bin)
 
 - **Path:** `/drive/trash`
@@ -240,6 +259,16 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
   - Usage chart per kategori (Video, Gambar, Dokumen, Arsip, Trash)
   - Largest files list (top 10; exclude Organization)
   - Shortcut `Kelola Sampah` → `/drive/trash`
+
+
+#### `/drive/profile/[userId]` (Profil Akun)
+
+- **Path:** `/drive/profile/:userId`
+- **Access:** Authenticated; pemilik dapat mengedit profilnya sendiri. Super Admin dapat membaca profil lain secara read-only; pengguna reguler tidak dapat membaca atau mengubah profil pengguna lain.
+- **Key components & actions:**
+  - Tampilkan nama tampilan, email, username, role, kuota efektif, dan penggunaan aktual; username, role, serta kuota tidak dapat diedit dari halaman profil
+  - Edit nama tampilan dan email; perubahan email memerlukan kata sandi saat ini dan menolak format tidak valid atau duplikat tanpa membedakan kapitalisasi
+  - Ubah kata sandi dengan kata sandi saat ini, validasi panjang minimum, dan konfirmasi; keberhasilan mencabut semua sesi dan meminta login kembali
 
 ---
 

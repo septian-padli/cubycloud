@@ -4,9 +4,22 @@ export interface UserResponse {
 	id: string;
 	username: string;
 	email: string;
+	display_name?: string;
 	role: string;
 	quota_bytes: number;
 	used_bytes?: number;
+}
+
+export interface UpdateProfileRequest {
+	display_name?: string;
+	email?: string;
+	current_password?: string;
+}
+
+export interface ChangePasswordRequest {
+	current_password: string;
+	new_password: string;
+	confirm_password: string;
 }
 
 export interface LoginResponse {
@@ -81,6 +94,31 @@ class AuthAPI {
 			body: JSON.stringify(req)
 		});
 	}
+
+	async updateProfile(
+		req: UpdateProfileRequest
+	): Promise<{ data?: UserResponse; error?: string }> {
+		return this.request<UserResponse>('/auth/profile', {
+			method: 'PATCH',
+			body: JSON.stringify(req)
+		});
+	}
+
+	async changePassword(
+		req: ChangePasswordRequest
+	): Promise<{ data?: { message: string }; error?: string }> {
+		return this.request<{ message: string }>('/auth/change-password', {
+			method: 'POST',
+			body: JSON.stringify(req)
+		});
+	}
+
+	async getUserProfile(
+		userId: string
+	): Promise<{ data?: UserResponse; error?: string }> {
+		return this.request<UserResponse>(`/auth/profile/${encodeURIComponent(userId)}`);
+	}
 }
 
 export const authAPI = new AuthAPI();
+

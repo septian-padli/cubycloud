@@ -43,14 +43,17 @@ test('Topbar upload button automatically uploads files to the root of My Drive f
 	const file2 = join(tempDir, 'topbar-from-subfolder.txt');
 	writeFileSync(file2, 'Uploaded from inside subfolder via topbar');
 
+	const uploadFromHeader = async (filePath: string) => {
+		const chooserPromise = page.waitForEvent('filechooser');
+		await page.getByTestId('topbar-upload-button').click();
+		await (await chooserPromise).setFiles(filePath);
+	};
 	// 1. On /drive/home, upload file1 using the topbar upload input
 	await page.goto('/drive/home');
 	await expect(page.getByRole('heading', { name: 'Beranda' })).toBeVisible();
 
-	const topbarInput = page.getByTestId('topbar-upload-input');
-	await topbarInput.setInputFiles(file1);
-
-	await expect(page.getByText('“topbar-from-home.txt” berhasil diunggah ke My Drive')).toBeVisible();
+	await uploadFromHeader(file1);
+	await expect(page.getByText('“topbar-from-home.txt” berhasil diunggah')).toBeVisible();
 
 	// 2. Go to /drive/my-storage and verify topbar-from-home.txt is in the root directory
 	await page.goto('/drive/my-storage');
@@ -67,9 +70,8 @@ test('Topbar upload button automatically uploads files to the root of My Drive f
 	await page.goto(`/drive/my-storage?folder=${subfolder.id}`);
 	await expect(page.getByText('Subfolder Alpha')).toBeVisible();
 
-	// 4. While inside the subfolder, upload file2 via the topbar upload input
-	await topbarInput.setInputFiles(file2);
-	await expect(page.getByText('“topbar-from-subfolder.txt” berhasil diunggah ke My Drive')).toBeVisible();
+	await uploadFromHeader(file2);
+	await expect(page.getByText('“topbar-from-subfolder.txt” berhasil diunggah')).toBeVisible();
 
 	// file2 must NOT be in the subfolder
 	await expect(page.getByText('topbar-from-subfolder.txt')).toHaveCount(0);

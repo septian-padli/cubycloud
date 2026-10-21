@@ -489,7 +489,8 @@ Antarmuka file pribadi berbasis **SvelteKit SPA** dengan **Flat Earthy Design Sy
 
 4. **Search & Quick Category Filters:**
 
-- **Fuzzy Text Search:** Pencarian instan berdasarkan nama file/folder.
+- **Global File Search:** Pencarian parsial berdasarkan nama file/folder di My Storage milik pengguna, Organization, dan pohon folder yang dibagikan kepadanya; item di Trash tidak disertakan. Hasil hanya menampilkan lokasi yang boleh diakses, tanpa membocorkan induk privat di atas akar share. Memilih hasil membuka folder pada sumbernya atau pratinjau file di folder induk yang sesuai.
+- **Header search:** Kotak pencarian global tersedia pada seluruh halaman drive terautentikasi, menampilkan pratinjau hasil dan menyediakan halaman hasil penuh `/drive/search?q=...&page=...`. Pencarian tidak mengindeks isi file.
 - **Category Filter Chips:** Filter cepat berdasarkan tipe file:
 - 🖼️ _Gambar_ (PNG, JPG, WebP, GIF, SVG)
 - 🎥 _Video_ (MP4, WebM)
@@ -509,6 +510,12 @@ Antarmuka file pribadi berbasis **SvelteKit SPA** dengan **Flat Earthy Design Sy
 - **Pemulihan sesi:** Simpan metadata sesi dan antrean di IndexedDB, bukan bytes file atau kredensial. Sesi backend bertahan 24 jam dan dibersihkan dengan aman setelah kedaluwarsa. Setelah refresh, browser ditutup, atau backend restart, sesi dapat dipulihkan dengan memilih ulang file yang sama dan memverifikasi SHA-256 seluruh file secara bertahap dengan memori terbatas. Sesi kedaluwarsa, tidak dapat dipulihkan, atau file yang tidak cocok harus menampilkan error yang jelas dan memerlukan tindakan eksplisit untuk memulai dari nol; jangan diam-diam mengulang atau membuat file duplikat.
 - **Antrean transfer:** Tampilkan status Uploading, Retrying, Paused, Waiting for File, Verifying, Committing, Completed, Failed, dan Expired. Sediakan Pause, Resume, dan Cancel serta lanjut otomatis ketika jaringan pulih. Cegah transfer yang sama berjalan bersamaan di beberapa tab; pertahankan pemeriksaan izin, user quota My Storage, dan kapasitas node.
 - **Download:** Unduhan file lokal reguler di My Storage dan Organization mendukung HTTP Range/HEAD (`200`, `206`, `416`, `Content-Range`, `Content-Length`, `Accept-Ranges`, `ETag`, dan `If-Range`) tanpa mengganti unduhan native browser. S3/R2 tetap menggunakan presigned GET langsung; ZIP tetap streaming dan tidak mendukung resume ZIP.
+
+7. **Global Header Upload:**
+
+- Tombol Upload pada header tersedia di seluruh halaman drive terautentikasi dan secara default mengunggah ke akar My Storage, tanpa mengikuti folder yang sedang dibuka pada halaman lain.
+- Saat pengguna membuka folder di `/drive/shared`, upload hanya menuju folder tersebut jika izin efektifnya `Editor`, termasuk izin turunan pada folder bersarang. Daftar Shared With Me atau izin `Viewer` menampilkan penolakan yang jelas dan tidak mengalihkan upload ke My Storage.
+- Upload My Storage memakai antrean transfer yang sudah ada, pemulihan/resume yang didukung transport, dan pemeriksaan kuota serta kapasitas node. Upload shared memakai API share dengan penanganan error yang sesuai transport; izin dan kepemilikan tetap diverifikasi backend.
 
 ---
 
@@ -682,6 +689,31 @@ Fitur pengarsipan dan kompresi (termasuk Download as ZIP) merupakan kapabilitas 
 - Pesan error dicatat di **In-App Notification Center** pengguna dan **Internal System Audit Log** milik Admin.
 
 ---
+### 4.13 Module 13: Account Profile & Session Security (`/drive/profile/:userId`)
+
+Pengguna mengelola profil akunnya sendiri; identitas akun, izin, dan penggunaan kuota tetap berasal dari backend.
+
+#### Functional Specifications:
+
+1. **Profile Display and Access:**
+
+- Halaman profil menampilkan nama tampilan, email, username, role, kuota efektif, dan penggunaan aktual.
+- Pengguna dapat membaca profil sendiri. Super Admin dapat membaca profil pengguna lain dalam mode read-only; pengguna reguler tidak dapat membaca atau mengubah profil pengguna lain.
+- Username, role, dan data kuota bersifat read-only pada halaman profil.
+
+2. **Profile Updates:**
+
+- Pengguna dapat mengubah nama tampilan dan email. Perubahan email mewajibkan kata sandi saat ini dan email unik tanpa membedakan kapitalisasi; input tidak valid atau konflik email ditolak tanpa mengubah data.
+- Pembaruan bersamaan tidak boleh menimpa data yang berubah setelah pembacaan; konflik harus meminta pengguna memuat ulang dan mencoba kembali.
+
+3. **Password Changes and Sessions:**
+
+- Pengguna dapat mengubah kata sandi dengan memverifikasi kata sandi saat ini, validasi panjang minimum, dan konfirmasi kecocokan.
+- Perubahan kata sandi menaikkan versi token akun dan membatalkan seluruh sesi yang telah diterbitkan; pengguna harus masuk kembali.
+
+---
+
+
 
 ### Summary of Data Entity & Access Rules Matrix
 
@@ -690,6 +722,8 @@ Fitur pengarsipan dan kompresi (termasuk Download as ZIP) merupakan kapabilitas 
 | **Setup Wizard (`/setup`)**              | Unauthenticated (First-Boot Only) | Membuat Admin, Pindai Disk, Ekspor Recovery Key        |
 | **Auth (`/login`, `/recovery`)**         | Unauthenticated                   | Login JWT; reset Super Admin via Recovery Key          |
 | **Beranda (`/drive/home`)**              | Regular User & Super Admin        | Quick access, activity, quota summary                  |
+| **Account Profile (`/drive/profile/:userId`)** | Authenticated | Self-update; Super Admin reads others read-only; password change revokes sessions |
+| **Global Search (`/drive/search`)** | Authenticated | Search accessible names across My Storage, Organization, and granted Shared folders |
 | **My Storage (`/drive/my-storage`)**     | Regular User & Super Admin        | CRUD pribadi; node badge **hidden** untuk Regular User |
 | **Organization (`/drive/organization`)** | All Registered Users              | Full Access; **no user quota**                         |
 | **Starred / Shared / Trash / Stats**     | Authenticated                     | Sesuai izin sumber; stats = own usage                  |

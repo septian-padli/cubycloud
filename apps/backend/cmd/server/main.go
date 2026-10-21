@@ -19,6 +19,7 @@ import (
 	"github.com/cubycloud/backend/internal/modules/mystorage"
 	"github.com/cubycloud/backend/internal/modules/organization"
 	"github.com/cubycloud/backend/internal/modules/setup"
+	"github.com/cubycloud/backend/internal/modules/search"
 	"github.com/cubycloud/backend/internal/modules/share"
 	"github.com/cubycloud/backend/internal/storage"
 	"github.com/cubycloud/backend/web"
@@ -94,6 +95,8 @@ func main() {
 	organization.RegisterRoutes(e, db, driver, jwtAuth)
 	// Share endpoints (internal user grants & public share links)
 	share.RegisterRoutes(e, db, driver, jwtAuth)
+	// Global search endpoint across My Storage, Organization, and Shared With Me
+	search.RegisterRoutes(e, db, jwtAuth)
 	// Background cron worker for 30-day trash auto-purge
 	trashPurgeJob := jobs.StartTrashPurgeJob(context.Background(), db, driver, 1*time.Hour, 30*24*time.Hour)
 	defer trashPurgeJob.Stop()

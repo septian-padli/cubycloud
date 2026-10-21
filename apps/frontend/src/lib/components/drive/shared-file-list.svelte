@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import type { SharedFileItem } from '$lib/types/drive.js';
 	import { formatSize } from '$lib/mocks/file-tree.js';
 	import { driveView } from '$lib/drive-view.svelte.js';
+	import { getDriveChrome } from '$lib/drive-context.svelte.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import * as ContextMenu from '$lib/components/ui/context-menu/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
@@ -52,6 +53,8 @@
 		initialItems?: SharedFileItem[];
 	} = $props();
 
+	const chrome = getDriveChrome();
+
 	let items = $state<SharedFileItem[]>([]);
 	let loading = $state(true);
 	let activeFolderId = $state<string | null>(null);
@@ -93,6 +96,7 @@
 	}
 
 	async function loadRoot() {
+		chrome.setSharedUploadContext(null, null);
 		loading = true;
 		try {
 			const res = await getSharedWithMe();
@@ -109,29 +113,58 @@
 
 	async function loadFolder(folderId: string) {
 		loading = true;
+		chrome.setSharedUploadContext(folderId, null);
 		try {
 			const res = await getSharedFolder(folderId);
 			items = (res.items ?? []).map(toSharedFileItem);
 			breadcrumbs = res.breadcrumbs ?? [];
 			folderPermission = res.permission;
 			currentFolderName = breadcrumbs[breadcrumbs.length - 1]?.name || 'Folder';
+			chrome.setSharedUploadContext(folderId, res.permission);
 		} catch (err) {
 			toast.error(err instanceof Error ? err.message : 'Gagal memuat folder bersama');
 			activeFolderId = null;
 			await loadRoot();
+			chrome.setSharedUploadContext(null, null);
 		} finally {
 			loading = false;
 		}
 	}
 
+	onDestroy(() => {
+		chrome.setSharedUploadContext(null, null);
+		chrome.registerStorageChangeHandler?.(null);
+	});
+
 	onMount(() => {
-		if (initialItems && initialItems.length > 0) {
+		chrome.registerStorageChangeHandler?.(() => {
+			if (activeFolderId) void loadFolder(activeFolderId);
+		});
+		const folderId = page.url.searchParams.get('folder');
+		if (folderId) {
+			activeFolderId = folderId;
+			void loadFolder(folderId);
+		} else if (initialItems && initialItems.length > 0) {
 			items = initialItems;
 			loading = false;
+			chrome.setSharedUploadContext(null, null);
 		} else {
 			void loadRoot();
 		}
 	});
+
+	function syncFolder(id: string | null) {
+		const params = new URLSearchParams(page.url.searchParams);
+		if (id) params.set('folder', id);
+		else params.delete('folder');
+		params.delete('preview');
+		const qs = params.toString();
+		void goto(`${page.url.pathname}${qs ? `?${qs}` : ''}`, {
+			replaceState: true,
+			keepFocus: true,
+			noScroll: true
+		});
+	}
 
 	function syncPreview(id: string | null) {
 		const params = new URLSearchParams(page.url.searchParams);
@@ -148,6 +181,7 @@
 	function onOpen(entry: SharedFileItem) {
 		if (entry.kind === 'folder') {
 			activeFolderId = entry.id;
+			syncFolder(entry.id);
 			void loadFolder(entry.id);
 			return;
 		}
@@ -157,9 +191,11 @@
 	function navigateBreadcrumb(id: string | null) {
 		if (id === null) {
 			activeFolderId = null;
+			syncFolder(null);
 			void loadRoot();
 		} else {
 			activeFolderId = id;
+			syncFolder(id);
 			void loadFolder(id);
 		}
 	}

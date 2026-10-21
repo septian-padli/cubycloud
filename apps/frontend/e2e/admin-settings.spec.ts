@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const username = 'storage-e2e-admin';
 const password = 'StorageE2E-password-2026';
@@ -11,10 +11,17 @@ async function ensureAdminLoggedIn(page: Page) {
 		if (!json.is_setup_completed) {
 			const scan = await page.request.get('/api/v1/setup/scan-nodes');
 			expect(scan.ok()).toBeTruthy();
-			const { nodes } = (await scan.json()) as { nodes: { path: string; capacity_bytes: number }[] };
+			const { nodes } = (await scan.json()) as {
+				nodes: { path: string; capacity_bytes: number }[];
+			};
 			const setup = await page.request.post('/api/v1/setup/complete', {
 				data: {
-					admin: { username, email: 'storage-e2e@example.test', password, recovery_key: recoveryKey },
+					admin: {
+						username,
+						email: 'storage-e2e@example.test',
+						password,
+						recovery_key: recoveryKey
+					},
 					storage_nodes: nodes.map((node) => ({ ...node, enabled: true })),
 					placement_strategy: 'FILL_FIRST',
 					cloud: { enabled: false }
@@ -32,7 +39,40 @@ async function ensureAdminLoggedIn(page: Page) {
 	await page.waitForURL('**/drive/home');
 }
 
-test('Admin Settings manages settings, validation, unsaved changes warnings, and backup download', async ({ page }) => {
+async function expectTabColors(tab: Locator, selected: boolean) {
+	const expected = await tab.evaluate(() => {
+		const tokenColor = (token: string) => {
+			const probe = document.createElement('span');
+			probe.style.color = `var(${token})`;
+			document.body.append(probe);
+			const color = getComputedStyle(probe).color;
+			probe.remove();
+			return color;
+		};
+		return { primary: tokenColor('--primary'), muted: tokenColor('--text-muted') };
+	});
+
+	await expect
+		.poll(async () =>
+			tab.evaluate((element) => {
+				const style = getComputedStyle(element);
+				return {
+					color: style.color,
+					borderBottomColor: style.borderBottomColor,
+					borderBottomWidth: style.borderBottomWidth
+				};
+			})
+		)
+		.toEqual({
+			color: selected ? expected.primary : expected.muted,
+			borderBottomColor: selected ? expected.primary : 'rgba(0, 0, 0, 0)',
+			borderBottomWidth: '2px'
+		});
+}
+
+test('Admin Settings manages settings, validation, unsaved changes warnings, and backup download', async ({
+	page
+}) => {
 	await ensureAdminLoggedIn(page);
 	// 1. Navigate to /admin/settings
 	await page.goto('/admin/settings');
@@ -143,13 +183,21 @@ test('Admin Settings manages settings, validation, unsaved changes warnings, and
 	expect(download.suggestedFilename()).toContain('.db');
 	await expect(page.getByText('Backup DB berhasil diunduh')).toBeVisible();
 });
-test('storage node names can be edited and persist, while local creation requires a unique name', async ({ page }) => {
+test('storage node names can be edited and persist, while local creation requires a unique name', async ({
+	page
+}) => {
 	await ensureAdminLoggedIn(page);
 	await page.goto('/admin/settings');
 	const nodesResponse = await page.request.get('/api/v1/admin/storage-nodes');
 	expect(nodesResponse.ok()).toBeTruthy();
 	const { nodes } = (await nodesResponse.json()) as {
-		nodes: { id: string; name: string; path: string; used_bytes: number; capacity_cap_gb: number }[];
+		nodes: {
+			id: string;
+			name: string;
+			path: string;
+			used_bytes: number;
+			capacity_cap_gb: number;
+		}[];
 	};
 	expect(nodes.length).toBeGreaterThan(0);
 	const firstNode = nodes[0]!;
@@ -179,6 +227,28 @@ test('storage node names can be edited and persist, while local creation require
 	await page.getByLabel('Path Direktori').fill(localNode.path);
 	await localName.fill(localNode.name);
 	await expect(addLocal).toBeEnabled();
+	const addNodeDialog = page.getByRole('dialog', { name: 'Tambah Node Penyimpanan' });
+	const storageTabs = addNodeDialog.getByRole('tablist');
+	const localTab = storageTabs.getByRole('tab', { name: 'Disk Lokal' });
+	const cloudTab = storageTabs.getByRole('tab', { name: 'Cloud (S3)' });
+	await expect(addNodeDialog).toBeVisible();
+	await expect(localTab).toHaveAttribute('aria-selected', 'true');
+	await expect(cloudTab).toHaveAttribute('aria-selected', 'false');
+	await expectTabColors(localTab, true);
+	await expectTabColors(cloudTab, false);
+	await expect(localName).toBeVisible();
+	await expect(addNodeDialog.getByLabel('Endpoint')).not.toBeVisible();
+	await cloudTab.click();
+	await expect(cloudTab).toHaveAttribute('aria-selected', 'true');
+	await expect(localTab).toHaveAttribute('aria-selected', 'false');
+	await expectTabColors(cloudTab, true);
+	await expectTabColors(localTab, false);
+	await expect(addNodeDialog.getByLabel('Endpoint')).toBeVisible();
+	await expect(localName).not.toBeVisible();
+	await localTab.click();
+	await expect(localTab).toHaveAttribute('aria-selected', 'true');
+	await expect(cloudTab).toHaveAttribute('aria-selected', 'false');
+	await expect(localName).toBeVisible();
 	await addLocal.click();
 	await expect(page.getByTestId('error-local-node-name')).toContainText(/name|already exists/i);
 });
@@ -193,7 +263,10 @@ test('capacity warning follows per-node used bytes', async ({ page }) => {
 	};
 	expect(nodes.length).toBeGreaterThan(0);
 	const usedBytes = nodes[0]!.used_bytes;
-	test.skip(usedBytes <= 1024 ** 3, 'Requires more than 1 GiB of node usage to lower capacity below usage.');
+	test.skip(
+		usedBytes <= 1024 ** 3,
+		'Requires more than 1 GiB of node usage to lower capacity below usage.'
+	);
 	const belowUsageGb = Math.ceil(usedBytes / 1024 ** 3) - 1;
 
 	await page.getByRole('button', { name: 'Edit' }).first().click();

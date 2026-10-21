@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const superAdminUsername = 'storage-e2e-admin';
 const superAdminPassword = 'StorageE2E-password-2026';
@@ -23,7 +23,9 @@ async function ensureSetup(page: Page) {
 		if (!json.is_setup_completed) {
 			const scan = await page.request.get('/api/v1/setup/scan-nodes');
 			expect(scan.ok()).toBeTruthy();
-			const { nodes } = (await scan.json()) as { nodes: { path: string; capacity_bytes: number }[] };
+			const { nodes } = (await scan.json()) as {
+				nodes: { path: string; capacity_bytes: number }[];
+			};
 			const setup = await page.request.post('/api/v1/setup/complete', {
 				data: {
 					admin: {
@@ -49,6 +51,37 @@ async function loginUser(page: Page, username: string, password: string) {
 	await page.getByRole('textbox', { name: 'Password' }).fill(password);
 	await page.getByRole('button', { name: 'Masuk' }).click();
 	await page.waitForURL('**/drive/home');
+}
+
+async function expectTabColors(tab: Locator, selected: boolean) {
+	const expected = await tab.evaluate(() => {
+		const tokenColor = (token: string) => {
+			const probe = document.createElement('span');
+			probe.style.color = `var(${token})`;
+			document.body.append(probe);
+			const color = getComputedStyle(probe).color;
+			probe.remove();
+			return color;
+		};
+		return { primary: tokenColor('--primary'), muted: tokenColor('--text-muted') };
+	});
+
+	await expect
+		.poll(async () =>
+			tab.evaluate((element) => {
+				const style = getComputedStyle(element);
+				return {
+					color: style.color,
+					borderBottomColor: style.borderBottomColor,
+					borderBottomWidth: style.borderBottomWidth
+				};
+			})
+		)
+		.toEqual({
+			color: selected ? expected.primary : expected.muted,
+			borderBottomColor: selected ? expected.primary : 'rgba(0, 0, 0, 0)',
+			borderBottomWidth: '2px'
+		});
 }
 
 test('File and folder sharing end-to-end: direct share to registered user and public links with password and revocation', async ({
@@ -93,6 +126,29 @@ test('File and folder sharing end-to-end: direct share to registered user and pu
 	// Sheet Bagikan terbuka
 	const sheet = page.getByRole('dialog');
 	await expect(sheet.getByRole('heading', { name: 'Bagikan' })).toBeVisible();
+	const shareTabs = sheet.getByRole('tablist');
+	const usersTab = shareTabs.getByRole('tab', { name: 'Pengguna' });
+	const linkTab = shareTabs.getByRole('tab', { name: 'Tautan' });
+	await expect(shareTabs).toBeVisible();
+	await expect(usersTab).toHaveAttribute('aria-selected', 'true');
+	await expect(linkTab).toHaveAttribute('aria-selected', 'false');
+	await expectTabColors(usersTab, true);
+	await expectTabColors(linkTab, false);
+	await expect(sheet.getByLabel('Cari pengguna CubyCloud')).toBeVisible();
+	await expect(sheet.getByLabel('Aktifkan kata sandi')).not.toBeVisible();
+	await linkTab.click();
+	await expect(linkTab).toHaveAttribute('aria-selected', 'true');
+	await expect(usersTab).toHaveAttribute('aria-selected', 'false');
+	await expectTabColors(linkTab, true);
+	await expectTabColors(usersTab, false);
+	await expect(sheet.getByLabel('Aktifkan kata sandi')).toBeVisible();
+	await expect(sheet.getByLabel('Cari pengguna CubyCloud')).not.toBeVisible();
+	await usersTab.click();
+	await expect(usersTab).toHaveAttribute('aria-selected', 'true');
+	await expect(linkTab).toHaveAttribute('aria-selected', 'false');
+	await expectTabColors(usersTab, true);
+	await expectTabColors(linkTab, false);
+	await expect(sheet.getByLabel('Cari pengguna CubyCloud')).toBeVisible();
 
 	// 5. Bagikan ke user Bob dengan izin Editor
 	const userSearchInput = sheet.getByLabel('Cari pengguna CubyCloud');
@@ -102,7 +158,9 @@ test('File and folder sharing end-to-end: direct share to registered user and pu
 	await suggestion.click();
 
 	// Ubah izin Bob menjadi Ubah (Editor) lewat dropdown
-	await sheet.getByRole('button', { name: new RegExp(`Pilih hak akses ${userBob.username}`, 'i') }).click();
+	await sheet
+		.getByRole('button', { name: new RegExp(`Pilih hak akses ${userBob.username}`, 'i') })
+		.click();
 	await page.getByRole('option', { name: 'Ubah', exact: true }).click();
 
 	// Klik Simpan
@@ -114,8 +172,12 @@ test('File and folder sharing end-to-end: direct share to registered user and pu
 	await page.getByRole('menuitem', { name: 'Bagikan' }).click();
 	await expect(sheet.getByRole('heading', { name: 'Bagikan' })).toBeVisible();
 
-	// Pindah ke tab Tautan
-	await sheet.getByRole('button', { name: 'Tautan' }).click();
+	await linkTab.click();
+	await expect(linkTab).toHaveAttribute('aria-selected', 'true');
+	await expect(usersTab).toHaveAttribute('aria-selected', 'false');
+	await expectTabColors(linkTab, true);
+	await expectTabColors(usersTab, false);
+	await expect(sheet.getByLabel('Aktifkan kata sandi')).toBeVisible();
 
 	// Aktifkan proteksi kata sandi
 	const passwordSwitch = sheet.getByLabel('Aktifkan kata sandi');
@@ -182,17 +244,64 @@ test('File and folder sharing end-to-end: direct share to registered user and pu
 	await subInput.fill('SubBob');
 	await page.getByRole('button', { name: 'Buat' }).click();
 	await expect(page.getByText('SubBob').first()).toBeVisible({ timeout: 10000 });
+	// Search results inside a nested shared folder must reopen that folder before previewing the file.
+	await page.getByText('SubBob', { exact: true }).dblclick();
+	await expect(page.getByText('Folder ini kosong')).toBeVisible({ timeout: 8000 });
+	const sharedFolderId = new URL(page.url()).searchParams.get('folder');
+	if (!sharedFolderId) throw new Error('shared folder navigation did not preserve its folder ID');
 
-	// 9. Alice mencabut / menghapus tautan berbagi
+	const sharedSearchFile = `shared-search-${Date.now()}.txt`;
+	const chooserPromise = page.waitForEvent('filechooser');
+	await page.getByTestId('topbar-upload-button').click();
+	await (
+		await chooserPromise
+	).setFiles({
+		name: sharedSearchFile,
+		mimeType: 'text/plain',
+		buffer: Buffer.from('Nested shared search preview.')
+	});
+	await expect(page.getByText(sharedSearchFile, { exact: true })).toBeVisible({ timeout: 10000 });
+
+	const searchResponse = await page.request.get(
+		`/api/v1/drive/search?q=${encodeURIComponent(sharedSearchFile)}`
+	);
+	expect(searchResponse.ok()).toBeTruthy();
+	const searchPayload = (await searchResponse.json()) as {
+		items: { id: string; name: string; source: string; parent_id: string | null }[];
+	};
+	const searchResult = searchPayload.items.find((item) => item.name === sharedSearchFile);
+	expect(searchResult).toBeTruthy();
+	if (!searchResult) throw new Error('uploaded shared file was not returned by global search');
+	expect(searchResult).toMatchObject({ source: 'shared', parent_id: sharedFolderId });
+
+	await page.getByTestId('global-search-input').fill(sharedSearchFile);
+	const previewResult = page
+		.getByTestId('search-result-item')
+		.filter({ hasText: sharedSearchFile });
+	await expect(previewResult).toBeVisible({ timeout: 10000 });
+	await previewResult.click();
+	await page.waitForURL(
+		(url) =>
+			url.pathname === '/drive/shared' &&
+			url.searchParams.get('folder') === sharedFolderId &&
+			url.searchParams.get('preview') === searchResult.id
+	);
+	await expect(
+		page.getByRole('dialog').getByRole('heading', { name: sharedSearchFile })
+	).toBeVisible();
+
+	// Return to Alice before testing link revocation.
 	await loginUser(page, userAlice.username, userAlice.password);
 	await page.goto('/drive/my-storage');
 	await page.waitForLoadState('networkidle');
+
+	// 9. Alice mencabut / menghapus tautan berbagi
 
 	const aliceFolderItem = page.getByRole('option').filter({ hasText: folderName });
 	await aliceFolderItem.getByRole('button', { name: 'Aksi berkas' }).click();
 	await page.getByRole('menuitem', { name: 'Bagikan' }).click();
 	await expect(sheet.getByRole('heading', { name: 'Bagikan' })).toBeVisible();
-	await sheet.getByRole('button', { name: 'Tautan' }).click();
+	await linkTab.click();
 
 	// Klik tombol hapus tautan
 	const deleteLinkBtn = sheet.getByRole('button', { name: 'Cabut tautan' }).first();
@@ -204,6 +313,8 @@ test('File and folder sharing end-to-end: direct share to registered user and pu
 	const checkContext = await browser.newContext();
 	const checkPage = await checkContext.newPage();
 	await checkPage.goto(`/s/${shareToken}`);
-	await expect(checkPage.getByText(/tautan tidak ditemukan/i).or(checkPage.getByText(/404/i))).toBeVisible({ timeout: 5000 });
+	await expect(
+		checkPage.getByText(/tautan tidak ditemukan/i).or(checkPage.getByText(/404/i))
+	).toBeVisible({ timeout: 5000 });
 	await checkContext.close();
 });
