@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 
-const admin = { username: 'preview-e2e-admin', password: 'PreviewPassword2026!' };
+const admin = { username: 'storage-e2e-admin', password: 'StorageE2E-password-2026' };
 const guestPassword = 'PreviewGuestPassword2026!';
 const video = readFileSync(join(import.meta.dirname, 'fixtures/preview.webm'));
 

@@ -99,7 +99,7 @@ test('Organization shared drive provides multi-user collaboration and isolates p
 	await expect(page.getByText('Proyek Bersama Tim', { exact: true })).toBeVisible();
 
 	// 5. Alice uploads a shared file "shared-spec.txt" into Organization
-	const fileInput = page.locator('input[type="file"]').first();
+	const fileInput = page.getByTestId('upload-file-input');
 	await fileInput.setInputFiles({
 		name: 'shared-spec.txt',
 		mimeType: 'text/plain',

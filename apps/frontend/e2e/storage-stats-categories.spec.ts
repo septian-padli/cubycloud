@@ -74,6 +74,14 @@ test.describe('Storage Stats Category Breakdown & Quota Bar', () => {
 
 		// 1. Login as Admin to provision isolated test users
 		await loginUser(page, adminUsername, adminPassword);
+		const cleanRes = await page.request.get('/api/v1/drive/my-storage');
+		if (cleanRes.ok()) {
+			const { items } = (await cleanRes.json()) as { items: { id: string }[] };
+			for (const item of items) {
+				await page.request.delete(`/api/v1/drive/my-storage/${encodeURIComponent(item.id)}`);
+			}
+			await page.request.delete('/api/v1/drive/trash');
+		}
 		// Super Admin is always unlimited: even with a nonzero usage, its bar must fill the track.
 		const adminVideo = await uploadFile(page, 'super-admin-unlimited-video.mp4', 4 * 1024 * 1024);
 		await page.goto('/drive/storage-stats');

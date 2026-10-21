@@ -3,8 +3,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const username = 'multiselect-e2e-admin';
-const password = 'MultiSelect-password-2026';
+const username = 'storage-e2e-admin';
+const password = 'StorageE2E-password-2026';
 const recoveryKey = 'ABCDE-FGHKL-MNPQR-STUVW-XYZ23-45678';
 
 async function finishSetup(page: Page) {
@@ -42,6 +42,17 @@ function itemRow(page: Page, name: string | RegExp): Locator {
 
 test('Multi-select actions in List & Grid view with bulk bar, move, delete, zip, and drag-drop', async ({ page }) => {
 	await finishSetup(page);
+
+	const cleanRes = await page.request.get('/api/v1/drive/my-storage');
+	if (cleanRes.ok()) {
+		const { items } = (await cleanRes.json()) as { items: { id: string }[] };
+		for (const item of items) {
+			await page.request.delete(`/api/v1/drive/my-storage/${encodeURIComponent(item.id)}`);
+		}
+		await page.request.delete('/api/v1/drive/trash');
+	}
+	await page.goto('/drive/my-storage');
+	await expect(page.getByRole('heading', { name: 'My Storage' })).toBeVisible();
 
 	const baseDir = mkdtempSync(join(tmpdir(), 'multiselect-e2e-'));
 	const fileA = join(baseDir, 'doc-alpha.txt');

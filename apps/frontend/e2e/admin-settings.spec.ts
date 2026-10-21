@@ -135,6 +135,11 @@ test('Admin Settings manages settings, validation, unsaved changes warnings, and
 	const downloadPromise = page.waitForEvent('download');
 	await page.getByTestId('btn-download-backup').click();
 	const download = await downloadPromise;
+
+	// Reset default quota back to 100 GB for subsequent tests
+	await page.request.put('/api/v1/admin/settings', {
+		data: { default_quota: { mode: 'limited', gb: 100 }, worker_concurrency: 2 }
+	});
 	expect(download.suggestedFilename()).toContain('.db');
 	await expect(page.getByText('Backup DB berhasil diunduh')).toBeVisible();
 });

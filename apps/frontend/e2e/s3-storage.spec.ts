@@ -326,7 +326,7 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 		.toBeTruthy();
 
 	// Reload persisted S3 node settings from the restarted process.
-	await page.goto('/admin/settings');
+	await page.goto('/admin/settings', { waitUntil: 'domcontentloaded' }).catch(() => page.goto('/admin/settings'));
 	await expect(page.getByText(nodeName).first()).toBeVisible();
 	await expect(page.getByText('Bucket: cubycloud-dev').first()).toBeVisible();
 	await expect(page.getByText('S3').first()).toBeVisible();
@@ -417,4 +417,12 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 		data: { placement_strategy: 'FILL_FIRST' }
 	});
 	expect(resetStrategyRes.ok()).toBeTruthy();
+
+	// Re-enable local storage nodes that were disabled for MinIO isolation.
+	for (const node of storageNodes.nodes.filter((node) => node.kind !== 'S3' && node.enabled)) {
+		const enableNodeRes = await page.request.put(`/api/v1/admin/storage-nodes/${node.id}`, {
+			data: { enabled: true }
+		});
+		expect(enableNodeRes.ok()).toBeTruthy();
+	}
 });

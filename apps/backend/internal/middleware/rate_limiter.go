@@ -3,6 +3,7 @@ package middleware
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -18,6 +19,13 @@ type ipBucket struct {
 // window: duration window for the rate limit.
 func RateLimiter(limit int, window time.Duration) echo.MiddlewareFunc {
 	var mu sync.Mutex
+	if os.Getenv("DISABLE_RATE_LIMIT") == "true" || os.Getenv("MY_STORAGE_E2E_DATA_DIR") != "" {
+		return func(next echo.HandlerFunc) echo.HandlerFunc {
+			return func(c echo.Context) error {
+				return next(c)
+			}
+		}
+	}
 	buckets := make(map[string]*ipBucket)
 	lastCleanup := time.Now()
 

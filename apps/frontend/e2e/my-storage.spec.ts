@@ -85,6 +85,14 @@ async function listing(page: Page, parentId = '') {
 test('My Storage manages real files and folders end to end', async ({ page }) => {
 	await finishSetup(page);
 
+	const initialListing = await listing(page);
+	for (const item of initialListing.items) {
+		await page.request.delete(`/api/v1/drive/my-storage/${encodeURIComponent(item.id)}`);
+	}
+	await page.request.delete('/api/v1/drive/trash');
+	await page.reload();
+	await expect(page.getByRole('heading', { name: 'My Storage' })).toBeVisible();
+
 	const base = mkdtempSync(join(tmpdir(), 'my-storage-e2e-upload-'));
 	try {
 		await page.getByRole('button', { name: 'Tambah' }).click();

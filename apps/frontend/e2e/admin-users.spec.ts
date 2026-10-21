@@ -1,7 +1,7 @@
 import { expect, test, request, type Page } from '@playwright/test';
 
-const adminUsername = 'user-e2e-admin';
-const adminPassword = 'UserE2E-password-2026';
+const adminUsername = 'storage-e2e-admin';
+const adminPassword = 'StorageE2E-password-2026';
 const recoveryKey = 'ABCDE-FGHKL-MNPQR-STUVW-XYZ23-45678';
 
 async function ensureAdminLoggedIn(page: Page) {
@@ -34,6 +34,9 @@ async function ensureAdminLoggedIn(page: Page) {
 
 test('Admin Users manages user creation, quota modes (fractional, default, unlimited), and deletion', async ({ page }) => {
 	await ensureAdminLoggedIn(page);
+	await page.request.put('/api/v1/admin/settings', {
+		data: { default_quota: { mode: 'limited', gb: 100 } }
+	});
 	// 1. Navigate to /admin/users
 	await page.goto('/admin/users');
 	await expect(page.getByRole('heading', { name: 'Users & Quotas' })).toBeVisible();
@@ -179,8 +182,8 @@ test('Admin Users manages user creation, quota modes (fractional, default, unlim
 	await deletedLoginContext.dispose();
 	// 10. Verify Sidebar actual storage, user name, email, and logout functionality
 	const sidebar = page.locator('aside').first();
-	await expect(sidebar.getByText('user-e2e-admin')).toBeVisible();
-	await expect(sidebar.getByText('user-e2e@example.test')).toBeVisible();
+	await expect(sidebar.getByText(adminUsername)).toBeVisible();
+	await expect(sidebar.getByText(/@example\.test/)).toBeVisible();
 	await expect(sidebar.getByText('terpakai')).toBeVisible();
 
 	// Open three-dot account menu popover in sidebar

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const superAdminUsername = 'share-e2e-admin';
-const superAdminPassword = 'ShareE2E-password-2026';
+const superAdminUsername = 'storage-e2e-admin';
+const superAdminPassword = 'StorageE2E-password-2026';
 const recoveryKey = 'ABCDE-FGHKL-MNPQR-STUVW-XYZ23-45678';
 
 const userAlice = {

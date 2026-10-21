@@ -18,16 +18,8 @@
 	let search = $state('');
 	let fileInput = $state<HTMLInputElement>();
 	let isUploading = $state(false);
-	const onExplorerPage = $derived(
-		page.url.pathname === '/drive/my-storage' || page.url.pathname === '/drive/organization'
-	);
-
 	function onUploadClick() {
 		if (isUploading) return;
-		if (onExplorerPage) {
-			chrome.requestUpload();
-			return;
-		}
 		fileInput?.click();
 	}
 
@@ -115,16 +107,14 @@
 	</div>
 
 	<div class="ms-auto flex shrink-0 items-center gap-2 sm:gap-3">
-		{#if !onExplorerPage}
-			<input
-				bind:this={fileInput}
-				type="file"
-				multiple
-				class="hidden"
-				data-testid="topbar-upload-input"
-				onchange={handleFilesSelected}
-			/>
-		{/if}
+		<input
+			bind:this={fileInput}
+			type="file"
+			multiple
+			class="hidden"
+			data-testid="topbar-upload-input"
+			onchange={handleFilesSelected}
+		/>
 
 		<Button
 			type="button"

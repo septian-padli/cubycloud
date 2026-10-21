@@ -80,6 +80,14 @@ test.describe('Storage Stats Largest Files', () => {
 		page
 	}) => {
 		await finishSetupAndLogin(page);
+		const cleanRes = await page.request.get('/api/v1/drive/my-storage');
+		if (cleanRes.ok()) {
+			const { items } = (await cleanRes.json()) as { items: { id: string }[] };
+			for (const item of items) {
+				await page.request.delete(`/api/v1/drive/my-storage/${encodeURIComponent(item.id)}`);
+			}
+			await page.request.delete('/api/v1/drive/trash');
+		}
 
 		// 1. Create nested folders: Work -> Reports
 		const workFolder = await createFolder(page, 'Work');

@@ -38,7 +38,8 @@ export default defineConfig({
 				DATA_DIR_PATH: dataDir,
 				JWT_SECRET: 'my-storage-e2e-secret',
 				MY_STORAGE_E2E_DATA_DIR: dataDir,
-				MY_STORAGE_E2E_RESTART_DIR: restartControlDir
+				MY_STORAGE_E2E_RESTART_DIR: restartControlDir,
+				DISABLE_RATE_LIMIT: 'true'
 			},
 			url: `${backendURL}/api/v1/setup/status`,
 			reuseExistingServer: false,

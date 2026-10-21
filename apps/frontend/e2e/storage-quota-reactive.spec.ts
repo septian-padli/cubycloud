@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const adminUsername = 'storage-reactive-admin';
-const adminPassword = 'StorageReactive-password-2026';
+const adminUsername = 'storage-e2e-admin';
+const adminPassword = 'StorageE2E-password-2026';
 const recoveryKey = 'ABCDE-FGHKL-MNPQR-STUVW-XYZ23-45678';
 
 const testUsername = 'quota-user-test';

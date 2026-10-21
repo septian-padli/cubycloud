@@ -334,7 +334,6 @@
 			};
 			toast.error(error instanceof Error ? error.message : 'Gagal mengunduh ZIP');
 		}
-		selectedIds = [];
 	}
 	let fetchedPreviewEntry = $state<FileEntry | null>(null);
 
