@@ -1,5 +1,12 @@
 <script lang="ts">
-	import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '$lib/components/ui/dialog/index.js';
+	import {
+		Dialog,
+		DialogContent,
+		DialogDescription,
+		DialogFooter,
+		DialogHeader,
+		DialogTitle
+	} from '$lib/components/ui/dialog/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
@@ -7,7 +14,7 @@
 	import { toast } from 'svelte-sonner';
 	import { adminAPI } from '$lib/api/admin.js';
 	import type { StorageNode } from '$lib/types/setup.js';
-
+	import { locale } from '$lib/locale.svelte.js';
 	let {
 		open = $bindable(false),
 		node,
@@ -40,7 +47,7 @@
 	async function handleUpdate() {
 		if (!node || !canUpdate) return;
 		if (!name.trim()) {
-			nameError = 'Nama node wajib diisi';
+			nameError = locale.language === 'id' ? 'Nama node wajib diisi' : 'Node name is required';
 			return;
 		}
 
@@ -54,10 +61,23 @@
 		updating = false;
 
 		if (resp.error) {
-			if (/name.*(?:required|already exists)|nama.*(?:wajib|sudah|digunakan)/i.test(resp.error)) nameError = resp.error;
-			else toast.error('Gagal memperbarui node', { description: resp.error });
+			if (/name.*(?:required|already exists)|nama.*(?:wajib|sudah|digunakan)/i.test(resp.error))
+				nameError =
+					locale.language === 'id'
+						? /already exists|sudah|digunakan/i.test(resp.error)
+							? 'Nama node sudah digunakan'
+							: 'Nama node wajib diisi'
+						: /already exists/i.test(resp.error)
+							? 'Node name already exists'
+							: 'Node name is required';
+			else
+				toast.error(locale.language === 'id' ? 'Gagal memperbarui node' : 'Failed to update node', {
+					description: resp.error
+				});
 		} else {
-			toast.success('Node berhasil diperbarui');
+			toast.success(
+				locale.language === 'id' ? 'Node berhasil diperbarui' : 'Node updated successfully'
+			);
 			open = false;
 			onUpdated();
 		}
@@ -73,16 +93,20 @@
 <Dialog bind:open onOpenChange={handleOpenChange}>
 	<DialogContent class="max-w-md">
 		<DialogHeader>
-			<DialogTitle>Edit Node Penyimpanan</DialogTitle>
+			<DialogTitle
+				>{locale.language === 'id' ? 'Edit Node Penyimpanan' : 'Edit storage node'}</DialogTitle
+			>
 			<DialogDescription>
-				Ubah kapasitas maksimal dan status node
+				{locale.language === 'id'
+					? 'Ubah kapasitas maksimal dan status node'
+					: 'Change the node’s maximum capacity and status'}
 			</DialogDescription>
 		</DialogHeader>
 
 		{#if node}
 			<div class="space-y-4">
 				<div class="space-y-2">
-					<Label for="edit-node-name">Nama Node</Label>
+					<Label for="edit-node-name">{locale.language === 'id' ? 'Nama Node' : 'Node name'}</Label>
 					<Input
 						id="edit-node-name"
 						data-testid="input-edit-node-name"
@@ -93,7 +117,14 @@
 						aria-describedby={nameError ? 'edit-node-name-error' : undefined}
 					/>
 					{#if nameError}
-						<p id="edit-node-name-error" data-testid="error-edit-node-name" class="text-xs text-destructive" role="alert">{nameError}</p>
+						<p
+							id="edit-node-name-error"
+							data-testid="error-edit-node-name"
+							class="text-xs text-destructive"
+							role="alert"
+						>
+							{nameError}
+						</p>
 					{/if}
 					{#if node.path}
 						<p class="text-xs text-muted">{node.path}</p>
@@ -101,7 +132,9 @@
 				</div>
 
 				<div class="space-y-2">
-					<Label for="edit-capacity">Kapasitas Maksimal (GB)</Label>
+					<Label for="edit-capacity"
+						>{locale.language === 'id' ? 'Kapasitas Maksimal (GB)' : 'Maximum capacity (GB)'}</Label
+					>
 					<Input
 						id="edit-capacity"
 						data-testid="input-edit-node-capacity"
@@ -113,20 +146,33 @@
 						aria-invalid={capacityBelowUsage}
 					/>
 					<p class="text-xs text-muted">
-						Batas kapasitas yang diizinkan untuk node ini (minimal 1 GB).
+						{locale.language === 'id'
+							? 'Batas kapasitas yang diizinkan untuk node ini (minimal 1 GB).'
+							: 'Capacity limit allowed for this node (minimum 1 GB).'}
 					</p>
 					{#if capacityBelowUsage}
-						<p id="edit-capacity-error" data-testid="warning-node-capacity" class="text-xs text-destructive" role="alert">
-							Kapasitas tidak boleh lebih kecil dari pemakaian node ({usedGb.toFixed(1)} GB).
+						<p
+							id="edit-capacity-error"
+							data-testid="warning-node-capacity"
+							class="text-xs text-destructive"
+							role="alert"
+						>
+							{locale.language === 'id'
+								? `Kapasitas tidak boleh lebih kecil dari pemakaian node (${usedGb.toFixed(1)} GB).`
+								: `Capacity cannot be lower than the node’s current usage (${usedGb.toFixed(1)} GB).`}
 						</p>
 					{/if}
 				</div>
 
 				<div class="flex items-center justify-between">
 					<div class="space-y-0.5">
-						<Label for="edit-enabled">Status Node</Label>
+						<Label for="edit-enabled"
+							>{locale.language === 'id' ? 'Status Node' : 'Node status'}</Label
+						>
 						<p class="text-xs text-muted">
-							Node yang dinonaktifkan tidak akan menerima file baru
+							{locale.language === 'id'
+								? 'Node yang dinonaktifkan tidak akan menerima file baru'
+								: 'Disabled nodes will not receive new files'}
 						</p>
 					</div>
 					<Switch id="edit-enabled" bind:checked={enabled} disabled={updating} />
@@ -136,10 +182,16 @@
 
 		<DialogFooter>
 			<Button variant="outline" onclick={() => (open = false)} disabled={updating}>
-				Batal
+				{locale.language === 'id' ? 'Batal' : 'Cancel'}
 			</Button>
 			<Button onclick={handleUpdate} disabled={!canUpdate || updating}>
-				{updating ? 'Memperbarui...' : 'Simpan Perubahan'}
+				{updating
+					? locale.language === 'id'
+						? 'Memperbarui...'
+						: 'Updating...'
+					: locale.language === 'id'
+						? 'Simpan Perubahan'
+						: 'Save changes'}
 			</Button>
 		</DialogFooter>
 	</DialogContent>

@@ -1,3 +1,4 @@
+import { locale } from '$lib/locale.svelte.js';
 /**
  * Standalone TUS transport for resumable uploads against a single scope
  * (`/api/v1/drive/my-storage` or `/api/v1/drive/organization`).
@@ -91,14 +92,19 @@ const TUS_VERSION = '1.0.0';
 
 /** Thrown by run() only when the session resumption state is inconsistent with the provided File. */
 export class TusResumeError extends Error {
-	constructor(message = 'Snapshot sesi upload tidak cocok dengan berkas yang dipilih.') {
+	constructor(
+		message =
+			locale.language === 'id'
+				? 'Snapshot sesi upload tidak cocok dengan berkas yang dipilih.'
+				: 'The saved upload session does not match the selected file.'
+	) {
 		super(message);
 		this.name = 'TusResumeError';
 	}
 }
 
 export class TusPauseError extends Error {
-	constructor(message = 'Upload dijeda.') {
+	constructor(message = locale.language === 'id' ? 'Upload dijeda.' : 'Upload paused.') {
 		super(message);
 		this.name = 'TusPauseError';
 	}
@@ -246,15 +252,22 @@ export function createTusTransfer(options: TusTransferOptions): TusTransferSessi
 			credentials: 'include'
 		});
 		if (!response.ok) {
-			const body = (await response.json().catch(() => null)) as { error?: string } | null;
-			const error = new Error(body?.error ?? `Gagal membuat sesi upload (HTTP ${response.status})`);
+			const error = new Error(
+				locale.language === 'id'
+					? `Gagal membuat sesi upload (HTTP ${response.status})`
+					: `Failed to create upload session (HTTP ${response.status})`
+			);
 			update({ error: error.message, state: 'failed' });
 			throw error;
 		}
 		const location = response.headers.get('Location');
 		if (!location) {
-			update({ error: 'Header Location tidak ditemukan pada respon TUS', state: 'failed' });
-			throw new Error('Header Location tidak ditemukan pada respon TUS');
+			const message =
+				locale.language === 'id'
+					? 'Header Location tidak ditemukan pada respons TUS'
+					: 'Location header not found in TUS response';
+			update({ error: message, state: 'failed' });
+			throw new Error(message);
 		}
 		const uploadUrl =
 			location.startsWith('http') || location.startsWith('/') ? location : `${scope}/${location}`;
@@ -294,8 +307,21 @@ export function createTusTransfer(options: TusTransferOptions): TusTransferSessi
 				text: xhr.responseText,
 				header: (name: string) => xhr.getResponseHeader(name)
 			});
-		xhr.onerror = () => reject(new Error('Koneksi ke server terputus'));
-		xhr.onabort = () => reject(new DOMException('Upload dijeda.', 'AbortError'));
+		xhr.onerror = () =>
+			reject(
+				new Error(
+					locale.language === 'id'
+						? 'Koneksi ke server terputus'
+						: 'Connection to the server was lost'
+				)
+			);
+		xhr.onabort = () =>
+			reject(
+				new DOMException(
+					locale.language === 'id' ? 'Upload dijeda.' : 'Upload paused.',
+					'AbortError'
+				)
+			);
 		xhr.send(chunk);
 		return promise;
 	}
@@ -371,7 +397,13 @@ export function createTusTransfer(options: TusTransferOptions): TusTransferSessi
 						if (!recovery) {
 							// Session gone (expired/cleanup/other owner): the caller
 							// must start a fresh session; bytes were never persisted.
-							update({ error: 'Sesi upload tidak ditemukan di server', state: 'failed' });
+							update({
+								error:
+									locale.language === 'id'
+										? 'Sesi upload tidak ditemukan di server'
+										: 'Upload session not found on the server',
+								state: 'failed'
+							});
 							return { ok: false, reason: 'failed', snapshot };
 						}
 						if (recovery.offset >= file.size) {
@@ -385,7 +417,13 @@ export function createTusTransfer(options: TusTransferOptions): TusTransferSessi
 						confirmed = true;
 					} catch {
 						if (attempts >= maxRetries) {
-							update({ error: 'Gagal memverifikasi sesi upload', state: 'failed' });
+							update({
+								error:
+									locale.language === 'id'
+										? 'Gagal memverifikasi sesi upload'
+										: 'Failed to verify upload session',
+								state: 'failed'
+							});
 							return { ok: false, reason: 'failed', snapshot };
 						}
 						await throttle(attempts);
@@ -446,16 +484,17 @@ export function createTusTransfer(options: TusTransferOptions): TusTransferSessi
 							break;
 						}
 						if (response.status >= 400 && response.status < 500 && response.status !== 409) {
-							const body = (() => {
-								try {
-									return JSON.parse(response.text) as { error?: string };
-								} catch {
-									return {} as { error?: string };
-								}
-							})();
-							return markFailed(body.error ?? `Upload gagal (HTTP ${response.status})`);
+							return markFailed(
+								locale.language === 'id'
+									? `Upload gagal (HTTP ${response.status})`
+									: `Upload failed (HTTP ${response.status})`
+							);
 						}
-						throw new Error(`Chunk tidak diterima (HTTP ${response.status})`);
+						throw new Error(
+							locale.language === 'id'
+								? `Chunk tidak diterima (HTTP ${response.status})`
+								: `Chunk was not accepted (HTTP ${response.status})`
+						);
 					} catch (err) {
 						if (pauseRequested()) {
 							paused = true;

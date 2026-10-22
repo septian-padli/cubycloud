@@ -9,6 +9,7 @@
 	import DriveSidebarNav from './drive-sidebar-nav.svelte';
 	import QuotaWidget from './quota-widget.svelte';
 	import type { DriveUser, QuotaState } from '$lib/types/drive.js';
+	import { locale } from '$lib/locale.svelte.js';
 	import { cn } from '$lib/utils.js';
 
 	let {
@@ -32,6 +33,7 @@
 			console.warn('Gagal menjeda antrean transfer saat logout:', error);
 		}
 		await authAPI.logout();
+		locale.setAccount(null);
 		setMockLoggedIn(false);
 		await goto('/login');
 	}
@@ -71,7 +73,7 @@
 							variant="ghost"
 							size="icon"
 							class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
-							aria-label="Menu akun"
+							aria-label={locale.t('account.menu')}
 						>
 							<MoreVertical class="size-4 stroke-2" />
 						</Button>
@@ -89,7 +91,7 @@
 						onclick={handleLogout}
 					>
 						<LogOut class="size-4 stroke-2 text-danger" />
-						Logout
+						{locale.t('account.logout')}
 					</DropdownMenu.Item>
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>

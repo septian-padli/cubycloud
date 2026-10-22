@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { getPreviewText } from '$lib/api/preview.js';
+	import { locale } from '$lib/locale.svelte.js';
 
 	let { url, extension }: { url: string; extension: string } = $props();
 	let text = $state('');
@@ -30,7 +31,16 @@
 					if (language === 'sql') await import('prismjs/components/prism-sql.js');
 					if (language === 'md') await import('prismjs/components/prism-markdown.js');
 					if (controller.signal.aborted) return;
-					const grammarName = language === 'html' ? 'markup' : language === 'js' ? 'javascript' : language === 'ts' ? 'typescript' : language === 'md' ? 'markdown' : language;
+					const grammarName =
+						language === 'html'
+							? 'markup'
+							: language === 'js'
+								? 'javascript'
+								: language === 'ts'
+									? 'typescript'
+									: language === 'md'
+										? 'markdown'
+										: language;
 					highlighted = Prism.highlight(content, Prism.languages[grammarName], grammarName);
 				} else {
 					text = content;
@@ -38,7 +48,12 @@
 				loading = false;
 			} catch (cause) {
 				if (!controller.signal.aborted) {
-					error = cause instanceof Error ? cause.message : 'Gagal menampilkan teks';
+					error =
+						cause instanceof Error
+							? cause.message
+							: locale.language === 'id'
+								? 'Gagal menampilkan teks'
+								: 'Unable to display text';
 					loading = false;
 				}
 			}
@@ -48,9 +63,15 @@
 </script>
 
 {#if loading}
-	<p role="status" class="text-sm text-muted">Memuat teks…</p>
+	<p role="status" class="text-sm text-muted">
+		{locale.language === 'id' ? 'Memuat teks…' : 'Loading text…'}
+	</p>
 {:else if error}
 	<p role="alert" class="text-sm text-muted">{error}</p>
 {:else}
-	<pre data-testid="text-preview" class="max-h-96 w-full overflow-auto rounded-lg bg-app p-4 text-left text-sm whitespace-pre-wrap break-words"><code>{#if highlighted}{@html highlighted}{:else}{text}{/if}</code></pre>
+	<pre
+		data-testid="text-preview"
+		class="max-h-96 w-full overflow-auto rounded-lg bg-app p-4 text-left text-sm break-words whitespace-pre-wrap"><code
+			>{#if highlighted}{@html highlighted}{:else}{text}{/if}</code
+		></pre>
 {/if}

@@ -6,6 +6,7 @@
 	import type { FileEntry } from '$lib/types/drive.js';
 	import { formatSize } from '$lib/mocks/file-tree.js';
 	import { driveView } from '$lib/drive-view.svelte.js';
+	import { locale } from '$lib/locale.svelte.js';
 	import { authAPI } from '$lib/api/auth.js';
 	import {
 		getPublicShare,
@@ -32,14 +33,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
-	import {
-		Archive,
-		Download,
-		FolderPlus,
-		Info,
-		Loader2,
-		Upload
-	} from '@lucide/svelte';
+	import { Archive, Download, FolderPlus, Info, Loader2, Upload } from '@lucide/svelte';
 	import PermissionBadge from '$lib/components/drive/permission-badge.svelte';
 	import type { PageData } from './$types.js';
 
@@ -115,7 +109,12 @@
 			} else if (e.status === 410) {
 				expired = true;
 			} else {
-				toast.error(e.message || 'Gagal memuat tautan berbagi');
+				toast.error(
+					e.message ||
+						(locale.language === 'id'
+							? 'Gagal memuat tautan berbagi'
+							: 'Failed to load shared link')
+				);
 			}
 		} finally {
 			loading = false;
@@ -133,12 +132,20 @@
 			const res = await unlockPublicShare(data.token, pwd);
 			if (res.success) {
 				await fetchShare(currentFolderId);
-				toast.success('Tautan berhasil dibuka');
+				toast.success(
+					locale.language === 'id' ? 'Tautan berhasil dibuka' : 'Link unlocked successfully'
+				);
 				return true;
 			}
 			return false;
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Kata sandi tidak sesuai');
+			toast.error(
+				err instanceof Error
+					? err.message
+					: locale.language === 'id'
+						? 'Kata sandi tidak sesuai'
+						: 'Incorrect password'
+			);
 			return false;
 		}
 	}
@@ -200,12 +207,16 @@
 				await uploadPublicFile(data.token, files[i], currentFolderId);
 				successCount++;
 			} catch (err) {
-				toast.error(`Gagal mengunggah ${files[i].name}: ${err instanceof Error ? err.message : ''}`);
+				toast.error(
+					`${locale.language === 'id' ? 'Gagal mengunggah' : 'Failed to upload'} ${files[i].name}: ${err instanceof Error ? err.message : ''}`
+				);
 			}
 		}
 		uploading = false;
 		if (successCount > 0) {
-			toast.success(`${successCount} berkas berhasil diunggah`);
+			toast.success(
+				`${successCount} ${locale.language === 'id' ? 'berkas berhasil diunggah' : 'file(s) uploaded successfully'}`
+			);
 			void fetchShare(currentFolderId);
 		}
 		if (fileInput) fileInput.value = '';
@@ -215,12 +226,22 @@
 		if (!newFolderName.trim()) return;
 		try {
 			await createPublicFolder(data.token, newFolderName.trim(), currentFolderId);
-			toast.success(`Folder “${newFolderName.trim()}” dibuat`);
+			toast.success(
+				locale.language === 'id'
+					? `Folder “${newFolderName.trim()}” dibuat`
+					: `Folder “${newFolderName.trim()}” created`
+			);
 			isCreateFolderOpen = false;
 			newFolderName = '';
 			void fetchShare(currentFolderId);
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Gagal membuat folder');
+			toast.error(
+				err instanceof Error
+					? err.message
+					: locale.language === 'id'
+						? 'Gagal membuat folder'
+						: 'Failed to create folder'
+			);
 		}
 	}
 
@@ -228,13 +249,21 @@
 		if (!renameTarget || !renameNewName.trim()) return;
 		try {
 			await renamePublicItem(data.token, renameTarget.id, renameNewName.trim());
-			toast.success('Nama berhasil diubah');
+			toast.success(
+				locale.language === 'id' ? 'Nama berhasil diubah' : 'Name updated successfully'
+			);
 			isRenameOpen = false;
 			renameTarget = null;
 			renameNewName = '';
 			void fetchShare(currentFolderId);
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Gagal mengubah nama');
+			toast.error(
+				err instanceof Error
+					? err.message
+					: locale.language === 'id'
+						? 'Gagal mengubah nama'
+						: 'Failed to rename'
+			);
 		}
 	}
 
@@ -242,25 +271,37 @@
 		if (!deleteTarget) return;
 		try {
 			await deletePublicItem(data.token, deleteTarget.id);
-			toast.success(`“${deleteTarget.name}” berhasil dihapus`);
+			toast.success(
+				locale.language === 'id'
+					? `“${deleteTarget.name}” berhasil dihapus`
+					: `“${deleteTarget.name}” deleted successfully`
+			);
 			isDeleteConfirmOpen = false;
 			deleteTarget = null;
 			void fetchShare(currentFolderId);
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Gagal menghapus');
+			toast.error(
+				err instanceof Error
+					? err.message
+					: locale.language === 'id'
+						? 'Gagal menghapus'
+						: 'Failed to delete'
+			);
 		}
 	}
 
 	const isEditor = $derived(shareData?.permission === 'editor');
 	const canEdit = $derived(isEditor && loggedIn);
-	const needsPassword = $derived(
-		!loading && shareData?.has_password && !shareData?.unlocked
-	);
+	const needsPassword = $derived(!loading && shareData?.has_password && !shareData?.unlocked);
 </script>
 
 <svelte:head>
 	<title>
-		{rootEntry ? `${rootEntry.name} — Dibagikan` : 'Tautan Berbagi'} — CubyCloud
+		{rootEntry
+			? `${rootEntry.name} — ${locale.language === 'id' ? 'Dibagikan' : 'Shared'}`
+			: locale.language === 'id'
+				? 'Tautan Berbagi'
+				: 'Shared Link'} — CubyCloud
 	</title>
 	<meta name="robots" content="noindex" />
 </svelte:head>
@@ -269,17 +310,23 @@
 	{#if loading}
 		<div class="flex flex-1 items-center justify-center py-16 text-muted">
 			<Loader2 class="size-6 animate-spin text-primary" />
-			<span class="ms-2 text-sm font-medium">Memuat tautan...</span>
+			<span class="ms-2 text-sm font-medium"
+				>{locale.language === 'id' ? 'Memuat tautan...' : 'Loading link...'}</span
+			>
 		</div>
 	{:else if notFound}
 		<ShareStatusView
-			title="Tautan tidak ditemukan"
-			description="Tautan ini tidak valid atau sudah dihapus oleh pemiliknya."
+			title={locale.language === 'id' ? 'Tautan tidak ditemukan' : 'Link not found'}
+			description={locale.language === 'id'
+				? 'Tautan ini tidak valid atau sudah dihapus oleh pemiliknya.'
+				: 'This link is invalid or has been deleted by its owner.'}
 		/>
 	{:else if expired}
 		<ShareStatusView
-			title="Tautan kedaluwarsa"
-			description="Tautan berbagi ini sudah melewati tanggal batas waktu."
+			title={locale.language === 'id' ? 'Tautan kedaluwarsa' : 'Link expired'}
+			description={locale.language === 'id'
+				? 'Tautan berbagi ini sudah melewati tanggal batas waktu.'
+				: 'This shared link has passed its expiration date.'}
 		/>
 	{:else if needsPassword}
 		<SharePasswordGate {onUnlock} />
@@ -288,8 +335,12 @@
 			<DrivePageHeader
 				title={rootEntry.name}
 				description={rootEntry.kind === 'folder'
-					? 'Folder dibagikan secara publik melalui CubyCloud.'
-					: 'Berkas dibagikan secara publik melalui CubyCloud.'}
+					? locale.language === 'id'
+						? 'Folder dibagikan secara publik melalui CubyCloud.'
+						: 'This folder is publicly shared through CubyCloud.'
+					: locale.language === 'id'
+						? 'Berkas dibagikan secara publik melalui CubyCloud.'
+						: 'This file is publicly shared through CubyCloud.'}
 			>
 				{#snippet actions()}
 					<div class="flex items-center gap-2">
@@ -302,23 +353,35 @@
 			</DrivePageHeader>
 
 			{#if isEditor && !loggedIn}
-				<div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
+				<div
+					class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4"
+				>
 					<div class="flex items-center gap-3">
-						<Info class="size-5 shrink-0 text-primary stroke-2" />
+						<Info class="size-5 shrink-0 stroke-2 text-primary" />
 						<div>
-							<p class="text-sm font-semibold text-main">Tautan berizin Ubah (Editor)</p>
+							<p class="text-sm font-semibold text-main">
+								{locale.language === 'id'
+									? 'Tautan berizin Ubah (Editor)'
+									: 'Link with edit access (Editor)'}
+							</p>
 							<p class="text-xs text-muted">
-								Masuk ke akun CubyCloud Anda untuk mengunggah berkas, membuat folder, atau mengedit isi folder ini.
+								{locale.language === 'id'
+									? 'Masuk ke akun CubyCloud Anda untuk mengunggah berkas, membuat folder, atau mengedit isi folder ini.'
+									: 'Sign in to your CubyCloud account to upload files, create folders, or edit this folder.'}
 							</p>
 						</div>
 					</div>
-					<Button href={loginHref} size="sm">Masuk untuk mengedit</Button>
+					<Button href={loginHref} size="sm">
+						{locale.language === 'id' ? 'Masuk untuk mengedit' : 'Sign in to edit'}
+					</Button>
 				</div>
 			{/if}
 
 			{#if rootEntry.kind === 'folder'}
 				<!-- Folder Toolbar & Breadcrumbs -->
-				<div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-subtle bg-surface px-4 py-3">
+				<div
+					class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-subtle bg-surface px-4 py-3"
+				>
 					<div class="flex items-center gap-2 overflow-x-auto text-sm">
 						<button
 							type="button"
@@ -360,7 +423,7 @@
 								onclick={() => (isCreateFolderOpen = true)}
 							>
 								<FolderPlus class="size-4 stroke-2" />
-								Folder baru
+								{locale.language === 'id' ? 'Folder baru' : 'New folder'}
 							</Button>
 							<Button
 								type="button"
@@ -374,7 +437,7 @@
 								{:else}
 									<Upload class="size-4 stroke-2" />
 								{/if}
-								Unggah
+								{locale.language === 'id' ? 'Unggah' : 'Upload'}
 							</Button>
 						{/if}
 						<Button
@@ -385,7 +448,7 @@
 							onclick={onDownloadZip}
 						>
 							<Archive class="size-4 stroke-2" />
-							Unduh ZIP
+							{locale.language === 'id' ? 'Unduh ZIP' : 'Download ZIP'}
 						</Button>
 					</div>
 				</div>
@@ -395,12 +458,12 @@
 					{onOpen}
 					{canEdit}
 					onDownload={onDownloadItem}
-					onRename={(entry) => {
+					onRename={(entry: FileEntry) => {
 						renameTarget = entry;
 						renameNewName = entry.name;
 						isRenameOpen = true;
 					}}
-					onDelete={(entry) => {
+					onDelete={(entry: FileEntry) => {
 						deleteTarget = entry;
 						isDeleteConfirmOpen = true;
 					}}
@@ -415,7 +478,10 @@
 						<div>
 							<p class="text-lg font-semibold text-main">{rootEntry.name}</p>
 							<p class="mt-1 text-sm text-muted">
-								{formatSize(rootEntry.sizeBytes)} · Diperbarui {rootEntry.modifiedAt}
+								{formatSize(rootEntry.sizeBytes)} · {locale.language === 'id'
+									? 'Diperbarui'
+									: 'Updated'}
+								{locale.formatDate(rootEntry.modifiedAt)}
 							</p>
 						</div>
 						<div class="flex items-center gap-3">
@@ -424,7 +490,7 @@
 								variant="secondary"
 								onclick={() => rootEntry && syncPreview(rootEntry.id)}
 							>
-								Pratinjau
+								{locale.language === 'id' ? 'Pratinjau' : 'Preview'}
 							</Button>
 							<Button
 								type="button"
@@ -432,7 +498,7 @@
 								onclick={() => rootEntry && onDownloadItem(rootEntry)}
 							>
 								<Download class="size-4 stroke-2" />
-								Unduh berkas
+								{locale.language === 'id' ? 'Unduh berkas' : 'Download file'}
 							</Button>
 						</div>
 					</Card.Content>
@@ -441,8 +507,10 @@
 		</div>
 	{:else}
 		<ShareStatusView
-			title="Tidak dapat memuat berkas"
-			description="Terjadi kendala saat memuat berkas dari tautan ini."
+			title={locale.language === 'id' ? 'Tidak dapat memuat berkas' : 'Unable to load file'}
+			description={locale.language === 'id'
+				? 'Terjadi kendala saat memuat berkas dari tautan ini.'
+				: 'There was a problem loading the file from this link.'}
 		/>
 	{/if}
 </ShareAppShell>
@@ -454,43 +522,55 @@
 	source="public"
 	token={data.token}
 	rootFile={previewEntry?.id === rootEntry?.id}
-	onDownload={(e) => onDownloadItem(e as FileEntry)}
+	onDownload={(e: FileEntry) => onDownloadItem(e)}
 	onClose={() => syncPreview(null)}
 />
 
 <!-- Create Folder Dialog -->
 <Dialog.Root bind:open={isCreateFolderOpen}>
-	<Dialog.Content class="bg-surface text-main border-subtle">
+	<Dialog.Content class="border-subtle bg-surface text-main">
 		<Dialog.Header>
-			<Dialog.Title>Folder Baru</Dialog.Title>
-			<Dialog.Description>Buat folder baru di dalam tautan ini.</Dialog.Description>
+			<Dialog.Title>{locale.language === 'id' ? 'Folder Baru' : 'New Folder'}</Dialog.Title>
+			<Dialog.Description>
+				{locale.language === 'id'
+					? 'Buat folder baru di dalam tautan ini.'
+					: 'Create a new folder in this link.'}
+			</Dialog.Description>
 		</Dialog.Header>
 		<div class="grid gap-2 py-2">
-			<Label for="public-new-folder-name">Nama Folder</Label>
+			<Label for="public-new-folder-name"
+				>{locale.language === 'id' ? 'Nama Folder' : 'Folder name'}</Label
+			>
 			<Input
 				id="public-new-folder-name"
 				bind:value={newFolderName}
-				placeholder="Folder baru"
+				placeholder={locale.language === 'id' ? 'Folder baru' : 'New folder'}
 				autocomplete="off"
 				onkeydown={(e) => e.key === 'Enter' && handleCreateFolder()}
 			/>
 		</div>
 		<Dialog.Footer>
-			<Button variant="secondary" onclick={() => (isCreateFolderOpen = false)}>Batal</Button>
-			<Button onclick={handleCreateFolder}>Buat</Button>
+			<Button variant="secondary" onclick={() => (isCreateFolderOpen = false)}>
+				{locale.language === 'id' ? 'Batal' : 'Cancel'}
+			</Button>
+			<Button onclick={handleCreateFolder}>{locale.language === 'id' ? 'Buat' : 'Create'}</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
 
 <!-- Rename Dialog -->
 <Dialog.Root bind:open={isRenameOpen}>
-	<Dialog.Content class="bg-surface text-main border-subtle">
+	<Dialog.Content class="border-subtle bg-surface text-main">
 		<Dialog.Header>
-			<Dialog.Title>Ubah Nama</Dialog.Title>
-			<Dialog.Description>Masukkan nama baru untuk berkas atau folder ini.</Dialog.Description>
+			<Dialog.Title>{locale.language === 'id' ? 'Ubah Nama' : 'Rename'}</Dialog.Title>
+			<Dialog.Description>
+				{locale.language === 'id'
+					? 'Masukkan nama baru untuk berkas atau folder ini.'
+					: 'Enter a new name for this file or folder.'}
+			</Dialog.Description>
 		</Dialog.Header>
 		<div class="grid gap-2 py-2">
-			<Label for="public-rename-name">Nama Baru</Label>
+			<Label for="public-rename-name">{locale.language === 'id' ? 'Nama Baru' : 'New name'}</Label>
 			<Input
 				id="public-rename-name"
 				bind:value={renameNewName}
@@ -499,24 +579,34 @@
 			/>
 		</div>
 		<Dialog.Footer>
-			<Button variant="secondary" onclick={() => (isRenameOpen = false)}>Batal</Button>
-			<Button onclick={handleRename}>Simpan</Button>
+			<Button variant="secondary" onclick={() => (isRenameOpen = false)}>
+				{locale.language === 'id' ? 'Batal' : 'Cancel'}
+			</Button>
+			<Button onclick={handleRename}>{locale.language === 'id' ? 'Simpan' : 'Save'}</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
 
 <!-- Delete Dialog -->
 <Dialog.Root bind:open={isDeleteConfirmOpen}>
-	<Dialog.Content class="bg-surface text-main border-subtle">
+	<Dialog.Content class="border-subtle bg-surface text-main">
 		<Dialog.Header>
-			<Dialog.Title>Hapus Berkas / Folder</Dialog.Title>
+			<Dialog.Title
+				>{locale.language === 'id' ? 'Hapus Berkas / Folder' : 'Delete file / folder'}</Dialog.Title
+			>
 			<Dialog.Description>
-				Apakah Anda yakin ingin menghapus “{deleteTarget?.name}”? Tindakan ini tidak dapat dibatalkan.
+				{locale.language === 'id'
+					? `Apakah Anda yakin ingin menghapus “${deleteTarget?.name}”? Tindakan ini tidak dapat dibatalkan.`
+					: `Are you sure you want to delete “${deleteTarget?.name}”? This action cannot be undone.`}
 			</Dialog.Description>
 		</Dialog.Header>
 		<Dialog.Footer>
-			<Button variant="secondary" onclick={() => (isDeleteConfirmOpen = false)}>Batal</Button>
-			<Button variant="destructive" onclick={handleDelete}>Hapus</Button>
+			<Button variant="secondary" onclick={() => (isDeleteConfirmOpen = false)}>
+				{locale.language === 'id' ? 'Batal' : 'Cancel'}
+			</Button>
+			<Button variant="destructive" onclick={handleDelete}>
+				{locale.language === 'id' ? 'Hapus' : 'Delete'}
+			</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

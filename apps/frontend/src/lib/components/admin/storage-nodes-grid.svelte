@@ -5,6 +5,7 @@
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
+	import { locale } from '$lib/locale.svelte.js';
 	import { Progress } from '$lib/components/ui/progress/index.js';
 	let {
 		nodes,
@@ -20,10 +21,11 @@
 	}
 </script>
 
-
 {#if nodes.length === 0}
 	<div class="rounded-xl border border-subtle bg-surface px-4 py-8 text-center shadow-none">
-		<p class="text-sm text-muted">Belum ada node penyimpanan.</p>
+		<p class="text-sm text-muted">
+			{locale.language === 'id' ? 'Belum ada node penyimpanan.' : 'No storage nodes yet.'}
+		</p>
 	</div>
 {:else}
 	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -51,7 +53,9 @@
 								<p class="truncate text-sm font-medium text-main">{node.name}</p>
 								{#if node.kind === 'S3'}
 									<p class="truncate text-xs text-muted" title={node.endpoint}>{node.endpoint}</p>
-									<p class="truncate text-xs text-muted" title={node.bucket}>Bucket: {node.bucket}</p>
+									<p class="truncate text-xs text-muted" title={node.bucket}>
+										{locale.language === 'id' ? 'Bucket' : 'Bucket'}: {node.bucket}
+									</p>
 								{:else}
 									<p class="truncate text-xs text-muted">{node.path}</p>
 								{/if}
@@ -60,17 +64,19 @@
 						<div class="flex shrink-0 flex-wrap justify-end gap-1.5">
 							<Badge
 								class="rounded-full px-2.5 py-0.5 text-xs font-medium {node.kind === 'S3'
-									? 'bg-secondary-accent text-white dark:text-app hover:bg-secondary-accent'
-									: 'bg-secondary text-main dark:text-app hover:bg-secondary'}"
+									? 'bg-secondary-accent text-white hover:bg-secondary-accent dark:text-app'
+									: 'bg-secondary text-main hover:bg-secondary dark:text-app'}"
 							>
 								{node.kind}
 							</Badge>
 							{#if critical}
-								<Badge variant="destructive" class="rounded-full">Kritis (&lt;5%)</Badge>
+								<Badge variant="destructive" class="rounded-full"
+									>{locale.language === 'id' ? 'Kritis (<5%)' : 'Critical (<5%)'}</Badge
+								>
 							{/if}
 							{#if !node.enabled}
 								<Badge variant="outline" class="rounded-full border-subtle text-muted">
-									Lepas
+									{locale.language === 'id' ? 'Dilepas' : 'Detached'}
 								</Badge>
 							{/if}
 						</div>
@@ -78,7 +84,7 @@
 
 					<div class="space-y-2">
 						<div class="flex justify-between text-xs text-muted">
-							<span>{node.freeGb.toFixed(1)} GB bebas</span>
+							<span>{node.freeGb.toFixed(1)} GB {locale.language === 'id' ? 'bebas' : 'free'}</span>
 							<span>{(node.usedBytes / 1024 ** 3).toFixed(1)} / {node.capacityCapGb} GB</span>
 						</div>
 						<Progress
@@ -87,7 +93,8 @@
 							indicatorClass={critical ? 'bg-danger' : 'bg-primary'}
 						/>
 						<p class="text-xs text-muted">
-							Terpakai {(node.usedBytes / 1024 ** 3).toFixed(1)} GB ({Math.round(used)}%)
+							{locale.language === 'id' ? 'Terpakai' : 'Used'}
+							{(node.usedBytes / 1024 ** 3).toFixed(1)} GB ({Math.round(used)}%)
 						</p>
 					</div>
 
@@ -99,7 +106,7 @@
 						onclick={() => onEdit(node)}
 					>
 						<Settings class="size-3.5" />
-						Edit
+						{locale.language === 'id' ? 'Ubah' : 'Edit'}
 					</Button>
 				</Card.Content>
 			</Card.Root>

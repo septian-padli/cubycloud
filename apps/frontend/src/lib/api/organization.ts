@@ -1,6 +1,7 @@
 import type { FileEntry } from '$lib/types/drive.js';
 import { downloadBatchZip } from '$lib/api/cloud-transfer.js';
 import { createResumableUploadDriver } from '$lib/api/resumable-upload.js';
+import { locale } from '$lib/locale.svelte.js';
 
 const base = '/api/v1/drive/organization';
 
@@ -13,6 +14,7 @@ export interface VFSNode {
 	modified_at: string;
 	is_starred?: boolean;
 	created_by?: string;
+	storage_available?: boolean;
 }
 
 export type StorageItem = VFSNode;
@@ -27,10 +29,30 @@ export interface FolderListing {
 }
 
 function storageErrorMessage(error: string, status?: number): string {
-	if (error === 'USER_QUOTA_EXCEEDED') return 'Kuota My Storage penuh. Hubungi admin.';
-	if (error === 'STORAGE_POOL_FULL') return 'Penyimpanan server penuh.';
-	if (error === 'name already in use') return 'Nama sudah digunakan di folder tujuan.';
-	return error || `HTTP ${status ?? 'error'}`;
+	if (error === 'USER_QUOTA_EXCEEDED') {
+		return locale.language === 'id'
+			? 'Kuota My Storage penuh. Hubungi admin.'
+			: 'My Storage quota is full. Contact an administrator.';
+	}
+	if (error === 'STORAGE_POOL_FULL') {
+		return locale.language === 'id' ? 'Penyimpanan server penuh.' : 'Server storage is full.';
+	}
+	if (error === 'name already in use') {
+		return locale.language === 'id'
+			? 'Nama sudah digunakan di folder tujuan.'
+			: 'That name is already in use in the destination folder.';
+	}
+	if (error === 'storage_unavailable' || error === 'STORAGE_UNAVAILABLE') {
+		return locale.language === 'id'
+			? 'Node penyimpanan sedang tidak tersedia. Coba lagi nanti.'
+			: 'The storage node is unavailable. Please try again later.';
+	}
+	if (error === 'NETWORK_ERROR') {
+		return locale.language === 'id' ? 'Kesalahan jaringan.' : 'Network error.';
+	}
+	return locale.language === 'id'
+		? `Permintaan Organization gagal (HTTP ${status ?? 'error'})`
+		: `Organization request failed (HTTP ${status ?? 'error'})`;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -195,7 +217,13 @@ export const organizationAPI = {
 				try {
 					resolve(JSON.parse(xhr.responseText) as StorageItem);
 				} catch {
-					reject(new Error('Respons upload tidak valid'));
+					reject(
+						new Error(
+							locale.language === 'id'
+								? 'Respons upload tidak valid.'
+								: 'Invalid upload response.'
+						)
+					);
 				}
 			} else {
 				let body: { error?: string } = {};
@@ -213,7 +241,8 @@ export const organizationAPI = {
 				reject(err);
 			}
 		};
-		xhr.onerror = () => reject(new Error('Network error'));
+		xhr.onerror = () =>
+			reject(new Error(locale.language === 'id' ? 'Kesalahan jaringan.' : 'Network error.'));
 		const form = new FormData();
 		form.append('file', file, file.name);
 		xhr.send(form);
@@ -256,7 +285,8 @@ export const organizationAPI = {
 			sizeBytes: item.size_bytes,
 			parentId: item.parent_id,
 			modifiedAt: item.modified_at,
-			starred: item.is_starred ?? false
+			starred: item.is_starred ?? false,
+			storageAvailable: item.kind === 'folder' ? true : (item.storage_available ?? true)
 		};
 	},
 	moveItem: moveOrganizationItem,

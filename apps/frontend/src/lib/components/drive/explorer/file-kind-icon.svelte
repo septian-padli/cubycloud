@@ -1,14 +1,6 @@
 <script lang="ts">
 	import type { FileKind } from '$lib/types/drive.js';
-	import {
-		Archive,
-		File,
-		FileAudio,
-		FileImage,
-		FileText,
-		FileVideo,
-		Folder
-	} from '@lucide/svelte';
+	import { Archive, File, FileAudio, FileImage, FileText, FileVideo, Folder } from '@lucide/svelte';
 	import type { Component } from 'svelte';
 	import { cn } from '$lib/utils.js';
 

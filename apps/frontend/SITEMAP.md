@@ -2,14 +2,21 @@
 
 ## Document Control
 
-| Parameter | Detail |
-| --------- | ------ |
-| **Project** | CubyCloud v1.0.0 |
-| **Audience** | Frontend Developers (SvelteKit), UI/UX Designers, QA Engineers |
+| Parameter         | Detail                                                                      |
+| ----------------- | --------------------------------------------------------------------------- |
+| **Project**       | CubyCloud v1.0.0                                                            |
+| **Audience**      | Frontend Developers (SvelteKit), UI/UX Designers, QA Engineers              |
 | **Design System** | [`DESIGN.md`](./DESIGN.md) — Flat Earthy, Montserrat, Zero Arbitrary Values |
-| **Product Spec** | [`docs/prd.md`](../../docs/prd.md) |
+| **Product Spec**  | [`docs/prd.md`](../../docs/prd.md)                                          |
 
 ---
+
+## Application-wide Health, Availability & Language Contract
+
+- `GET /health` is an unauthenticated service endpoint, not a SvelteKit page. It returns HTTP `200` only when every currently configured storage node is accessible and HTTP `503` if any one is inaccessible; all registered nodes are probed. Its public response does not expose storage names, paths, or credentials.
+- My Storage and Organization file-list items include the JSON boolean `storage_available` for files. Offline-backed files remain listed with their metadata; they are not treated as not found. Regular users must not receive physical node identifiers or names.
+- The UI supports English and Indonesian. Browser language beginning with `id` defaults to Indonesian; all other browser languages default to English. A user's explicit choice is stored only in browser `localStorage`, keyed by authenticated account ID, so accounts in the same browser may use different languages. It is never persisted server-side. User-facing page and component copy, errors, notifications, and accessible names follow the active language; established product/technical terms and user-provided content remain unchanged where translation is inappropriate.
+- The global language control uses a Globe icon and shadcn-svelte Select, displaying the short locale codes `id` and `en`.
 
 ## 1. Route Tree Overview (`src/routes/`)
 
@@ -75,20 +82,20 @@ Sidebar di layout `(drive)`. Blok Super Admin di bagian bawah, di-_render_ hanya
 
 Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget** ringkas untuk semua authenticated user (lihat §5).
 
-| Label Menu | Ikon (Lucide) | Route Target | Visibility |
-| ---------- | ------------- | ------------ | ---------- |
-| **Beranda** | `Home` | `/drive/home` | All authenticated |
-| **My Storage** | `HardDrive` | `/drive/my-storage` | All authenticated |
-| **Organization** | `Building2` | `/drive/organization` | All authenticated (badge 🏢) |
-| **Dibagikan pada saya** | `Users` | `/drive/shared` | All authenticated |
-| **Berbintang** | `Star` | `/drive/starred` | All authenticated |
-| **Trash** | `Trash2` | `/drive/trash` | All authenticated |
-| **Penyimpanan** | `PieChart` | `/drive/storage-stats` | All authenticated |
-| _(Quota Widget)_ | — | — | All authenticated |
-| _(divider)_ | — | — | Super Admin only |
-| **Penyimpanan** | `HardDrive` | `/admin/storage` | Super Admin only |
-| **Admin Settings** | `Settings` | `/admin/settings` | Super Admin only |
-| **Users & Quotas** | `UserCog` | `/admin/users` | Super Admin only |
+| Label Menu              | Ikon (Lucide) | Route Target           | Visibility                   |
+| ----------------------- | ------------- | ---------------------- | ---------------------------- |
+| **Beranda**             | `Home`        | `/drive/home`          | All authenticated            |
+| **My Storage**          | `HardDrive`   | `/drive/my-storage`    | All authenticated            |
+| **Organization**        | `Building2`   | `/drive/organization`  | All authenticated (badge 🏢) |
+| **Dibagikan pada saya** | `Users`       | `/drive/shared`        | All authenticated            |
+| **Berbintang**          | `Star`        | `/drive/starred`       | All authenticated            |
+| **Trash**               | `Trash2`      | `/drive/trash`         | All authenticated            |
+| **Penyimpanan**         | `PieChart`    | `/drive/storage-stats` | All authenticated            |
+| _(Quota Widget)_        | —             | —                      | All authenticated            |
+| _(divider)_             | —             | —                      | Super Admin only             |
+| **Penyimpanan**         | `HardDrive`   | `/admin/storage`       | Super Admin only             |
+| **Admin Settings**      | `Settings`    | `/admin/settings`      | Super Admin only             |
+| **Users & Quotas**      | `UserCog`     | `/admin/users`         | Super Admin only             |
 
 ---
 
@@ -159,7 +166,6 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
   - Recent activities list (5 berkas/folder berbeda dengan aksi upload atau ubah terbaru oleh akun aktif, termasuk rename dan pindah folder di My Storage dan Organization; deduplikasi per berkas/folder)
   - Storage summary widget (same data as sidebar quota)
 
-
 #### `/drive/search` (Pencarian Berkas)
 
 - **Path:** `/drive/search`
@@ -186,8 +192,9 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
   - _Quota Exceeded Toast / Modal_ — `USER_QUOTA_EXCEEDED`
 - **Key components & actions:**
   - Category filter chips
-  - File explorer list view — Nama, ukuran, tanggal, aksi
-  - **Storage Node Badge:** tampil **hanya** jika role = Super Admin
+  - File explorer list view — Nama, ukuran, tanggal, aksi; file items include `storage_available`
+    - Jika `storage_available` bernilai `false`, item dan metadata tetap terlihat. Nonaktifkan aksi berkas yang memerlukan storage tersebut dan tampilkan shadcn-svelte Popover saat hover atau klik dengan pesan bahasa UI yang menyatakan node offline tanpa mengungkap identitas node. Folder tetap dapat dijelajahi dan tidak dinonaktifkan hanya karena node tidak tersedia.
+    - Storage Node Badge hanya untuk Super Admin; regular users tidak menerima identifier atau nama physical node.
   - Upload file/folder via picker or drag-and-drop — process each file independently, preserve folder hierarchy, show failed items, and check user quota
   - Download file/folder; Rename; Move; recursive Duplicate (zero-byte references); Delete to Trash recursively
   - Preview gambar, video, teks/kode, PDF, dan audio menggunakan akses file sesuai izin; star dan share behavior tetap berlaku
@@ -203,8 +210,8 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
   - _File Preview Lightbox_ — format dan perilaku sama dengan My Storage
   - _Conflict Resolution Modal_
 - **Key components & actions:**
-  - Header banner + badge `[🏢 Organization]`
-  - File explorer list view (komponen sama; node badge admin-only; aksi Bagikan disembunyikan karena sudah dapat diakses bersama secara internal)
+  - File explorer list view (komponen sama; file items include `storage_available`; node badge admin-only; aksi Bagikan disembunyikan karena sudah dapat diakses bersama secara internal)
+    - File offline tetap menampilkan metadata; nonaktifkan aksi yang memerlukan storage, lalu tampilkan shadcn-svelte Popover pada hover atau klik dengan pesan lokal bahwa node offline tanpa menampilkan identitas node. Folder tetap navigable.
 
 #### `/drive/shared` (Dibagikan pada saya)
 
@@ -259,7 +266,6 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
   - Usage chart per kategori (Video, Gambar, Dokumen, Arsip, Trash)
   - Largest files list (top 10; exclude Organization)
   - Shortcut `Kelola Sampah` → `/drive/trash`
-
 
 #### `/drive/profile/[userId]` (Profil Akun)
 
@@ -318,6 +324,7 @@ Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget
   - Create Regular User (inherits default quota unless overridden)
 
 > Catatan: Modul Add-ons Manager (`/admin/addons`) telah ditiadakan sepenuhnya. Fitur **Download as ZIP** dan pengarsipan berkas kini menjadi fitur core file manager yang selalu aktif dan terpasang secara bawaan tanpa memerlukan modul add-on.
+
 ---
 
 ### E. Public Module
@@ -347,8 +354,8 @@ Lightbox previewer bersifat **URL-driven** via query parameter agar tautan ke sa
 
 1. **Trigger lightbox:** Double-click berkas memanggil  
    `goto('?preview=file_id', { keepFocus: true, noScroll: true })`.
-2. **Direct shared file link:**  
-   - Internal: `https://domain.com/drive/my-storage?preview=abc-123`  
+2. **Direct shared file link:**
+   - Internal: `https://domain.com/drive/my-storage?preview=abc-123`
    - Publik: `https://domain.com/s/token?preview=abc-123`
 3. **Formats:** Gambar native (PNG, JPEG, WebP, GIF, SVG), Video MP4/WebM (Vidstack dengan media native), Text/Code/Markdown (teks biasa, syntax highlighting PrismJS untuk kode), Audio MP3/WAV/OGG (perilaku yang sudah ada), dan PDF (PDF.js melalui `pdfjs-dist`, selalu tersedia tanpa add-on Admin). Berlaku pada My Storage, Organization, Shared, dan `/s/[token]` sesuai izin masing-masing.
 4. **Sumber berkas:** Gunakan endpoint unduh yang sudah ada dengan opt-in `?preview=1` untuk respons inline dan MIME preview yang diizinkan; gunakan HTTP Range bila endpoint/storage mendukung. Tanpa `preview=1`, unduhan tetap attachment. Parameter `?preview=file_id` pada URL halaman tetap hanya mengendalikan lightbox; akses file tetap mengikuti otorisasi route dan password share link.
@@ -364,25 +371,25 @@ Lightbox previewer bersifat **URL-driven** via query parameter agar tautan ke sa
 
 ### Sidebar widget (all authenticated users)
 
-| State | Display |
-| ----- | ------- |
-| Limited | Label `My Storage` + `8.2 / 15 GB` + flat progress bar |
-| ≥ 80% | Bar `bg-secondary` (Ochre) + toast warning on write attempts |
-| 100% | Block My Storage upload; toast `USER_QUOTA_EXCEEDED` |
-| Unlimited | `Used: 8.2 GB` only (no bar cap / no limit number) |
-| Super Admin | Always Unlimited display |
+| State       | Display                                                      |
+| ----------- | ------------------------------------------------------------ |
+| Limited     | Label `My Storage` + `8.2 / 15 GB` + flat progress bar       |
+| ≥ 80%       | Bar `bg-secondary` (Ochre) + toast warning on write attempts |
+| 100%        | Block My Storage upload; toast `USER_QUOTA_EXCEEDED`         |
+| Unlimited   | `Used: 8.2 GB` only (no bar cap / no limit number)           |
+| Super Admin | Always Unlimited display                                     |
 
 ### Error copy (must differ)
 
-| Code / case | User-facing message |
-| ----------- | ------------------- |
+| Code / case           | User-facing message                    |
+| --------------------- | -------------------------------------- |
 | `USER_QUOTA_EXCEEDED` | Kuota My Storage penuh. Hubungi admin. |
-| Physical pool full | Penyimpanan server penuh. |
+| Physical pool full    | Penyimpanan server penuh.              |
 
 ### Visibility rules
 
-| UI element | Regular User | Super Admin |
-| ---------- | ------------ | ----------- |
-| Storage Node Badge in explorer | Hidden | Visible |
-| Node grid in `/admin/settings` | — | Visible |
+| UI element                       | Regular User  | Super Admin   |
+| -------------------------------- | ------------- | ------------- |
+| Storage Node Badge in explorer   | Hidden        | Visible       |
+| Node grid in `/admin/settings`   | —             | Visible       |
 | Organization files in user quota | Never counted | Never counted |

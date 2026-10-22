@@ -1,3 +1,4 @@
+import { locale } from '$lib/locale.svelte.js';
 import type { AdminStorageStats, AdminTopStorageUsersResponse } from '$lib/types/admin.js';
 
 export const API_BASE = '/api/v1';
@@ -82,7 +83,12 @@ class AdminAPI {
 			return { data };
 		} catch (err) {
 			return {
-				error: err instanceof Error ? err.message : 'Network error'
+				error:
+					err instanceof Error
+						? err.message
+						: locale.language === 'id'
+							? 'Kesalahan jaringan'
+							: 'Network error'
 			};
 		}
 	}
@@ -139,7 +145,12 @@ class AdminAPI {
 			return {};
 		} catch (err) {
 			return {
-				error: err instanceof Error ? err.message : 'Download failed'
+				error:
+					err instanceof Error
+						? err.message
+						: locale.language === 'id'
+							? 'Unduhan gagal'
+							: 'Download failed'
 			};
 		}
 	}

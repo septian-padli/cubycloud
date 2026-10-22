@@ -6,7 +6,9 @@
 	import { getDriveChrome } from '$lib/drive-context.svelte.js';
 	import { authAPI } from '$lib/api/auth.js';
 	import type { AdminUser } from '$lib/types/admin.js';
+	import { locale } from '$lib/locale.svelte.js';
 
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 	const chrome = getDriveChrome();
 	let loading = $state(true);
 	let errorState = $state<string | null>(null);
@@ -48,7 +50,7 @@
 				};
 			}
 		} catch (e) {
-			errorState = 'Gagal memuat profil pengguna';
+			errorState = tx('Gagal memuat profil pengguna', 'Failed to load user profile');
 		} finally {
 			loading = false;
 		}
@@ -95,7 +97,7 @@
 			current_password: next.currentPassword
 		});
 		if (res.error || !res.data) {
-			toast.error(res.error || 'Gagal memperbarui profil');
+			toast.error(res.error || tx('Gagal memperbarui profil', 'Failed to update profile'));
 			return false;
 		}
 		chrome.updateProfile({
@@ -106,24 +108,34 @@
 			profileUser.displayName = res.data.display_name || next.displayName;
 			profileUser.email = res.data.email;
 		}
-		toast.success('Profil berhasil diperbarui');
+		toast.success(tx('Profil berhasil diperbarui', 'Profile updated successfully'));
 		return true;
 	}
 </script>
 
 <svelte:head>
-	<title>{viewUser?.displayName || 'Profil'} — CubyCloud</title>
-	<meta name="description" content="Profil pengguna dan statistik penyimpanan My Storage." />
+	<title>{viewUser?.displayName || tx('Profil', 'Profile')} — CubyCloud</title>
+	<meta
+		name="description"
+		content={tx(
+			'Profil pengguna dan statistik penyimpanan My Storage.',
+			'User profile and My Storage usage statistics.'
+		)}
+	/>
 </svelte:head>
 
 {#if loading}
 	<div class="flex items-center justify-center py-16 text-muted">
-		<Loader2 class="size-6 animate-spin mr-2" />
-		<span>Memuat profil...</span>
+		<Loader2 class="mr-2 size-6 animate-spin" />
+		<span>{tx('Memuat profil...', 'Loading profile...')}</span>
 	</div>
 {:else if errorState}
-	<div class="rounded-xl border border-destructive/20 bg-destructive/5 p-8 text-center text-destructive">
-		<p class="text-base font-semibold">Akses Ditolak atau Pengguna Tidak Ditemukan</p>
+	<div
+		class="rounded-xl border border-destructive/20 bg-destructive/5 p-8 text-center text-destructive"
+	>
+		<p class="text-base font-semibold">
+			{tx('Akses Ditolak atau Pengguna Tidak Ditemukan', 'Access Denied or User Not Found')}
+		</p>
 		<p class="mt-1 text-sm text-muted">{errorState}</p>
 	</div>
 {:else if viewUser}

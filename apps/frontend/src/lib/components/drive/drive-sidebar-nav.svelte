@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { locale } from '$lib/locale.svelte.js';
 	import {
 		Building2,
 		HardDrive,
@@ -12,6 +13,7 @@
 	} from '@lucide/svelte';
 	import { cn } from '$lib/utils.js';
 	import type { Component } from 'svelte';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	type NavItem = {
 		id: string;
@@ -31,26 +33,51 @@
 		class?: string;
 	} = $props();
 
-	const driveItems: NavItem[] = [
-		{ id: 'home', label: 'Beranda', icon: Home, href: '/drive/home' },
+	const driveItems = $derived<NavItem[]>([
+		{ id: 'home', label: tx('Beranda', 'Home'), icon: Home, href: '/drive/home' },
 		{ id: 'my-storage', label: 'My Storage', icon: HardDrive, href: '/drive/my-storage' },
 		{
 			id: 'organization',
-			label: 'Organization',
+			label: tx('Organisasi', 'Organization'),
 			icon: Building2,
 			href: '/drive/organization'
 		},
-		{ id: 'shared', label: 'Dibagikan pada saya', icon: Users, href: '/drive/shared' },
-		{ id: 'starred', label: 'Berbintang', icon: Star, href: '/drive/starred' },
-		{ id: 'trash', label: 'Trash', icon: Trash2, href: '/drive/trash' },
-		{ id: 'storage-stats', label: 'Penyimpanan', icon: PieChart, href: '/drive/storage-stats' }
-	];
+		{
+			id: 'shared',
+			label: tx('Dibagikan pada saya', 'Shared with me'),
+			icon: Users,
+			href: '/drive/shared'
+		},
+		{ id: 'starred', label: tx('Berbintang', 'Starred'), icon: Star, href: '/drive/starred' },
+		{ id: 'trash', label: tx('Sampah', 'Trash'), icon: Trash2, href: '/drive/trash' },
+		{
+			id: 'storage-stats',
+			label: tx('Penyimpanan', 'Storage'),
+			icon: PieChart,
+			href: '/drive/storage-stats'
+		}
+	]);
 
-	const adminItems: NavItem[] = [
-		{ id: 'admin-storage', label: 'Penyimpanan', icon: HardDrive, href: '/admin/storage' },
-		{ id: 'admin-settings', label: 'Admin Settings', icon: Settings, href: '/admin/settings' },
-		{ id: 'admin-users', label: 'Users & Quotas', icon: UserCog, href: '/admin/users' },
-	];
+	const adminItems = $derived<NavItem[]>([
+		{
+			id: 'admin-storage',
+			label: tx('Penyimpanan', 'Storage'),
+			icon: HardDrive,
+			href: '/admin/storage'
+		},
+		{
+			id: 'admin-settings',
+			label: tx('Pengaturan Admin', 'Admin settings'),
+			icon: Settings,
+			href: '/admin/settings'
+		},
+		{
+			id: 'admin-users',
+			label: tx('Pengguna & Kuota', 'Users & quotas'),
+			icon: UserCog,
+			href: '/admin/users'
+		}
+	]);
 
 	const pillClass = (active: boolean, linked: boolean) =>
 		cn(
@@ -63,7 +90,10 @@
 		);
 </script>
 
-<nav class={cn('flex flex-col gap-1 px-3 py-2', className)} aria-label="Navigasi drive">
+<nav
+	class={cn('flex flex-col gap-1 px-3 py-2', className)}
+	aria-label={tx('Navigasi drive', 'Drive navigation')}
+>
 	{#each driveItems as item (item.id)}
 		{@const active = item.id === activeId}
 		{@const ItemIcon = item.icon}
@@ -98,7 +128,7 @@
 
 	{#if showAdmin}
 		<div class="my-2 border-t border-subtle" role="separator"></div>
-		<p class="px-3 pb-1 text-xs font-medium text-muted">Super Admin</p>
+		<p class="px-3 pb-1 text-xs font-medium text-muted">{tx('Super Admin', 'Super Admin')}</p>
 		{#each adminItems as item (item.id)}
 			{@const active = item.id === activeId}
 			{@const ItemIcon = item.icon}

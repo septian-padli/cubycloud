@@ -22,6 +22,7 @@
 	import { toast } from 'svelte-sonner';
 	import { cn } from '$lib/utils.js';
 	import { Copy, Lock, Loader2, Search, Trash2, X } from '@lucide/svelte';
+	import { locale } from '$lib/locale.svelte.js';
 
 	type TabId = 'users' | 'link';
 
@@ -97,7 +98,11 @@
 			links = res.links ?? [];
 		} catch (err) {
 			console.error('Failed to load item shares', err);
-			toast.error('Gagal memuat daftar berbagi.');
+			toast.error(
+				locale.language === 'id'
+					? 'Gagal memuat daftar berbagi.'
+					: 'Unable to load sharing details.'
+			);
 		} finally {
 			loading = false;
 		}
@@ -144,12 +149,22 @@
 			const count = grants.length;
 			toast.success(
 				count === 0
-					? `Akses pengguna untuk “${entry.name}” dikosongkan`
-					: `Hak akses untuk “${entry.name}” berhasil disimpan`
+					? locale.language === 'id'
+						? `Akses pengguna untuk “${entry.name}” dikosongkan`
+						: `User access for “${entry.name}” was cleared`
+					: locale.language === 'id'
+						? `Hak akses untuk “${entry.name}” berhasil disimpan`
+						: `Access permissions for “${entry.name}” were saved`
 			);
 			open = false;
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Gagal menyimpan akses pengguna.');
+			toast.error(
+				err instanceof Error
+					? err.message
+					: locale.language === 'id'
+						? 'Gagal menyimpan akses pengguna.'
+						: 'Unable to save user access.'
+			);
 		} finally {
 			saving = false;
 		}
@@ -158,7 +173,9 @@
 	async function submitLink() {
 		if (!entry) return;
 		if (usePassword && password.trim().length === 0) {
-			toast.error('Masukkan kata sandi tautan.');
+			toast.error(
+				locale.language === 'id' ? 'Masukkan kata sandi tautan.' : 'Enter a link password.'
+			);
 			return;
 		}
 		creatingLink = true;
@@ -174,9 +191,15 @@
 			links = [res.link, ...links.filter((l) => l.id !== res.link.id)];
 			password = '';
 			usePassword = false;
-			toast.success('Tautan berbagi dibuat');
+			toast.success(locale.language === 'id' ? 'Tautan berbagi dibuat' : 'Share link created');
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Gagal membuat tautan.');
+			toast.error(
+				err instanceof Error
+					? err.message
+					: locale.language === 'id'
+						? 'Gagal membuat tautan.'
+						: 'Unable to create link.'
+			);
 		} finally {
 			creatingLink = false;
 		}
@@ -187,9 +210,15 @@
 		try {
 			await deleteShareLink(entry.id, linkId);
 			links = links.filter((l) => l.id !== linkId);
-			toast.success('Tautan berhasil dicabut');
+			toast.success(locale.language === 'id' ? 'Tautan berhasil dicabut' : 'Link revoked');
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Gagal mencabut tautan.');
+			toast.error(
+				err instanceof Error
+					? err.message
+					: locale.language === 'id'
+						? 'Gagal mencabut tautan.'
+						: 'Unable to revoke link.'
+			);
 		}
 	}
 
@@ -197,22 +226,25 @@
 		if (!urlToCopy) return;
 		try {
 			await navigator.clipboard.writeText(urlToCopy);
-			toast.success('Tautan disalin ke clipboard');
+			toast.success(
+				locale.language === 'id' ? 'Tautan disalin ke clipboard' : 'Link copied to clipboard'
+			);
 		} catch {
-			toast.error('Gagal menyalin tautan');
+			toast.error(locale.language === 'id' ? 'Gagal menyalin tautan' : 'Unable to copy link');
 		}
 	}
 
 	function formatExpiry(iso: string | null): string {
-		if (!iso) return 'Tanpa batas waktu';
+		if (!iso) return locale.language === 'id' ? 'Tanpa batas waktu' : 'No expiration';
 		try {
 			const d = new Date(iso);
 			if (isNaN(d.getTime())) return iso;
-			return `Kedaluwarsa ${d.toLocaleDateString('id-ID', {
+			const date = d.toLocaleDateString(locale.language === 'id' ? 'id-ID' : 'en-US', {
 				day: 'numeric',
 				month: 'short',
 				year: 'numeric'
-			})}`;
+			});
+			return locale.language === 'id' ? `Kedaluwarsa ${date}` : `Expires ${date}`;
 		} catch {
 			return iso;
 		}
@@ -222,24 +254,32 @@
 <Sheet.Root bind:open>
 	<Sheet.Content side="right" class="border-subtle bg-surface sm:max-w-md">
 		<Sheet.Header>
-			<Sheet.Title>Bagikan</Sheet.Title>
+			<Sheet.Title>{locale.language === 'id' ? 'Bagikan' : 'Share'}</Sheet.Title>
 			<Sheet.Description>
-				{entry?.name ?? 'Berkas'} — bagikan ke pengguna CubyCloud atau buat tautan.
+				{entry?.name ?? (locale.language === 'id' ? 'Berkas' : 'File')} — {locale.language === 'id'
+					? 'bagikan ke pengguna CubyCloud atau buat tautan.'
+					: 'share with CubyCloud users or create a link.'}
 			</Sheet.Description>
 		</Sheet.Header>
 
 		<Tabs.Root bind:value={tab} class="flex min-h-0 flex-1 flex-col">
 			<div class="px-4">
 				<Tabs.List variant="line" class="grid w-full grid-cols-2">
-					<Tabs.Trigger value="users">Pengguna</Tabs.Trigger>
-					<Tabs.Trigger value="link">Tautan</Tabs.Trigger>
+					<Tabs.Trigger value="users"
+						>{locale.language === 'id' ? 'Pengguna' : 'Users'}</Tabs.Trigger
+					>
+					<Tabs.Trigger value="link">{locale.language === 'id' ? 'Tautan' : 'Link'}</Tabs.Trigger>
 				</Tabs.List>
 			</div>
 
 			{#if loading}
 				<div class="flex flex-1 items-center justify-center py-12 text-muted">
 					<Loader2 class="size-6 animate-spin text-primary" />
-					<span class="ms-2 text-sm font-medium">Memuat info berbagi...</span>
+					<span class="ms-2 text-sm font-medium"
+						>{locale.language === 'id'
+							? 'Memuat info berbagi...'
+							: 'Loading sharing details...'}</span
+					>
 				</div>
 			{:else}
 				<Tabs.Content value="users" class="flex min-h-0 flex-1 flex-col">
@@ -251,10 +291,14 @@
 							<Input
 								id="share-user-search"
 								bind:value={query}
-								placeholder="Tambahkan pengguna (nama atau email)"
+								placeholder={locale.language === 'id'
+									? 'Tambahkan pengguna (nama atau email)'
+									: 'Add users (name or email)'}
 								autocomplete="off"
 								class="ps-9"
-								aria-label="Cari pengguna CubyCloud"
+								aria-label={locale.language === 'id'
+									? 'Cari pengguna CubyCloud'
+									: 'Search CubyCloud users'}
 							/>
 							{#if searchingUsers}
 								<div class="absolute end-3 top-1/2 -translate-y-1/2">
@@ -279,7 +323,11 @@
 										</li>
 									{:else}
 										{#if !searchingUsers}
-											<li class="px-3 py-2 text-xs text-muted">Tidak ada pengguna yang cocok.</li>
+											<li class="px-3 py-2 text-xs text-muted">
+												{locale.language === 'id'
+													? 'Tidak ada pengguna yang cocok.'
+													: 'No matching users.'}
+											</li>
 										{/if}
 									{/each}
 								</ul>
@@ -287,10 +335,16 @@
 						</div>
 
 						<div class="space-y-2">
-							<p class="text-xs font-medium text-muted">Pengguna dengan akses ({grants.length})</p>
+							<p class="text-xs font-medium text-muted">
+								{locale.language === 'id'
+									? `Pengguna dengan akses (${grants.length})`
+									: `Users with access (${grants.length})`}
+							</p>
 							{#if grants.length === 0}
 								<p class="text-xs text-muted">
-									Belum ada pengguna. Cari nama lalu klik untuk menambahkan.
+									{locale.language === 'id'
+										? 'Belum ada pengguna. Cari nama lalu klik untuk menambahkan.'
+										: 'No users yet. Search for a name and click to add them.'}
 								</p>
 							{:else}
 								{#each grants as grant (grant.user_id)}
@@ -311,14 +365,32 @@
 													}}
 												>
 													<Select.Trigger
-														aria-label="Pilih hak akses {grant.username}"
+														aria-label={locale.language === 'id'
+															? `Pilih hak akses ${grant.username}`
+															: `Select access for ${grant.username}`}
 														class="h-8 w-24 rounded-lg border-subtle bg-surface text-xs text-main"
 													>
-														<span>{grant.permission === 'editor' ? 'Ubah' : 'Lihat'}</span>
+														<span
+															>{grant.permission === 'editor'
+																? locale.language === 'id'
+																	? 'Ubah'
+																	: 'Edit'
+																: locale.language === 'id'
+																	? 'Lihat'
+																	: 'View'}</span
+														>
 													</Select.Trigger>
 													<Select.Content class="border-subtle bg-surface">
-														<Select.Item value="viewer" label="Lihat">Lihat</Select.Item>
-														<Select.Item value="editor" label="Ubah">Ubah</Select.Item>
+														<Select.Item
+															value="viewer"
+															label={locale.language === 'id' ? 'Lihat' : 'View'}
+															>{locale.language === 'id' ? 'Lihat' : 'View'}</Select.Item
+														>
+														<Select.Item
+															value="editor"
+															label={locale.language === 'id' ? 'Ubah' : 'Edit'}
+															>{locale.language === 'id' ? 'Ubah' : 'Edit'}</Select.Item
+														>
 													</Select.Content>
 												</Select.Root>
 												<Button
@@ -326,7 +398,9 @@
 													variant="ghost"
 													size="icon"
 													class="size-8 text-muted hover:bg-danger/10 hover:text-danger"
-													aria-label="Hapus {grant.username}"
+													aria-label={locale.language === 'id'
+														? `Hapus ${grant.username}`
+														: `Remove ${grant.username}`}
 													onclick={() => removeUser(grant.user_id)}
 												>
 													<X class="size-4 stroke-2" />
@@ -339,12 +413,12 @@
 						</div>
 					</div>
 					<Sheet.Footer>
-						<Button type="button" variant="secondary" onclick={() => (open = false)}>Batal</Button>
+						<Button type="button" variant="secondary" onclick={() => (open = false)}
+							>{locale.language === 'id' ? 'Batal' : 'Cancel'}</Button
+						>
 						<Button type="button" onclick={saveUsers} disabled={saving}>
-							{#if saving}
-								<Loader2 class="size-4 animate-spin stroke-2" />
-							{/if}
-							Simpan
+							{#if saving}<Loader2 class="size-4 animate-spin stroke-2" />{/if}
+							{locale.language === 'id' ? 'Simpan' : 'Save'}
 						</Button>
 					</Sheet.Footer>
 				</Tabs.Content>
@@ -352,41 +426,74 @@
 					<div class="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4">
 						<div class="space-y-4 rounded-xl border border-subtle bg-app p-4">
 							<p class="text-xs font-semibold tracking-wider text-muted uppercase">
-								Buat Tautan Baru
+								{locale.language === 'id' ? 'Buat Tautan Baru' : 'Create a new link'}
 							</p>
 
 							<div class="grid gap-2">
-								<Label for="share-permission">Hak Akses</Label>
+								<Label for="share-permission"
+									>{locale.language === 'id' ? 'Hak Akses' : 'Access'}</Label
+								>
 								<Select.Root type="single" bind:value={linkPermission}>
 									<Select.Trigger id="share-permission">
 										<span
 											>{linkPermission === 'editor'
-												? 'Editor (Bisa Ubah & Unggah)'
-												: 'Viewer (Hanya Lihat & Unduh)'}</span
+												? locale.language === 'id'
+													? 'Editor (Bisa Ubah & Unggah)'
+													: 'Editor (Can edit & upload)'
+												: locale.language === 'id'
+													? 'Viewer (Hanya Lihat & Unduh)'
+													: 'Viewer (View & download only)'}</span
 										>
 									</Select.Trigger>
 									<Select.Content>
-										<Select.Item value="viewer" label="Viewer (Hanya Lihat & Unduh)">
-											Viewer (Hanya Lihat & Unduh)
-										</Select.Item>
-										<Select.Item value="editor" label="Editor (Bisa Ubah & Unggah)">
-											Editor (Bisa Ubah & Unggah)
-										</Select.Item>
+										<Select.Item
+											value="viewer"
+											label={locale.language === 'id'
+												? 'Viewer (Hanya Lihat & Unduh)'
+												: 'Viewer (View & download only)'}
+											>{locale.language === 'id'
+												? 'Viewer (Hanya Lihat & Unduh)'
+												: 'Viewer (View & download only)'}</Select.Item
+										>
+										<Select.Item
+											value="editor"
+											label={locale.language === 'id'
+												? 'Editor (Bisa Ubah & Unggah)'
+												: 'Editor (Can edit & upload)'}
+											>{locale.language === 'id'
+												? 'Editor (Bisa Ubah & Unggah)'
+												: 'Editor (Can edit & upload)'}</Select.Item
+										>
 									</Select.Content>
 								</Select.Root>
 							</div>
 
 							<div class="flex items-center justify-between gap-3">
 								<div>
-									<p class="text-sm font-medium text-main">Lindungi kata sandi</p>
-									<p class="text-xs text-muted">Pengunjung harus memasukkan sandi untuk membuka.</p>
+									<p class="text-sm font-medium text-main">
+										{locale.language === 'id'
+											? 'Lindungi dengan kata sandi'
+											: 'Password protection'}
+									</p>
+									<p class="text-xs text-muted">
+										{locale.language === 'id'
+											? 'Pengunjung harus memasukkan sandi untuk membuka.'
+											: 'Visitors must enter a password to open the link.'}
+									</p>
 								</div>
-								<Switch bind:checked={usePassword} aria-label="Aktifkan kata sandi" />
+								<Switch
+									bind:checked={usePassword}
+									aria-label={locale.language === 'id'
+										? 'Aktifkan kata sandi'
+										: 'Enable password protection'}
+								/>
 							</div>
 
 							{#if usePassword}
 								<div class="grid gap-2">
-									<Label for="share-password">Kata sandi</Label>
+									<Label for="share-password"
+										>{locale.language === 'id' ? 'Kata sandi' : 'Password'}</Label
+									>
 									<Input
 										id="share-password"
 										type="password"
@@ -397,22 +504,40 @@
 							{/if}
 
 							<div class="grid gap-2">
-								<Label for="share-expiry">Masa Berlaku Kedaluwarsa</Label>
+								<Label for="share-expiry"
+									>{locale.language === 'id' ? 'Masa berlaku' : 'Expiration'}</Label
+								>
 								<Select.Root type="single" bind:value={expiresInDays}>
 									<Select.Trigger id="share-expiry">
 										<span
 											>{expiresInDays === 'never'
-												? 'Tanpa kedaluwarsa'
-												: `${expiresInDays} hari`}</span
+												? locale.language === 'id'
+													? 'Tanpa kedaluwarsa'
+													: 'Never expires'
+												: locale.language === 'id'
+													? `${expiresInDays} hari`
+													: `${expiresInDays} days`}</span
 										>
 									</Select.Trigger>
 									<Select.Content>
-										<Select.Item value="1" label="1 hari">1 hari</Select.Item>
-										<Select.Item value="7" label="7 hari">7 hari</Select.Item>
-										<Select.Item value="30" label="30 hari">30 hari</Select.Item>
-										<Select.Item value="90" label="90 hari">90 hari</Select.Item>
-										<Select.Item value="never" label="Tanpa kedaluwarsa"
-											>Tanpa kedaluwarsa</Select.Item
+										<Select.Item value="1" label={locale.language === 'id' ? '1 hari' : '1 day'}
+											>{locale.language === 'id' ? '1 hari' : '1 day'}</Select.Item
+										>
+										<Select.Item value="7" label={locale.language === 'id' ? '7 hari' : '7 days'}
+											>{locale.language === 'id' ? '7 hari' : '7 days'}</Select.Item
+										>
+										<Select.Item value="30" label={locale.language === 'id' ? '30 hari' : '30 days'}
+											>{locale.language === 'id' ? '30 hari' : '30 days'}</Select.Item
+										>
+										<Select.Item value="90" label={locale.language === 'id' ? '90 hari' : '90 days'}
+											>{locale.language === 'id' ? '90 hari' : '90 days'}</Select.Item
+										>
+										<Select.Item
+											value="never"
+											label={locale.language === 'id' ? 'Tanpa kedaluwarsa' : 'Never expires'}
+											>{locale.language === 'id'
+												? 'Tanpa kedaluwarsa'
+												: 'Never expires'}</Select.Item
 										>
 									</Select.Content>
 								</Select.Root>
@@ -422,14 +547,16 @@
 								{#if creatingLink}
 									<Loader2 class="size-4 animate-spin stroke-2" />
 								{/if}
-								Buat tautan
+								{locale.language === 'id' ? 'Buat tautan' : 'Create link'}
 							</Button>
 						</div>
 
 						{#if createdUrl}
 							<div class="grid gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3">
 								<Label for="share-url" class="text-xs font-semibold text-primary"
-									>Tautan baru berhasil dibuat</Label
+									>{locale.language === 'id'
+										? 'Tautan baru berhasil dibuat'
+										: 'New link created successfully'}</Label
 								>
 								<div class="flex gap-2">
 									<Input
@@ -443,7 +570,7 @@
 										variant="secondary"
 										size="icon"
 										onclick={() => copyUrl(createdUrl)}
-										aria-label="Salin tautan baru"
+										aria-label={locale.language === 'id' ? 'Salin tautan baru' : 'Copy new link'}
 									>
 										<Copy class="size-4 stroke-2" />
 									</Button>
@@ -452,9 +579,17 @@
 						{/if}
 
 						<div class="space-y-3 pb-4">
-							<p class="text-xs font-medium text-muted">Daftar tautan aktif ({links.length})</p>
+							<p class="text-xs font-medium text-muted">
+								{locale.language === 'id'
+									? `Daftar tautan aktif (${links.length})`
+									: `Active links (${links.length})`}
+							</p>
 							{#if links.length === 0}
-								<p class="text-xs text-muted">Belum ada tautan aktif untuk berkas/folder ini.</p>
+								<p class="text-xs text-muted">
+									{locale.language === 'id'
+										? 'Belum ada tautan aktif untuk berkas/folder ini.'
+										: 'There are no active links for this file or folder.'}
+								</p>
 							{:else}
 								<div class="space-y-2">
 									{#each links as link (link.id)}
@@ -475,7 +610,8 @@
 														</span>
 														{#if link.has_password}
 															<span class="inline-flex items-center gap-1 text-[11px] text-muted">
-																<Lock class="size-3" /> Sandi
+																<Lock class="size-3" />
+																{locale.language === 'id' ? 'Sandi' : 'Password'}
 															</span>
 														{/if}
 													</div>
@@ -490,7 +626,7 @@
 														variant="ghost"
 														size="icon"
 														class="size-8 text-muted hover:bg-primary/10 hover:text-main"
-														aria-label="Salin tautan"
+														aria-label={locale.language === 'id' ? 'Salin tautan' : 'Copy link'}
 														onclick={() => copyUrl(linkUrl)}
 													>
 														<Copy class="size-3.5 stroke-2" />
@@ -500,7 +636,7 @@
 														variant="ghost"
 														size="icon"
 														class="size-8 text-muted hover:bg-danger/10 hover:text-danger"
-														aria-label="Cabut tautan"
+														aria-label={locale.language === 'id' ? 'Cabut tautan' : 'Revoke link'}
 														onclick={() => removeLink(link.id)}
 													>
 														<Trash2 class="size-3.5 stroke-2" />
@@ -514,7 +650,9 @@
 						</div>
 					</div>
 					<Sheet.Footer>
-						<Button type="button" variant="secondary" onclick={() => (open = false)}>Tutup</Button>
+						<Button type="button" variant="secondary" onclick={() => (open = false)}
+							>{locale.language === 'id' ? 'Tutup' : 'Close'}</Button
+						>
 					</Sheet.Footer>
 				</Tabs.Content>
 			{/if}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { locale } from '$lib/locale.svelte.js';
 	import { onMount, untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import type { TrashFileItem } from '$lib/types/drive.js';
@@ -17,6 +18,7 @@
 	import DriveViewToggle from './drive-view-toggle.svelte';
 	import { trashAPI } from '$lib/api/trash.js';
 	import { getDriveChrome } from '$lib/drive-context.svelte.js';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	const chrome = getDriveChrome();
 	let {
@@ -42,7 +44,8 @@
 			loading = true;
 			items = await trashAPI.list();
 		} catch (err: unknown) {
-			const msg = err instanceof Error ? err.message : 'Gagal memuat Trash';
+			const msg =
+				err instanceof Error ? err.message : tx('Gagal memuat Trash', 'Failed to load Trash');
 			toast.error(msg);
 		} finally {
 			loading = false;
@@ -57,7 +60,7 @@
 
 	function openPurge() {
 		if (items.length === 0) {
-			toast.info('Trash sudah kosong.');
+			toast.info(tx('Trash sudah kosong.', 'Trash is already empty.'));
 			return;
 		}
 		purgeOpen = true;
@@ -75,12 +78,20 @@
 			removeItem(entry.id);
 			void chrome?.refreshQuota();
 			if (res.restored_to_root) {
-				toast.success(`“${entry.name}” dipulihkan ke Root My Storage`);
+				toast.success(
+					tx(
+						`“${entry.name}” dipulihkan ke Root My Storage`,
+						`“${entry.name}” restored to the My Storage root`
+					)
+				);
 			} else {
-				toast.success(`“${entry.name}” berhasil dipulihkan`);
+				toast.success(
+					tx(`“${entry.name}” berhasil dipulihkan`, `“${entry.name}” restored successfully`)
+				);
 			}
 		} catch (err: unknown) {
-			const msg = err instanceof Error ? err.message : 'Gagal memulihkan item';
+			const msg =
+				err instanceof Error ? err.message : tx('Gagal memulihkan item', 'Failed to restore item');
 			toast.error(msg);
 		} finally {
 			actionLoading = false;
@@ -109,9 +120,14 @@
 			await trashAPI.purgeOne(target.id);
 			removeItem(target.id);
 			void chrome?.refreshQuota();
-			toast.success(`“${target.name}” dihapus permanen`);
+			toast.success(
+				tx(`“${target.name}” dihapus permanen`, `“${target.name}” permanently deleted`)
+			);
 		} catch (err: unknown) {
-			const msg = err instanceof Error ? err.message : 'Gagal menghapus permanen';
+			const msg =
+				err instanceof Error
+					? err.message
+					: tx('Gagal menghapus permanen', 'Failed to permanently delete');
 			toast.error(msg);
 		} finally {
 			actionLoading = false;
@@ -127,9 +143,17 @@
 			items = [];
 			selectedId = null;
 			void chrome?.refreshQuota();
-			toast.success('Semua item di Trash berhasil dihapus permanen');
+			toast.success(
+				tx(
+					'Semua item di Trash berhasil dihapus permanen',
+					'All items in Trash were permanently deleted'
+				)
+			);
 		} catch (err: unknown) {
-			const msg = err instanceof Error ? err.message : 'Gagal mengosongkan Trash';
+			const msg =
+				err instanceof Error
+					? err.message
+					: tx('Gagal mengosongkan Trash', 'Failed to empty Trash');
 			toast.error(msg);
 		} finally {
 			actionLoading = false;
@@ -149,7 +173,7 @@
 			onclick={() => openPurge()}
 		>
 			<Trash2 class="size-4 stroke-2" />
-			Kosongkan Sampah
+			{tx('Kosongkan Sampah', 'Empty Trash')}
 		</Button>
 		<DriveViewToggle />
 	</div>
@@ -157,17 +181,20 @@
 	{#if loading}
 		<div class="flex items-center justify-center p-12 text-muted">
 			<Loader2 class="mr-2 size-5 animate-spin" />
-			<span class="text-sm">Memuat Trash...</span>
+			<span class="text-sm">{tx('Memuat Trash...', 'Loading Trash...')}</span>
 		</div>
 	{:else if items.length === 0}
 		<div class="overflow-hidden rounded-xl border border-subtle bg-surface px-4 py-12 text-center">
-			<p class="text-sm font-medium text-main">Trash kosong</p>
+			<p class="text-sm font-medium text-main">{tx('Trash kosong', 'Trash is empty')}</p>
 			<p class="mt-1 text-xs text-muted">
-				Berkas yang dihapus akan muncul di sini selama 30 hari.
+				{tx(
+					'Berkas yang dihapus akan muncul di sini selama 30 hari.',
+					'Deleted files will appear here for 30 days.'
+				)}
 			</p>
 		</div>
 	{:else if driveView.mode === 'grid'}
-		<DriveFileGrid label="Trash">
+		<DriveFileGrid label={tx('Sampah', 'Trash')}>
 			{#each items as entry (entry.id)}
 				<ContextMenu.Root>
 					<ContextMenu.Trigger class="block w-full">
@@ -175,8 +202,14 @@
 							kind={entry.kind}
 							name={entry.name}
 							subtitle={entry.kind === 'folder'
-								? `Dihapus ${entry.deletedAt} · sisa ${entry.daysRemaining} hari`
-								: `${formatSize(entry.sizeBytes)} · sisa ${entry.daysRemaining} hari`}
+								? tx(
+										`Dihapus ${locale.formatDate(entry.deletedAt)} · sisa ${entry.daysRemaining} hari`,
+										`Deleted ${locale.formatDate(entry.deletedAt)} · ${entry.daysRemaining} days left`
+									)
+								: tx(
+										`${formatSize(entry.sizeBytes)} · sisa ${entry.daysRemaining} hari`,
+										`${formatSize(entry.sizeBytes)} · ${entry.daysRemaining} days left`
+									)}
 							selected={selectedId === entry.id}
 							onSelect={() => (selectedId = entry.id)}
 						>
@@ -190,7 +223,7 @@
 												variant="ghost"
 												size="icon"
 												class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
-												aria-label="Aksi trash"
+												aria-label={tx('Aksi trash', 'Trash actions')}
 												onclick={(e: MouseEvent) => e.stopPropagation()}
 											>
 												<MoreVertical class="size-4 stroke-2" />
@@ -200,7 +233,7 @@
 									<DropdownMenu.Content align="end" class="min-w-48">
 										<DropdownMenu.Item class="gap-2" onclick={() => onRestore(entry)}>
 											<RotateCcw class="size-4 stroke-2" />
-											Pulihkan
+											{tx('Pulihkan', 'Restore')}
 										</DropdownMenu.Item>
 										<DropdownMenu.Separator />
 										<DropdownMenu.Item
@@ -209,7 +242,7 @@
 											onclick={() => onPurgeOne(entry)}
 										>
 											<Trash2 class="size-4 stroke-2" />
-											Hapus permanen
+											{tx('Hapus permanen', 'Delete permanently')}
 										</DropdownMenu.Item>
 									</DropdownMenu.Content>
 								</DropdownMenu.Root>
@@ -219,16 +252,12 @@
 					<ContextMenu.Content class="min-w-48">
 						<ContextMenu.Item class="gap-2" onclick={() => onRestore(entry)}>
 							<RotateCcw class="size-4 stroke-2" />
-							Pulihkan
+							{tx('Pulihkan', 'Restore')}
 						</ContextMenu.Item>
 						<ContextMenu.Separator />
-						<ContextMenu.Item
-							variant="destructive"
-							class="gap-2"
-							onclick={() => onPurgeOne(entry)}
-						>
+						<ContextMenu.Item variant="destructive" class="gap-2" onclick={() => onPurgeOne(entry)}>
 							<Trash2 class="size-4 stroke-2" />
-							Hapus permanen
+							{tx('Hapus permanen', 'Delete permanently')}
 						</ContextMenu.Item>
 					</ContextMenu.Content>
 				</ContextMenu.Root>
@@ -238,14 +267,14 @@
 		<div
 			class="overflow-hidden rounded-xl border border-subtle bg-surface"
 			role="listbox"
-			aria-label="Trash"
+			aria-label={tx('Sampah', 'Trash')}
 		>
 			{#each items as entry (entry.id)}
 				<TrashFileRow
 					{entry}
 					selected={selectedId === entry.id}
 					onSelect={(e) => (selectedId = e.id)}
-					onRestore={onRestore}
+					{onRestore}
 					onPurge={onPurgeOne}
 				/>
 			{/each}
@@ -260,17 +289,16 @@
 		if (actionEntry) restoreEntry(actionEntry, true);
 	}}
 />
-<PurgeTrashDialog
-	bind:open={purgeOpen}
-	itemCount={items.length}
-	onConfirm={onPurgeAll}
-/>
+<PurgeTrashDialog bind:open={purgeOpen} itemCount={items.length} onConfirm={onPurgeAll} />
 <ConfirmDialog
 	bind:open={singlePurgeOpen}
-	title="Hapus Permanen"
-	description={`Hapus permanen “${purgeOneTarget?.name ?? ''}”? Tindakan ini tidak dapat dibatalkan.`}
-	confirmText="Hapus permanen"
-	cancelText="Batal"
+	title={tx('Hapus Permanen', 'Delete permanently')}
+	description={tx(
+		`Hapus permanen “${purgeOneTarget?.name ?? ''}”? Tindakan ini tidak dapat dibatalkan.`,
+		`Permanently delete “${purgeOneTarget?.name ?? ''}”? This action cannot be undone.`
+	)}
+	confirmText={tx('Hapus permanen', 'Delete permanently')}
+	cancelText={tx('Batal', 'Cancel')}
 	variant="destructive"
 	loading={actionLoading}
 	onConfirm={confirmPurgeOne}

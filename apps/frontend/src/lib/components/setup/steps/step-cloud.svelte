@@ -11,6 +11,8 @@
 	import PasswordInput from '$lib/components/password-input.svelte';
 	import { Box, CheckCircle2, Cloud, LoaderCircle, Server, XCircle } from '@lucide/svelte';
 	import { cn } from '$lib/utils.js';
+	import { locale } from '$lib/locale.svelte.js';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	let {
 		cloud = $bindable(),
@@ -57,9 +59,14 @@
 
 <Card.Root class="rounded-xl border-subtle bg-surface shadow-none">
 	<Card.Header>
-		<Card.Title class="text-lg font-semibold text-main">Cloud (Opsional)</Card.Title>
+		<Card.Title class="text-lg font-semibold text-main"
+			>{tx('Cloud (Opsional)', 'Cloud (Optional)')}</Card.Title
+		>
 		<Card.Description class="text-sm text-muted">
-			Hubungkan Cloudflare R2, AWS S3, atau penyedia S3 Compatible. Langkah ini bisa dilewati.
+			{tx(
+				'Hubungkan Cloudflare R2, AWS S3, atau penyedia S3 Compatible. Langkah ini bisa dilewati.',
+				'Connect Cloudflare R2, AWS S3, or an S3-compatible provider. This step is optional.'
+			)}
 		</Card.Description>
 	</Card.Header>
 	<Card.Content class="space-y-5">
@@ -67,12 +74,16 @@
 			class="flex items-center justify-between gap-4 rounded-xl border border-subtle bg-app px-4 py-3"
 		>
 			<div>
-				<p class="text-sm font-medium text-main">Aktifkan node cloud</p>
-				<p class="text-xs text-muted">Tambahkan penyimpanan objek ke pool.</p>
+				<p class="text-sm font-medium text-main">
+					{tx('Aktifkan node cloud', 'Enable cloud node')}
+				</p>
+				<p class="text-xs text-muted">
+					{tx('Tambahkan penyimpanan objek ke pool.', 'Add object storage to the pool.')}
+				</p>
 			</div>
 			<Switch
 				checked={cloud.enabled}
-				aria-label="Aktifkan node cloud"
+				aria-label={tx('Aktifkan node cloud', 'Enable cloud node')}
 				onCheckedChange={(v) => {
 					cloud.enabled = v;
 					testState = 'idle';
@@ -81,10 +92,17 @@
 		</div>
 		{#if noLocalNodes}
 			<Alert.Root>
-				<Alert.Title>Minimal satu penyimpanan wajib diisi</Alert.Title>
+				<Alert.Title
+					>{tx(
+						'Minimal satu penyimpanan wajib diisi',
+						'At least one storage location is required'
+					)}</Alert.Title
+				>
 				<Alert.Description>
-					Tidak ada node lokal yang dipilih. Aktifkan node cloud di bawah untuk bisa
-					menyelesaikan setup.
+					{tx(
+						'Tidak ada node lokal yang dipilih. Aktifkan node cloud di bawah untuk bisa menyelesaikan setup.',
+						'No local nodes are selected. Enable a cloud node below to complete setup.'
+					)}
 				</Alert.Description>
 			</Alert.Root>
 		{/if}
@@ -92,7 +110,7 @@
 		{#if cloud.enabled}
 			<div class="space-y-4">
 				<div>
-					<p class="mb-2 text-sm font-medium text-main">Penyedia</p>
+					<p class="mb-2 text-sm font-medium text-main">{tx('Penyedia', 'Provider')}</p>
 					<RadioGroup.Root
 						value={cloud.provider}
 						onValueChange={onProviderChange}
@@ -118,7 +136,15 @@
 											{option.label}
 										</Label>
 									</div>
-									<p class="text-xs leading-normal text-muted">{option.description}</p>
+									<p class="text-xs leading-normal text-muted">
+										{locale.language === 'id'
+											? option.description
+											: option.value === 'R2'
+												? 'Cloudflare object storage.'
+												: option.value === 'S3'
+													? 'Amazon Simple Storage Service.'
+													: 'Any S3-compatible storage provider.'}
+									</p>
 								</div>
 							</label>
 						{/each}
@@ -126,7 +152,7 @@
 				</div>
 
 				<div class="space-y-2">
-					<Label for="cloud-endpoint">Endpoint</Label>
+					<Label for="cloud-endpoint">{tx('Endpoint', 'Endpoint')}</Label>
 					<Input
 						id="cloud-endpoint"
 						placeholder={providerMeta.endpointPlaceholder}
@@ -137,7 +163,7 @@
 					/>
 				</div>
 				<div class="space-y-2">
-					<Label for="cloud-bucket">Bucket name</Label>
+					<Label for="cloud-bucket">{tx('Nama bucket', 'Bucket name')}</Label>
 					<Input
 						id="cloud-bucket"
 						placeholder="cubycloud-files"
@@ -148,7 +174,7 @@
 					/>
 				</div>
 				<div class="space-y-2">
-					<Label for="cloud-access">Access key</Label>
+					<Label for="cloud-access">{tx('Access key', 'Access key')}</Label>
 					<Input
 						id="cloud-access"
 						bind:value={cloud.accessKey}
@@ -159,7 +185,7 @@
 					/>
 				</div>
 				<div class="space-y-2">
-					<Label for="cloud-secret">Secret key</Label>
+					<Label for="cloud-secret">{tx('Secret key', 'Secret key')}</Label>
 					<PasswordInput
 						id="cloud-secret"
 						bind:value={cloud.secretKey}
@@ -180,36 +206,47 @@
 					>
 						{#if testState === 'loading'}
 							<LoaderCircle class="size-4 animate-spin stroke-2" />
-							Menguji…
+							{tx('Menguji…', 'Testing…')}
 						{:else}
-							Uji koneksi
+							{tx('Uji koneksi', 'Test connection')}
 						{/if}
 					</Button>
 					{#if !formReady}
-						<p class="text-xs text-muted">Isi semua field untuk menguji koneksi.</p>
+						<p class="text-xs text-muted">
+							{tx(
+								'Isi semua field untuk menguji koneksi.',
+								'Fill in all fields to test the connection.'
+							)}
+						</p>
 					{/if}
 				</div>
 
 				{#if testState === 'success'}
 					<Alert.Root variant="default">
 						<CheckCircle2 class="size-4 stroke-2" />
-						<Alert.Title>Koneksi berhasil</Alert.Title>
+						<Alert.Title>{tx('Koneksi berhasil', 'Connection successful')}</Alert.Title>
 						<Alert.Description>
-							Mock: kredensial diterima. Backend belum dihubungkan.
+							{tx(
+								'Mock: kredensial diterima. Backend belum dihubungkan.',
+								'Mock: credentials accepted. The backend is not connected yet.'
+							)}
 						</Alert.Description>
 					</Alert.Root>
 				{:else if testState === 'error'}
 					<Alert.Root variant="destructive">
 						<XCircle class="size-4 stroke-2" />
-						<Alert.Title>Koneksi gagal</Alert.Title>
+						<Alert.Title>{tx('Koneksi gagal', 'Connection failed')}</Alert.Title>
 						<Alert.Description>
-							Tidak dapat menjangkau endpoint. Periksa kredensial dan coba lagi.
+							{tx(
+								'Tidak dapat menjangkau endpoint. Periksa kredensial dan coba lagi.',
+								'Could not reach the endpoint. Check your credentials and try again.'
+							)}
 						</Alert.Description>
 					</Alert.Root>
 				{/if}
 
 				<div class="rounded-xl border border-subtle bg-app px-4 py-3">
-					<p class="text-xs font-medium text-muted">Ringkasan</p>
+					<p class="text-xs font-medium text-muted">{tx('Ringkasan', 'Summary')}</p>
 					<p class="mt-1 text-sm text-main">
 						{providerMeta.label}
 						{#if cloud.bucket.trim()}

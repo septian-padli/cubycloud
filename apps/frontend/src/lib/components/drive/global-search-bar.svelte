@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { locale } from '$lib/locale.svelte.js';
 	import { goto } from '$app/navigation';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { searchFiles, type SearchItem } from '$lib/api/search.js';
@@ -15,6 +16,7 @@
 		X
 	} from '@lucide/svelte';
 	import { onMount } from 'svelte';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	let searchQuery = $state('');
 	let debouncedQuery = $state('');
@@ -193,7 +195,7 @@
 
 <div
 	bind:this={containerEl}
-	class="relative min-w-0 w-full max-w-sm"
+	class="relative w-full max-w-sm min-w-0"
 	data-testid="global-search-container"
 >
 	<div class="relative flex items-center">
@@ -205,8 +207,8 @@
 			bind:ref={inputEl}
 			type="search"
 			class="ps-9 pe-8"
-			placeholder="Cari berkas…"
-			aria-label="Cari berkas"
+			placeholder={tx('Cari berkas…', 'Search files…')}
+			aria-label={tx('Cari berkas', 'Search files')}
 			role="combobox"
 			aria-expanded={isOpen}
 			aria-controls="search-preview-menu"
@@ -230,7 +232,7 @@
 				type="button"
 				class="absolute end-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted hover:text-foreground focus:outline-none"
 				onclick={clearInput}
-				aria-label="Bersihkan pencarian"
+				aria-label={tx('Bersihkan pencarian', 'Clear search')}
 			>
 				<X class="size-3.5 stroke-2" />
 			</button>
@@ -242,22 +244,22 @@
 		<div
 			id="search-preview-menu"
 			role="listbox"
-			aria-label="Hasil pratinjau pencarian"
+			aria-label={tx('Hasil pratinjau pencarian', 'Search preview results')}
 			class="absolute inset-x-0 top-full z-50 mt-1 max-h-96 overflow-hidden rounded-xl border border-subtle bg-surface shadow-xl"
 			data-testid="global-search-preview"
 		>
 			{#if isLoading && previewItems.length === 0}
 				<div class="flex items-center justify-center gap-2 px-4 py-6 text-sm text-muted">
 					<Loader2 class="size-4 animate-spin text-primary" />
-					<span>Mencari berkas…</span>
+					<span>{tx('Mencari berkas…', 'Searching files…')}</span>
 				</div>
 			{:else}
 				{#if previewItems.length === 0}
 					<div class="px-4 py-4 text-center text-sm text-muted">
-						Tidak ada berkas yang cocok
+						{tx('Tidak ada berkas yang cocok', 'No matching files')}
 					</div>
 				{:else}
-					<ul class="divide-y divide-subtle/50 overflow-y-auto max-h-72">
+					<ul class="max-h-72 divide-y divide-subtle/50 overflow-y-auto">
 						{#each previewItems as item, idx (item.id)}
 							{@const Icon = getIcon(item)}
 							{@const isSelected = selectedIndex === idx}
@@ -267,7 +269,7 @@
 									role="option"
 									aria-selected={isSelected}
 									class={`flex w-full items-center gap-3 px-3.5 py-2.5 text-start text-sm transition-colors ${
-										isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-accent/50 text-foreground'
+										isSelected ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-accent/50'
 									}`}
 									onclick={() => selectItem(item)}
 									onmouseenter={() => (selectedIndex = idx)}
@@ -292,13 +294,13 @@
 												<span
 													class="shrink-0 rounded bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-400"
 												>
-													Organisasi
+													{tx('Organisasi', 'Organization')}
 												</span>
 											{:else}
 												<span
 													class="shrink-0 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400"
 												>
-													Dibagikan
+													{tx('Dibagikan', 'Shared')}
 												</span>
 											{/if}
 										</div>
@@ -328,7 +330,9 @@
 						data-testid="search-view-all"
 					>
 						<span class="truncate">
-							Lihat semua hasil untuk “<span class="font-semibold">{trimmedQuery}</span>”
+							{tx('Lihat semua hasil untuk', 'View all results for')} “<span class="font-semibold"
+								>{trimmedQuery}</span
+							>”
 						</span>
 						<ArrowRight class="size-3.5 shrink-0 stroke-2" />
 					</button>

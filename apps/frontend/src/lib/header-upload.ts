@@ -1,6 +1,8 @@
+import { locale } from '$lib/locale.svelte.js';
 import { myStorageAPI } from '$lib/api/my-storage.js';
 import { uploadSharedFile } from '$lib/api/share.js';
 import type { TransferRecord } from '$lib/transfer-queue.svelte.js';
+const tx = (id: string, en: string): string => (locale.language === 'id' ? id : en);
 
 export type HeaderUploadAction = 'upload-my-storage' | 'upload-shared' | 'denied';
 
@@ -69,7 +71,10 @@ export function resolveHeaderUploadTarget(
 	if (!effectiveFolderId) {
 		return {
 			action: 'denied',
-			reason: 'Anda tidak memiliki izin mengunggah ke folder bersama ini'
+			reason: tx(
+				'Anda tidak memiliki izin mengunggah ke folder bersama ini',
+				'You do not have permission to upload to this shared folder.'
+			)
 		};
 	}
 
@@ -83,7 +88,10 @@ export function resolveHeaderUploadTarget(
 	return {
 		action: 'denied',
 		targetFolderId: effectiveFolderId,
-		reason: 'Anda tidak memiliki izin mengunggah ke folder bersama ini'
+		reason: tx(
+			'Anda tidak memiliki izin mengunggah ke folder bersama ini',
+			'You do not have permission to upload to this shared folder.'
+		)
 	};
 }
 /**
@@ -159,11 +167,14 @@ async function uploadThroughTransferQueue(
 
 		const current = transferQueueState.items.find((item) => item.id === id);
 		if (current?.state === 'failed' || current?.state === 'expired') {
-			firstError ??= Object.assign(new Error(current.error || 'Unggahan gagal'), {
+			firstError ??= Object.assign(new Error(current.error || tx('Unggahan gagal', 'Upload failed')), {
 				code: current.errorCode
 			});
 			if (isTransferQuotaError(current)) {
-				await failPendingTransfers(ids.slice(index + 1), 'Dibatalkan: kuota penyimpanan tidak cukup.');
+				await failPendingTransfers(
+					ids.slice(index + 1),
+					tx('Dibatalkan: kuota penyimpanan tidak cukup.', 'Cancelled: not enough storage quota.')
+				);
 				break;
 			}
 		}
@@ -190,7 +201,11 @@ export async function handleHeaderFilesUpload(
 
 	if (target.action === 'denied') {
 		const denialError = new Error(
-			target.reason || 'Anda tidak memiliki izin mengunggah ke folder bersama ini'
+			target.reason ||
+				tx(
+					'Anda tidak memiliki izin mengunggah ke folder bersama ini',
+					'You do not have permission to upload to this shared folder.'
+				)
 		);
 		callbacks.onError?.(denialError);
 		throw denialError;
@@ -229,7 +244,12 @@ export async function handleHeaderFilesUpload(
 		try {
 			if (target.action === 'upload-shared') {
 				if (!target.targetFolderId) {
-					throw new Error('Target folder ID tidak ditemukan untuk folder bersama');
+					throw new Error(
+						tx(
+							'ID folder tujuan tidak ditemukan untuk folder bersama',
+							'The destination folder ID was not found for this shared folder.'
+						)
+					);
 				}
 				await uploadShared(target.targetFolderId, file);
 				const overallPercent = Math.round(((i + 1) / totalFiles) * 100);

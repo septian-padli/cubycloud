@@ -1,12 +1,13 @@
 <script lang="ts">
 	import errorIllustration from '$lib/assets/illustration/404.webp';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import { locale } from '$lib/locale.svelte.js';
 
 	let {
 		title,
 		description,
 		ctaHref = '/',
-		ctaLabel = 'Kembali ke beranda'
+		ctaLabel
 	}: {
 		title: string;
 		description: string;
@@ -23,8 +24,10 @@
 		decoding="async"
 	/>
 	<div class="flex max-w-lg flex-col items-center gap-3">
-		<h1 class="text-3xl font-bold leading-tight text-main md:text-4xl">{title}</h1>
+		<h1 class="text-3xl leading-tight font-bold text-main md:text-4xl">{title}</h1>
 		<p class="text-base leading-relaxed text-muted">{description}</p>
 	</div>
-	<Button href={ctaHref} size="lg">{ctaLabel}</Button>
+	<Button href={ctaHref} size="lg"
+		>{ctaLabel ?? (locale.language === 'id' ? 'Kembali ke beranda' : 'Back to home')}</Button
+	>
 </div>

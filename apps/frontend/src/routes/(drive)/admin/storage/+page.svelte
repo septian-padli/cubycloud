@@ -11,6 +11,8 @@
 	import AdminStorageOverview from '$lib/components/admin/admin-storage-overview.svelte';
 	import AdminTopStorageUsers from '$lib/components/admin/admin-top-storage-users.svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import { locale } from '$lib/locale.svelte.js';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	const chrome = getDriveChrome();
 	let stats = $state<AdminStorageStats | null>(null);
@@ -23,10 +25,12 @@
 			if (res.data) {
 				stats = res.data;
 			} else if (res.error) {
-				toast.error(`Gagal memuat statistik penyimpanan: ${res.error}`);
+				toast.error(
+					`${tx('Gagal memuat statistik penyimpanan', 'Failed to load storage statistics')}: ${res.error}`
+				);
 			}
 		} catch {
-			toast.error('Gagal menghubungi server.');
+			toast.error(tx('Gagal menghubungi server.', 'Failed to reach the server.'));
 		} finally {
 			loading = false;
 			refreshing = false;
@@ -36,7 +40,7 @@
 	async function handleRefresh() {
 		refreshing = true;
 		await fetchStats();
-		toast.success('Statistik penyimpanan diperbarui.');
+		toast.success(tx('Statistik penyimpanan diperbarui.', 'Storage statistics refreshed.'));
 	}
 
 	onMount(() => {
@@ -49,17 +53,23 @@
 </script>
 
 <svelte:head>
-	<title>Penyimpanan Sistem — CubyCloud</title>
+	<title>{tx('Penyimpanan Sistem', 'System Storage')} — CubyCloud</title>
 	<meta
 		name="description"
-		content="Ringkasan kapasitas seluruh storage node dan konsumsi penyimpanan per pengguna."
+		content={tx(
+			'Ringkasan kapasitas seluruh storage node dan konsumsi penyimpanan per pengguna.',
+			'Overview of capacity across all storage nodes and storage usage by user.'
+		)}
 	/>
 </svelte:head>
 
 <div class="flex flex-col gap-8 pb-12">
 	<DrivePageHeader
-		title="Penyimpanan Sistem"
-		description="Ringkasan kapasitas seluruh storage node dan konsumsi penyimpanan per pengguna."
+		title={tx('Penyimpanan Sistem', 'System Storage')}
+		description={tx(
+			'Ringkasan kapasitas seluruh storage node dan konsumsi penyimpanan per pengguna.',
+			'Overview of capacity across all storage nodes and storage usage by user.'
+		)}
 	>
 		{#snippet actions()}
 			<Button
@@ -70,7 +80,7 @@
 				onclick={handleRefresh}
 			>
 				<RefreshCw class="size-3.5 {refreshing ? 'animate-spin' : ''}" />
-				<span>Segarkan</span>
+				<span>{tx('Segarkan', 'Refresh')}</span>
 			</Button>
 		{/snippet}
 	</DrivePageHeader>

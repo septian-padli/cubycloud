@@ -368,6 +368,8 @@ func respond(c echo.Context, err error) error {
 		return echo.NewHTTPError(413, map[string]string{"error": "USER_QUOTA_EXCEEDED"})
 	case errors.Is(err, errStorageFull):
 		return echo.NewHTTPError(413, map[string]string{"error": "STORAGE_POOL_FULL"})
+	case errors.Is(err, storage.ErrUnavailable):
+		return echo.NewHTTPError(http.StatusServiceUnavailable, map[string]string{"error": "storage_unavailable"})
 	case errors.Is(err, errConflict):
 		return echo.NewHTTPError(409, map[string]string{"error": "name_conflict"})
 	case errors.Is(err, errInvalidName), errors.Is(err, errInvalidSize), errors.Is(err, errBadParent), errors.Is(err, errMoveCycle):

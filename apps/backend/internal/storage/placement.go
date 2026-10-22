@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"io"
 	"time"
 
@@ -110,8 +111,27 @@ func ReadBlob(ctx context.Context,db *bun.DB,driver StorageDriver,table,key stri
  var nodeID,path sql.NullString
  err:=db.QueryRowContext(ctx,`SELECT i.storage_node_id,sn.path FROM `+table+` i LEFT JOIN storage_nodes sn ON sn.id=i.storage_node_id WHERE i.disk_key=? ORDER BY i.storage_node_id IS NULL LIMIT 1`,key).Scan(&nodeID,&path)
  if err!=nil&& !errors.Is(err,sql.ErrNoRows){return nil,err}
- if nodeID.Valid {var kind string;if err=db.QueryRowContext(ctx,`SELECT type FROM storage_nodes WHERE id=?`,nodeID.String).Scan(&kind);err!=nil{return nil,err};if kind=="S3" {cloud,ok:=driver.(CloudStorageDriver);if !ok{return nil,errors.New("cloud driver unavailable")};return cloud.ReadObject(ctx,nodeID.String,key)}}
- return driver.ReadLocal(ctx,path.String,key)
+	if nodeID.Valid {
+		if _, ok := driver.(NodeProber); ok && !NodeAvailable(ctx, driver, nodeID.String) {
+			return nil, fmt.Errorf("%w: storage read failed", ErrUnavailable)
+		}
+		var kind string
+		if err = db.QueryRowContext(ctx, `SELECT type FROM storage_nodes WHERE id=?`, nodeID.String).Scan(&kind); err != nil {
+			return nil, err
+		}
+		if kind == "S3" {
+			cloud, ok := driver.(CloudStorageDriver)
+			if !ok {
+				return nil, errors.New("cloud driver unavailable")
+			}
+			return cloud.ReadObject(ctx, nodeID.String, key)
+		}
+	}
+	reader, err := driver.ReadLocal(ctx, path.String, key)
+	if err != nil {
+		return nil, err
+	}
+	return reader, nil
 }
 
 func DeleteBlob(ctx context.Context,db *bun.DB,driver StorageDriver,nodeID,nodePath,key string)error{

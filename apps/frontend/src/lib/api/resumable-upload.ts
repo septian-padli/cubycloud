@@ -1,3 +1,4 @@
+import { locale } from '$lib/locale.svelte.js';
 import { sha256File } from '$lib/api/incremental-sha256.js';
 import {
 	MultipartError,
@@ -67,19 +68,32 @@ class FileMismatchError extends Error {
 	readonly code = 'FILE_MISMATCH';
 
 	constructor() {
-		super('File yang dipilih tidak cocok dengan unggahan tersimpan. Pilih file asli yang benar.');
+		super(
+			locale.language === 'id'
+				? 'File yang dipilih tidak cocok dengan unggahan tersimpan. Pilih file asli yang benar.'
+				: 'The selected file does not match the saved upload. Choose the correct original file.'
+		);
 		this.name = 'FileMismatchError';
 	}
 }
 
+const tx = (id: string, en: string): string => (locale.language === 'id' ? id : en);
+
 function apiErrorMessage(code: string | undefined, status: number): string {
-	if (code === 'USER_QUOTA_EXCEEDED') return 'Kuota penyimpanan penuh. Hubungi admin.';
-	if (code === 'STORAGE_POOL_FULL') return 'Penyimpanan server penuh.';
+	if (code === 'USER_QUOTA_EXCEEDED')
+		return tx('Kuota penyimpanan penuh. Hubungi admin.', 'Storage quota is full. Contact an administrator.');
+	if (code === 'STORAGE_POOL_FULL') return tx('Penyimpanan server penuh.', 'Server storage is full.');
 	if (code === 'multipart_session_expired')
-		return 'Sesi upload kedaluwarsa. Mulai ulang upload berkas ini.';
+		return tx(
+			'Sesi upload kedaluwarsa. Mulai ulang upload berkas ini.',
+			'The upload session has expired. Restart this file upload.'
+		);
 	if (code === 'multipart_unrecoverable')
-		return 'Sesi upload tidak dapat dilanjutkan. Mulai ulang upload berkas ini.';
-	return code || `Permintaan upload gagal (HTTP ${status})`;
+		return tx(
+			'Sesi upload tidak dapat dilanjutkan. Mulai ulang upload berkas ini.',
+			'This upload session cannot be resumed. Restart this file upload.'
+		);
+	return tx(`Permintaan upload gagal (HTTP ${status})`, `Upload request failed (HTTP ${status})`);
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -91,7 +105,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 			body = JSON.parse(text) as T & APIErrorBody;
 		} catch {
 			if (response.ok)
-				throw new TransferAPIError('Respons upload tidak valid', undefined, response.status);
+				throw new TransferAPIError(
+					tx('Respons upload tidak valid', 'Invalid upload response'),
+					undefined,
+					response.status
+				);
 		}
 	}
 	if (!response.ok) {
@@ -117,7 +135,11 @@ function tusSessionId(snapshot: TusSessionSnapshot): string {
 
 function tusSnapshot(session: TransferSessionSnapshot): TusSessionSnapshot {
 	if (session.transport !== 'tus' || !session.snapshot || typeof session.snapshot !== 'object') {
-		throw new TransferAPIError('Sesi TUS tidak dapat dipulihkan.', 'UPLOAD_UNRECOVERABLE', 410);
+		throw new TransferAPIError(
+			tx('Sesi TUS tidak dapat dipulihkan.', 'The TUS session cannot be resumed.'),
+			'UPLOAD_UNRECOVERABLE',
+			410
+		);
 	}
 	return session.snapshot as TusSessionSnapshot;
 }
@@ -129,7 +151,7 @@ function multipartSnapshot(session: TransferSessionSnapshot): MultipartSessionSn
 		typeof session.snapshot !== 'object'
 	) {
 		throw new TransferAPIError(
-			'Sesi multipart tidak dapat dipulihkan.',
+			tx('Sesi multipart tidak dapat dipulihkan.', 'The multipart session cannot be resumed.'),
 			'multipart_unrecoverable',
 			410
 		);
@@ -143,18 +165,26 @@ function singlePutSnapshot(session: TransferSessionSnapshot): SinglePutSnapshot 
 		!session.snapshot ||
 		typeof session.snapshot !== 'object'
 	) {
-		throw new TransferAPIError('Sesi upload tidak dapat dipulihkan.', 'UPLOAD_UNRECOVERABLE', 410);
+		throw new TransferAPIError(
+			tx('Sesi upload tidak dapat dipulihkan.', 'The upload session cannot be resumed.'),
+			'UPLOAD_UNRECOVERABLE',
+			410
+		);
 	}
 	return session.snapshot as SinglePutSnapshot;
 }
 
 function throwTusFailure(snapshot: TusSessionSnapshot): never {
-	const message = snapshot.error || 'Upload TUS gagal';
-	if (/tidak ditemukan|not found|kedaluwarsa|expired/i.test(message)) {
-		throw new TransferAPIError(message, 'UPLOAD_SESSION_EXPIRED', 410);
+	const error = snapshot.error ?? '';
+	if (/tidak ditemukan|not found|kedaluwarsa|expired/i.test(error)) {
+		throw new TransferAPIError(
+			tx('Sesi upload tidak ditemukan atau sudah kedaluwarsa.', 'The upload session was not found or has expired.'),
+			'UPLOAD_SESSION_EXPIRED',
+			410
+		);
 	}
-	if (/checksum|digest|file.*tidak cocok/i.test(message)) throw new FileMismatchError();
-	throw new TransferAPIError(message);
+	if (/checksum|digest|file.*tidak cocok/i.test(error)) throw new FileMismatchError();
+	throw new TransferAPIError(tx('Upload TUS gagal', 'TUS upload failed'));
 }
 
 async function uploadTus(
@@ -196,13 +226,16 @@ async function uploadTus(
 		if (result.reason === 'paused' || result.reason === 'uncertain') {
 			if (result.reason === 'uncertain') {
 				const error = new TransferAPIError(
-					result.snapshot.error || 'Finalisasi upload belum terkonfirmasi',
+					tx(
+						'Finalisasi upload belum terkonfirmasi',
+						'Upload finalization has not been confirmed'
+					),
 					'NETWORK_ERROR',
 					0
 				);
 				throw error;
 			}
-			throw new DOMException('Upload dijeda', 'AbortError');
+			throw new DOMException(tx('Upload dijeda', 'Upload paused'), 'AbortError');
 		}
 		throwTusFailure(result.snapshot);
 	}
@@ -266,7 +299,9 @@ async function uploadMultipart(
 				await uploadTus(base, file, record, fingerprint, '', options);
 				return;
 			}
-			throw new TransferAPIError('Respons cloud multipart tidak lengkap');
+			throw new TransferAPIError(
+				tx('Respons cloud multipart tidak lengkap', 'Incomplete cloud multipart response')
+			);
 		}
 		const state = await request<BackendMultipartState>(
 			`${base}/multipart/${encodeURIComponent(intent.upload_id)}`
@@ -277,7 +312,7 @@ async function uploadMultipart(
 	if (session.status === 'completed') {
 		if (!session.final_item_id)
 			throw new TransferAPIError(
-				'Sesi selesai tanpa ID file akhir.',
+				tx('Sesi selesai tanpa ID berkas akhir.', 'The completed session has no final file ID.'),
 				'multipart_unrecoverable',
 				410
 			);
@@ -287,7 +322,10 @@ async function uploadMultipart(
 	}
 	if (session.expires_at && Date.parse(session.expires_at) <= Date.now()) {
 		throw new TransferAPIError(
-			'Sesi upload kedaluwarsa. Mulai ulang upload berkas ini.',
+			tx(
+				'Sesi upload kedaluwarsa. Mulai ulang upload berkas ini.',
+				'The upload session has expired. Restart this file upload.'
+			),
 			'multipart_session_expired',
 			410
 		);
@@ -413,7 +451,13 @@ function uploadSinglePut(
 		};
 		xhr.onerror = () => {
 			options.signal.removeEventListener('abort', abort);
-			reject(new TransferAPIError('Koneksi ke cloud storage gagal', 'NETWORK_ERROR', 0));
+			reject(
+				new TransferAPIError(
+					tx('Koneksi ke cloud storage gagal', 'Connection to cloud storage failed'),
+					'NETWORK_ERROR',
+					0
+				)
+			);
 		};
 		xhr.onabort = () => {
 			options.signal.removeEventListener('abort', abort);
@@ -521,7 +565,7 @@ export function createResumableUploadDriver(
 	const scope = area === 'organization' ? 'organization' : 'my-storage';
 	const driver: TransferDriver = async (file, record, options) => {
 		if (area !== 'organization' && area !== 'my-storage')
-			throw new Error('Area upload tidak didukung');
+			throw new Error(tx('Area upload tidak didukung', 'This upload area is not supported'));
 		await options.onPhase('verifying');
 		const digest = await sha256File(file, options.signal);
 		if (record.fingerprint && record.fingerprint !== digest.hex) throw new FileMismatchError();
@@ -648,7 +692,7 @@ export function createResumableUploadDriver(
 			);
 			return;
 		}
-		throw new TransferAPIError('Respons multipart upload tidak dapat dikenali');
+		throw new TransferAPIError(tx('Respons multipart upload tidak dapat dikenali', 'Unrecognized multipart upload response'));
 	};
 
 	const cancel: TransferCancelDriver = async (record) => {
@@ -663,7 +707,11 @@ export function createResumableUploadDriver(
 				credentials: 'include'
 			});
 			if (!response.ok && response.status !== 404 && response.status !== 410) {
-				throw new TransferAPIError('Sesi TUS belum dapat dibatalkan.', undefined, response.status);
+				throw new TransferAPIError(
+					tx('Sesi TUS belum dapat dibatalkan.', 'The TUS session could not be cancelled.'),
+					undefined,
+					response.status
+				);
 			}
 			return;
 		}

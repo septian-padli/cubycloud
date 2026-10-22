@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { locale } from '$lib/locale.svelte.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import * as Tabs from '$lib/components/ui/tabs/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
@@ -7,6 +8,7 @@
 	import { authAPI } from '$lib/api/auth.js';
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	let {
 		open = $bindable(false),
@@ -93,11 +95,16 @@
 				toast.error(res.error);
 				return;
 			}
-			toast.success('Kata sandi berhasil diubah. Sesi Anda dihentikan, silakan masuk kembali.');
+			toast.success(
+				tx(
+					'Kata sandi berhasil diubah. Sesi Anda dihentikan, silakan masuk kembali.',
+					'Password changed successfully. Your session has ended; please sign in again.'
+				)
+			);
 			open = false;
 			await goto('/login');
 		} catch (e) {
-			toast.error('Gagal mengubah kata sandi');
+			toast.error(tx('Gagal mengubah kata sandi', 'Failed to change password'));
 		} finally {
 			isChangingPassword = false;
 		}
@@ -107,14 +114,19 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="bg-surface text-main sm:max-w-md">
 		<Dialog.Header>
-			<Dialog.Title>Pengaturan Akun</Dialog.Title>
-			<Dialog.Description>Kelola profil akun dan keamanan Anda.</Dialog.Description>
+			<Dialog.Title>{tx('Pengaturan Akun', 'Account settings')}</Dialog.Title>
+			<Dialog.Description
+				>{tx(
+					'Kelola profil akun dan keamanan Anda.',
+					'Manage your account profile and security.'
+				)}</Dialog.Description
+			>
 		</Dialog.Header>
 
 		<Tabs.Root bind:value={activeTab} class="w-full">
 			<Tabs.List variant="line" class="grid w-full grid-cols-2">
-				<Tabs.Trigger value="profile">Profil</Tabs.Trigger>
-				<Tabs.Trigger value="password">Kata Sandi</Tabs.Trigger>
+				<Tabs.Trigger value="profile">{tx('Profil', 'Profile')}</Tabs.Trigger>
+				<Tabs.Trigger value="password">{tx('Kata Sandi', 'Password')}</Tabs.Trigger>
 			</Tabs.List>
 
 			<Tabs.Content value="profile" class="mt-4">
@@ -126,12 +138,12 @@
 					}}
 				>
 					<div class="grid gap-2">
-						<Label for="profile-username">Nama pengguna</Label>
+						<Label for="profile-username">{tx('Nama pengguna', 'Username')}</Label>
 						<Input id="profile-username" value={username} disabled class="text-muted" />
 					</div>
 
 					<div class="grid gap-2">
-						<Label for="profile-display-name">Nama tampilan</Label>
+						<Label for="profile-display-name">{tx('Nama tampilan', 'Display name')}</Label>
 						<Input
 							id="profile-display-name"
 							bind:value={nameDraft}
@@ -153,24 +165,31 @@
 
 					{#if emailChanged}
 						<div class="grid gap-2">
-							<Label for="profile-current-password">Kata sandi saat ini (diperlukan)</Label>
+							<Label for="profile-current-password"
+								>{tx('Kata sandi saat ini (diperlukan)', 'Current password (required)')}</Label
+							>
 							<Input
 								id="profile-current-password"
 								type="password"
 								bind:value={currentPasswordDraft}
-								placeholder="Masukkan kata sandi saat ini"
+								placeholder={tx('Masukkan kata sandi saat ini', 'Enter your current password')}
 								autocomplete="current-password"
 							/>
 							<p class="text-xs text-muted">
-								Diperlukan untuk memverifikasi perubahan alamat email.
+								{tx(
+									'Diperlukan untuk memverifikasi perubahan alamat email.',
+									'Required to verify your email address change.'
+								)}
 							</p>
 						</div>
 					{/if}
 
 					<Dialog.Footer class="mt-2">
-						<Button type="button" variant="secondary" onclick={() => (open = false)}>Batal</Button>
+						<Button type="button" variant="secondary" onclick={() => (open = false)}
+							>{tx('Batal', 'Cancel')}</Button
+						>
 						<Button type="submit" disabled={!canSubmitProfile}>
-							{isSavingProfile ? 'Menyimpan...' : 'Simpan'}
+							{isSavingProfile ? tx('Menyimpan...', 'Saving...') : tx('Simpan', 'Save')}
 						</Button>
 					</Dialog.Footer>
 				</form>
@@ -185,45 +204,53 @@
 					}}
 				>
 					<div class="grid gap-2">
-						<Label for="change-current-pass">Kata sandi saat ini</Label>
+						<Label for="change-current-pass">{tx('Kata sandi saat ini', 'Current password')}</Label>
 						<Input
 							id="change-current-pass"
 							type="password"
 							bind:value={currentPass}
-							placeholder="Masukkan kata sandi saat ini"
+							placeholder={tx('Masukkan kata sandi saat ini', 'Enter your current password')}
 							autocomplete="current-password"
 						/>
 					</div>
 
 					<div class="grid gap-2">
-						<Label for="change-new-pass">Kata sandi baru</Label>
+						<Label for="change-new-pass">{tx('Kata sandi baru', 'New password')}</Label>
 						<Input
 							id="change-new-pass"
 							type="password"
 							bind:value={newPass}
-							placeholder="Minimal 8 karakter"
+							placeholder={tx('Minimal 8 karakter', 'At least 8 characters')}
 							autocomplete="new-password"
 						/>
 					</div>
 
 					<div class="grid gap-2">
-						<Label for="change-confirm-pass">Konfirmasi kata sandi baru</Label>
+						<Label for="change-confirm-pass"
+							>{tx('Konfirmasi kata sandi baru', 'Confirm new password')}</Label
+						>
 						<Input
 							id="change-confirm-pass"
 							type="password"
 							bind:value={confirmPass}
-							placeholder="Ulangi kata sandi baru"
+							placeholder={tx('Ulangi kata sandi baru', 'Re-enter your new password')}
 							autocomplete="new-password"
 						/>
 						{#if confirmPass.length > 0 && newPass !== confirmPass}
-							<p class="text-xs text-destructive">Kata sandi tidak cocok</p>
+							<p class="text-xs text-destructive">
+								{tx('Kata sandi tidak cocok', 'Passwords do not match')}
+							</p>
 						{/if}
 					</div>
 
 					<Dialog.Footer class="mt-2">
-						<Button type="button" variant="secondary" onclick={() => (open = false)}>Batal</Button>
+						<Button type="button" variant="secondary" onclick={() => (open = false)}
+							>{tx('Batal', 'Cancel')}</Button
+						>
 						<Button type="submit" disabled={!canSubmitPassword}>
-							{isChangingPassword ? 'Mengubah...' : 'Ubah Kata Sandi'}
+							{isChangingPassword
+								? tx('Mengubah...', 'Changing...')
+								: tx('Ubah Kata Sandi', 'Change password')}
 						</Button>
 					</Dialog.Footer>
 				</form>

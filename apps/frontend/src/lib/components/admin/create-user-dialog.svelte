@@ -7,7 +7,7 @@
 	import { Label } from '$lib/components/ui/label/index.js';
 	import PasswordInput from '$lib/components/password-input.svelte';
 	import { cn } from '$lib/utils.js';
-
+	import { locale } from '$lib/locale.svelte.js';
 	type CreateQuotaChoice = 'default' | 'override_gb' | 'unlimited';
 
 	let {
@@ -27,7 +27,11 @@
 	let quotaGb = $state('50');
 
 	const defaultLabel = $derived(
-		defaultQuota.mode === 'unlimited' ? 'Unlimited' : `${defaultQuota.gb} GB`
+		defaultQuota.mode === 'unlimited'
+			? locale.language === 'id'
+				? 'Tanpa batas'
+				: 'Unlimited'
+			: `${defaultQuota.gb} GB`
 	);
 
 	const canSubmit = $derived(
@@ -66,9 +70,12 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="bg-surface text-main sm:max-w-md">
 		<Dialog.Header>
-			<Dialog.Title>Buat Pengguna</Dialog.Title>
+			<Dialog.Title>{locale.language === 'id' ? 'Buat Pengguna' : 'Create user'}</Dialog.Title>
 			<Dialog.Description>
-				Tambah pengguna reguler. Kuota default saat ini: {defaultLabel}.
+				{locale.language === 'id'
+					? 'Tambahkan pengguna reguler. Kuota default saat ini:'
+					: 'Add a regular user. Current default quota:'}
+				{defaultLabel}.
 			</Dialog.Description>
 		</Dialog.Header>
 
@@ -80,11 +87,13 @@
 			}}
 		>
 			<div class="grid gap-2">
-				<Label for="create-user-username">Nama pengguna</Label>
+				<Label for="create-user-username"
+					>{locale.language === 'id' ? 'Nama pengguna' : 'Username'}</Label
+				>
 				<Input
 					id="create-user-username"
 					bind:value={username}
-					placeholder="mis. siti"
+					placeholder={locale.language === 'id' ? 'mis. siti' : 'e.g. alex'}
 					autocomplete="off"
 				/>
 			</div>
@@ -95,13 +104,15 @@
 					id="create-user-email"
 					type="email"
 					bind:value={email}
-					placeholder="siti@contoh.local"
+					placeholder={locale.language === 'id' ? 'siti@contoh.local' : 'alex@example.com'}
 					autocomplete="off"
 				/>
 			</div>
 
 			<div class="grid gap-2">
-				<Label for="create-user-password">Kata sandi</Label>
+				<Label for="create-user-password"
+					>{locale.language === 'id' ? 'Kata sandi' : 'Password'}</Label
+				>
 				<PasswordInput
 					id="create-user-password"
 					bind:value={password}
@@ -111,11 +122,8 @@
 			</div>
 
 			<div class="grid gap-2">
-				<p class="text-sm font-medium text-main">Kuota</p>
-				<RadioGroup.Root
-					bind:value={quotaChoice}
-					class="grid gap-2"
-				>
+				<p class="text-sm font-medium text-main">{locale.language === 'id' ? 'Kuota' : 'Quota'}</p>
+				<RadioGroup.Root bind:value={quotaChoice} class="grid gap-2">
 					<label
 						class={cn(
 							'flex cursor-pointer items-start gap-3 rounded-xl border border-subtle bg-app px-4 py-3',
@@ -125,9 +133,13 @@
 						<RadioGroup.Item value="default" id="quota-default" class="mt-0.5" />
 						<div class="min-w-0">
 							<Label for="quota-default" class="cursor-pointer text-sm font-medium text-main">
-								Ikuti default ({defaultLabel})
+								{locale.language === 'id' ? 'Ikuti default' : 'Use default'} ({defaultLabel})
 							</Label>
-							<p class="text-xs text-muted">Warisi kebijakan kuota sistem.</p>
+							<p class="text-xs text-muted">
+								{locale.language === 'id'
+									? 'Warisi kebijakan kuota sistem.'
+									: 'Inherit the system quota policy.'}
+							</p>
 						</div>
 					</label>
 
@@ -140,7 +152,7 @@
 						<RadioGroup.Item value="override_gb" id="quota-gb" class="mt-0.5" />
 						<div class="min-w-0 flex-1 space-y-2">
 							<Label for="quota-gb" class="cursor-pointer text-sm font-medium text-main">
-								Atur GB
+								{locale.language === 'id' ? 'Atur GB' : 'Set GB'}
 							</Label>
 							{#if quotaChoice === 'override_gb'}
 								<div class="relative flex w-full items-center">
@@ -151,11 +163,9 @@
 										step="any"
 										bind:value={quotaGb}
 										class="w-full pe-9"
-										aria-label="Kuota dalam GB"
+										aria-label={locale.language === 'id' ? 'Kuota dalam GB' : 'Quota in GB'}
 									/>
-									<span
-										class="pointer-events-none absolute end-3 text-xs font-semibold text-muted"
-									>
+									<span class="pointer-events-none absolute end-3 text-xs font-semibold text-muted">
 										GB
 									</span>
 								</div>
@@ -172,17 +182,25 @@
 						<RadioGroup.Item value="unlimited" id="quota-unlimited" class="mt-0.5" />
 						<div class="min-w-0">
 							<Label for="quota-unlimited" class="cursor-pointer text-sm font-medium text-main">
-								Unlimited
+								{locale.language === 'id' ? 'Tanpa batas' : 'Unlimited'}
 							</Label>
-							<p class="text-xs text-muted">Tanpa batas kuota My Storage.</p>
+							<p class="text-xs text-muted">
+								{locale.language === 'id'
+									? 'Tanpa batas kuota My Storage.'
+									: 'No quota limit for My Storage.'}
+							</p>
 						</div>
 					</label>
 				</RadioGroup.Root>
 			</div>
 
 			<Dialog.Footer>
-				<Button type="button" variant="secondary" onclick={() => (open = false)}>Batal</Button>
-				<Button type="submit" disabled={!canSubmit}>Buat Pengguna</Button>
+				<Button type="button" variant="secondary" onclick={() => (open = false)}
+					>{locale.language === 'id' ? 'Batal' : 'Cancel'}</Button
+				>
+				<Button type="submit" disabled={!canSubmit}
+					>{locale.language === 'id' ? 'Buat Pengguna' : 'Create user'}</Button
+				>
 			</Dialog.Footer>
 		</form>
 	</Dialog.Content>

@@ -3,6 +3,10 @@
 	import { page } from '$app/state';
 	import { onDestroy, onMount, untrack } from 'svelte';
 	import { fly } from 'svelte/transition';
+	import { locale } from '$lib/locale.svelte.js';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
+	const formatModifiedAt = (value: string) =>
+		value === 'Baru saja' ? tx('Baru saja', 'Just now') : value;
 	import { toast } from 'svelte-sonner';
 	import type { ExplorerVariant, FileCategory, FileEntry, FileKind } from '$lib/types/drive.js';
 	import { getDriveChrome } from '$lib/drive-context.svelte.js';
@@ -54,6 +58,7 @@
 	import { previewUrl } from '$lib/api/preview.js';
 	import DriveFileGrid from '$lib/components/drive/drive-file-grid.svelte';
 	import FileGridCard from '$lib/components/drive/file-grid-card.svelte';
+	import OfflineFileNotice from './offline-file-notice.svelte';
 	import { driveView } from '$lib/drive-view.svelte.js';
 	import {
 		ChevronDown,
@@ -173,16 +178,20 @@
 	);
 	const queueHeading = $derived.by(() => {
 		const states = uploadQueue.map((item) => item.state);
-		if (states.includes('committing')) return 'Menyimpan';
-		if (states.includes('verifying')) return 'Memverifikasi';
-		if (states.includes('uploading')) return 'Mengunggah';
-		if (states.includes('retrying')) return 'Mencoba kembali';
-		if (states.includes('queued')) return 'Menunggu giliran';
-		if (states.includes('paused') || states.includes('waiting-for-file')) return 'Perlu tindakan';
-		if (states.includes('failed') || states.includes('expired')) return 'Ada masalah';
-		if (downloadQueue.some((item) => item.state === 'uploading')) return 'Memproses';
-		if (downloadQueue.some((item) => item.state === 'started')) return 'Unduhan dimulai';
-		return 'Selesai';
+		if (states.includes('committing')) return tx('Menyimpan', 'Saving');
+		if (states.includes('verifying')) return tx('Memverifikasi', 'Verifying');
+		if (states.includes('uploading')) return tx('Mengunggah', 'Uploading');
+		if (states.includes('retrying')) return tx('Mencoba kembali', 'Retrying');
+		if (states.includes('queued')) return tx('Menunggu giliran', 'Queued');
+		if (states.includes('paused') || states.includes('waiting-for-file'))
+			return tx('Perlu tindakan', 'Action required');
+		if (states.includes('failed') || states.includes('expired'))
+			return tx('Ada masalah', 'Something went wrong');
+		if (downloadQueue.some((item) => item.state === 'uploading'))
+			return tx('Memproses', 'Processing');
+		if (downloadQueue.some((item) => item.state === 'started'))
+			return tx('Unduhan dimulai', 'Download started');
+		return tx('Selesai', 'Complete');
 	});
 	const uploadProgress = $derived.by(() => {
 		let totalWeight = 0;
@@ -205,8 +214,10 @@
 	let deleteConfirmOpen = $state(false);
 	let deleteTargetEntry = $state<FileEntry | null>(null);
 	let conflictConfirmOpen = $state(false);
-	let conflictTitle = $state('Folder Sudah Ada');
-	let conflictDescription = $state('');
+	let conflictTitle = $state({ id: 'Folder Sudah Ada', en: 'Folder Already Exists' });
+	let conflictDescription = $state({ id: '', en: '' });
+	const conflictTitleText = $derived(tx(conflictTitle.id, conflictTitle.en));
+	const conflictDescriptionText = $derived(tx(conflictDescription.id, conflictDescription.en));
 	let conflictAction = $state<(() => Promise<void>) | null>(null);
 	let bulkDeleteEntries = $state<FileEntry[]>([]);
 	let moveMultipleEntries = $state<FileEntry[]>([]);
@@ -246,14 +257,27 @@
 		category === 'all' ? children : children.filter((e) => e.kind === category)
 	);
 	const selectedCount = $derived(selectedIds.length);
-	const isAllSelected = $derived(
-		visible.length > 0 &&
-			selectedCount === visible.length &&
-			visible.every((item) => selectedIds.includes(item.id))
+	const selectableItems = $derived(
+		visible.filter((item) => item.kind === 'folder' || item.storageAvailable !== false)
 	);
-	const isPartiallySelected = $derived(selectedCount > 0 && !isAllSelected);
+	const hasUnavailableSelection = $derived(
+		visible.some(
+			(entry) =>
+				selectedIds.includes(entry.id) &&
+				entry.kind !== 'folder' &&
+				entry.storageAvailable === false
+		)
+	);
+	const isAllSelected = $derived(
+		selectableItems.length > 0 && selectableItems.every((item) => selectedIds.includes(item.id))
+	);
+	const isPartiallySelected = $derived(
+		selectableItems.some((item) => selectedIds.includes(item.id)) && !isAllSelected
+	);
 
 	function toggleSelectEntry(id: string) {
+		const entry = visible.find((item) => item.id === id);
+		if (entry?.kind !== 'folder' && entry?.storageAvailable === false) return;
 		if (selectedIds.includes(id)) {
 			selectedIds = selectedIds.filter((item) => item !== id);
 		} else {
@@ -263,15 +287,20 @@
 
 	function toggleSelectAll() {
 		if (isAllSelected) {
-			selectedIds = [];
+			const selectableIds = new Set(selectableItems.map((item) => item.id));
+			selectedIds = selectedIds.filter((id) => !selectableIds.has(id));
 		} else {
-			selectedIds = visible.map((item) => item.id);
+			selectedIds = [...new Set([...selectedIds, ...selectableItems.map((item) => item.id)])];
 		}
 	}
 
 	function handleBulkMove() {
 		const selected = visible.filter((e) => selectedIds.includes(e.id));
-		if (selected.length === 0) return;
+		if (
+			selected.length === 0 ||
+			selected.some((e) => e.kind !== 'folder' && e.storageAvailable === false)
+		)
+			return;
 		actionEntry = null;
 		moveMultipleEntries = selected;
 		moveOpen = true;
@@ -279,7 +308,11 @@
 
 	function handleBulkDelete() {
 		const selected = visible.filter((e) => selectedIds.includes(e.id));
-		if (selected.length === 0) return;
+		if (
+			selected.length === 0 ||
+			selected.some((e) => e.kind !== 'folder' && e.storageAvailable === false)
+		)
+			return;
 		deleteTargetEntry = null;
 		bulkDeleteEntries = selected;
 		deleteConfirmOpen = true;
@@ -287,9 +320,18 @@
 
 	async function handleBulkDownload() {
 		const selected = visible.filter((e) => selectedIds.includes(e.id));
-		if (selected.length === 0) return;
+		if (
+			selected.length === 0 ||
+			selected.some((e) => e.kind !== 'folder' && e.storageAvailable === false)
+		)
+			return;
 		if (!isApiBacked) {
-			toast.info(`Mengunduh ${selected.length} item sebagai ZIP (mock)`);
+			toast.info(
+				tx(
+					`Mengunduh ${selected.length} item sebagai ZIP (mock)`,
+					`Downloading ${selected.length} items as ZIP (mock)`
+				)
+			);
 			return;
 		}
 		const queueIndex = downloadQueue.length;
@@ -299,8 +341,8 @@
 			{
 				name:
 					selected.length === 1
-						? `Men-zip-kan ${selected[0].name}`
-						: `Men-zip-kan ${selected.length} item`,
+						? tx(`Men-zip-kan ${selected[0].name}`, `Zipping ${selected[0].name}`)
+						: tx(`Men-zip-kan ${selected.length} item`, `Zipping ${selected.length} items`),
 				size: totalSize,
 				progress: 0,
 				state: 'uploading'
@@ -325,14 +367,17 @@
 				...downloadQueue[queueIndex],
 				state: 'started'
 			};
-			toast.info('Pengunduhan berkas ZIP dimulai');
+			toast.info(tx('Pengunduhan berkas ZIP dimulai', 'ZIP file download started'));
 		} catch (error) {
 			downloadQueue[queueIndex] = {
 				...downloadQueue[queueIndex],
 				state: 'failed',
-				error: error instanceof Error ? error.message : 'Gagal men-zip berkas'
+				error:
+					error instanceof Error ? error.message : tx('Gagal men-zip berkas', 'Failed to zip files')
 			};
-			toast.error(error instanceof Error ? error.message : 'Gagal mengunduh ZIP');
+			toast.error(
+				error instanceof Error ? error.message : tx('Gagal mengunduh ZIP', 'Failed to download ZIP')
+			);
 		}
 	}
 	let fetchedPreviewEntry = $state<FileEntry | null>(null);
@@ -375,7 +420,9 @@
 				: (findEntry(tree, previewId) ?? null)
 			: null
 	);
-	const previewOpen = $derived(!!previewEntry);
+	const previewOpen = $derived(
+		!!previewEntry && (previewEntry.kind === 'folder' || previewEntry.storageAvailable !== false)
+	);
 	const moveFolders = $derived(
 		isApiBacked
 			? allFolders.filter((f) => f.id !== actionEntry?.id)
@@ -387,6 +434,11 @@
 		try {
 			const [listing, folders] = await Promise.all([api.list(folderId), api.folders()]);
 			currentItems = listing.items.map((item) => api.toEntry(item));
+			selectedIds = selectedIds.filter((id) =>
+				currentItems.some(
+					(item) => item.id === id && (item.kind === 'folder' || item.storageAvailable !== false)
+				)
+			);
 			apiBreadcrumbs = listing.breadcrumbs;
 			allFolders = folders.items.map((item) => ({
 				id: item.id,
@@ -397,7 +449,11 @@
 				modifiedAt: ''
 			}));
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : `Gagal memuat ${rootLabel}`);
+			toast.error(
+				error instanceof Error
+					? error.message
+					: tx(`Gagal memuat ${rootLabel}`, `Failed to load ${rootLabel}`)
+			);
 		} finally {
 			storageLoading = false;
 		}
@@ -430,6 +486,7 @@
 	}
 
 	function openEntry(entry: FileEntry) {
+		if (entry.kind !== 'folder' && entry.storageAvailable === false) return;
 		const source = variant === 'organization' ? 'organization' : 'my-storage';
 		void recordItemAccess(entry.id, source);
 		if (entry.kind === 'folder') {
@@ -477,7 +534,7 @@
 				}
 			];
 		}
-		toast.success(`“${name}” diunggah (mock)`);
+		toast.success(tx(`“${name}” diunggah (mock)`, `“${name}” uploaded (mock)`));
 	}
 
 	async function handleUploadFiles(
@@ -545,7 +602,7 @@
 					await ensureFolderPath(emptyRelPath);
 				} catch (error) {
 					pathErrors.push(
-						`${emptyRelPath}: ${error instanceof Error ? error.message : 'Gagal membuat folder'}`
+						`${emptyRelPath}: ${error instanceof Error ? error.message : tx('Gagal membuat folder', 'Failed to create folder')}`
 					);
 				}
 			}
@@ -555,17 +612,31 @@
 		if (!list.length) {
 			await refreshStorage();
 			if (pathErrors.length) {
-				toast.error(`${pathErrors.length} folder gagal dibuat`, { description: pathErrors[0] });
+				toast.error(
+					tx(
+						`${pathErrors.length} folder gagal dibuat`,
+						`${pathErrors.length} folders failed to create`
+					),
+					{ description: pathErrors[0] }
+				);
 			} else {
-				toast.success('Folder berhasil dibuat', {
-					description: `${emptyFolders!.length} folder dibuat.`
+				toast.success(tx('Folder berhasil dibuat', 'Folder created successfully'), {
+					description: tx(
+						`${emptyFolders!.length} folder dibuat.`,
+						`${emptyFolders!.length} folders created.`
+					)
 				});
 			}
 			return;
 		}
 
 		if (!chrome.user.id) {
-			toast.error('Sesi pengguna tidak tersedia. Silakan masuk kembali.');
+			toast.error(
+				tx(
+					'Sesi pengguna tidak tersedia. Silakan masuk kembali.',
+					'User session is unavailable. Please sign in again.'
+				)
+			);
 			return;
 		}
 
@@ -584,16 +655,22 @@
 				prepared.push({ name: file.name, file, parentId, relativePath });
 			} catch (error) {
 				pathErrors.push(
-					`${paths?.[index] || file.name}: ${error instanceof Error ? error.message : 'Gagal menyiapkan folder tujuan'}`
+					`${paths?.[index] || file.name}: ${error instanceof Error ? error.message : tx('Gagal menyiapkan folder tujuan', 'Failed to prepare destination folder')}`
 				);
 			}
 		}
 
 		if (!prepared.length) {
 			if (pathErrors.length) {
-				toast.error(`${pathErrors.length} item tidak dapat disiapkan`, {
-					description: pathErrors[0]
-				});
+				toast.error(
+					tx(
+						`${pathErrors.length} item tidak dapat disiapkan`,
+						`${pathErrors.length} items could not be prepared`
+					),
+					{
+						description: pathErrors[0]
+					}
+				);
 			}
 			return;
 		}
@@ -602,7 +679,11 @@
 		try {
 			transferIds = await enqueueTransfers(chrome.user.id, variant, prepared);
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Gagal menyimpan antrean unggahan');
+			toast.error(
+				error instanceof Error
+					? error.message
+					: tx('Gagal menyimpan antrean unggahan', 'Failed to save upload queue')
+			);
 			return;
 		}
 		queueDismissed = false;
@@ -616,7 +697,7 @@
 				quotaAborted = true;
 				await failPendingTransfers(
 					transferIds.slice(index + 1),
-					'Dibatalkan: kuota penyimpanan tidak cukup.'
+					tx('Dibatalkan: kuota penyimpanan tidak cukup.', 'Cancelled: insufficient storage quota.')
 				);
 				break;
 			}
@@ -629,17 +710,28 @@
 			return current?.state === 'failed' || current?.state === 'expired';
 		}).length;
 		if (quotaAborted) {
-			toast.error('Unggahan dihentikan: kuota penyimpanan penuh', {
-				description: 'Sebagian berkas gagal diunggah karena batas kuota terlampaui.'
-			});
+			toast.error(
+				tx('Unggahan dihentikan: kuota penyimpanan penuh', 'Upload stopped: storage quota is full'),
+				{
+					description: tx(
+						'Sebagian berkas gagal diunggah karena batas kuota terlampaui.',
+						'Some files could not be uploaded because the quota limit was exceeded.'
+					)
+				}
+			);
 		} else {
 			const failedTotal = failed + pathErrors.length;
 			toast[failedTotal ? 'warning' : 'success'](
-				failedTotal ? `${failedTotal} unggahan gagal` : 'Unggahan selesai',
+				failedTotal
+					? tx(`${failedTotal} unggahan gagal`, `${failedTotal} uploads failed`)
+					: tx('Unggahan selesai', 'Upload complete'),
 				{
 					description: failedTotal
-						? 'Periksa daftar unggahan untuk detail.'
-						: `${prepared.length} item berhasil diunggah.`
+						? tx('Periksa daftar unggahan untuk detail.', 'Check the upload list for details.')
+						: tx(
+								`${prepared.length} item berhasil diunggah.`,
+								`${prepared.length} items uploaded successfully.`
+							)
 				}
 			);
 		}
@@ -659,7 +751,10 @@
 			!getInMemoryTransferFile(id)
 		) {
 			toast.info(
-				'Unggahan ini masih berjalan di tab lain. Coba lagi setelah transfer tersebut berhenti.'
+				tx(
+					'Unggahan ini masih berjalan di tab lain. Coba lagi setelah transfer tersebut berhenti.',
+					'This upload is still running in another tab. Try again after that transfer stops.'
+				)
 			);
 		}
 	}
@@ -686,7 +781,12 @@
 			return;
 		}
 		if (record.state === 'failed' && !(await resumeFailedTransfer(id))) {
-			toast.error('Sesi unggahan tidak dapat dilanjutkan. Mulai ulang dari nol.');
+			toast.error(
+				tx(
+					'Sesi unggahan tidak dapat dilanjutkan. Mulai ulang dari nol.',
+					'The upload session cannot be resumed. Start over from scratch.'
+				)
+			);
 			return;
 		}
 		const file = getInMemoryTransferFile(id);
@@ -697,7 +797,10 @@
 	async function restartQueuedUpload(id: string) {
 		if (!(await restartTransfer(id, transferCancelDriver))) {
 			toast.error(
-				'Sesi unggahan tidak dapat dihapus dengan aman. Coba lagi sebelum memulai ulang.'
+				tx(
+					'Sesi unggahan tidak dapat dihapus dengan aman. Coba lagi sebelum memulai ulang.',
+					'The upload session could not be safely removed. Try again before restarting.'
+				)
 			);
 			return;
 		}
@@ -705,46 +808,54 @@
 	}
 
 	async function pauseQueuedUpload(id: string) {
-		if (!(await pauseTransfer(id))) toast.error('Unggahan tidak dapat dijeda sekarang.');
+		if (!(await pauseTransfer(id)))
+			toast.error(
+				tx('Unggahan tidak dapat dijeda sekarang.', 'The upload cannot be paused right now.')
+			);
 	}
 
 	async function cancelQueuedUpload(id: string) {
 		if (!(await cancelTransfer(id, transferCancelDriver))) {
-			toast.error('Unggahan belum dapat dibatalkan dengan aman.');
+			toast.error(
+				tx(
+					'Unggahan belum dapat dibatalkan dengan aman.',
+					'The upload cannot be safely cancelled yet.'
+				)
+			);
 		}
 	}
 
 	function queueStateLabel(item: QueueDisplayItem): string {
 		if (item.kind === 'download') {
-			if (item.state === 'uploading') return 'Memproses';
-			if (item.state === 'failed') return 'Gagal';
-			return 'Dimulai';
+			if (item.state === 'uploading') return tx('Memproses', 'Processing');
+			if (item.state === 'failed') return tx('Gagal', 'Failed');
+			return tx('Dimulai', 'Started');
 		}
 		switch (item.state) {
 			case 'queued':
-				return 'Menunggu giliran';
+				return tx('Menunggu giliran', 'Queued');
 			case 'uploading':
-				return 'Mengunggah';
+				return tx('Mengunggah', 'Uploading');
 			case 'retrying':
-				return 'Mencoba kembali';
+				return tx('Mencoba kembali', 'Retrying');
 			case 'paused':
-				return 'Dijeda';
+				return tx('Dijeda', 'Paused');
 			case 'waiting-for-file':
-				return 'Menunggu file';
+				return tx('Menunggu file', 'Waiting for file');
 			case 'verifying':
-				return 'Memverifikasi';
+				return tx('Memverifikasi', 'Verifying');
 			case 'committing':
-				return 'Menyimpan';
+				return tx('Menyimpan', 'Saving');
 			case 'completed':
-				return 'Selesai';
+				return tx('Selesai', 'Completed');
 			case 'failed':
-				return 'Gagal';
+				return tx('Gagal', 'Failed');
 			case 'expired':
-				return 'Kedaluwarsa';
+				return tx('Kedaluwarsa', 'Expired');
 			case 'done':
-				return 'Selesai';
+				return tx('Selesai', 'Completed');
 			case 'started':
-				return 'Dimulai';
+				return tx('Dimulai', 'Started');
 		}
 	}
 
@@ -769,16 +880,17 @@
 
 	function transferActionLabel(item: QueueDisplayItem): string {
 		if (item.state === 'expired' || (item.state === 'failed' && !transferHasSession(item))) {
-			return 'Mulai ulang dari nol';
+			return tx('Mulai ulang dari nol', 'Start over from scratch');
 		}
-		if (item.state === 'failed' && transferHasSession(item)) return 'Pilih file untuk melanjutkan';
+		if (item.state === 'failed' && transferHasSession(item))
+			return tx('Pilih file untuk melanjutkan', 'Choose a file to resume');
 		if (
 			item.state === 'waiting-for-file' ||
 			(['uploading', 'retrying', 'verifying', 'committing'].includes(item.state) &&
 				!getInMemoryTransferFile(item.id))
 		)
-			return 'Pilih file';
-		return 'Lanjutkan';
+			return tx('Pilih file', 'Choose file');
+		return tx('Lanjutkan', 'Resume');
 	}
 
 	function triggerUpload() {
@@ -793,7 +905,9 @@
 		if (isApiBacked && chrome.user.id) {
 			void loadTransferQueue(chrome.user.id, variant).catch((error) => {
 				toast.error(
-					error instanceof Error ? error.message : 'Gagal memuat antrean transfer tersimpan'
+					error instanceof Error
+						? error.message
+						: tx('Gagal memuat antrean transfer tersimpan', 'Failed to load saved transfer queue')
 				);
 			});
 		}
@@ -863,20 +977,30 @@
 			try {
 				await api.createFolder(name, folderId);
 				await refreshStorage();
-				toast.success(`Folder “${name}” dibuat`);
+				toast.success(tx(`Folder “${name}” dibuat`, `Folder “${name}” created`));
 			} catch (error) {
 				const conflict = error as Error & { status?: number; suggested_name?: string };
 				if (conflict.status === 409 && conflict.suggested_name) {
-					conflictTitle = 'Folder Sudah Ada';
-					conflictDescription = `Folder “${name}” sudah ada. Gunakan nama yang disarankan “${conflict.suggested_name}”?`;
+					conflictTitle = { id: 'Folder Sudah Ada', en: 'Folder Already Exists' };
+					conflictDescription = {
+						id: `Folder “${name}” sudah ada. Gunakan nama yang disarankan “${conflict.suggested_name}”?`,
+						en: `Folder “${name}” already exists. Use the suggested name “${conflict.suggested_name}”?`
+					};
 					conflictAction = async () => {
 						try {
 							await api.createFolder(conflict.suggested_name!, folderId);
 							await refreshStorage();
-							toast.success(`Folder “${conflict.suggested_name}” dibuat`);
+							toast.success(
+								tx(
+									`Folder “${conflict.suggested_name}” dibuat`,
+									`Folder “${conflict.suggested_name}” created`
+								)
+							);
 						} catch (retryError) {
 							toast.error(
-								retryError instanceof Error ? retryError.message : 'Gagal membuat folder'
+								retryError instanceof Error
+									? retryError.message
+									: tx('Gagal membuat folder', 'Failed to create folder')
 							);
 						}
 					};
@@ -888,7 +1012,7 @@
 			return;
 		}
 		if (findSiblingByName(name)) {
-			toast.error(`Folder “${name}” sudah ada.`);
+			toast.error(tx(`Folder “${name}” sudah ada.`, `Folder “${name}” already exists.`));
 			return;
 		}
 		tree = [
@@ -903,28 +1027,36 @@
 				storageNode: 'ssd'
 			}
 		];
-		toast.success(`Folder “${name}” dibuat`);
+		toast.success(tx(`Folder “${name}” dibuat`, `Folder “${name}” created`));
 	}
 
 	async function runMutation(update: { name?: string; parent_id?: string | null }) {
-		if (!actionEntry) return;
+		if (!actionEntry || (actionEntry.kind !== 'folder' && actionEntry.storageAvailable === false))
+			return;
 		try {
 			await api.mutate(actionEntry.id, update);
 		} catch (error) {
 			const conflict = error as Error & { status?: number; suggested_name?: string };
 			if (conflict.status === 409 && conflict.suggested_name) {
-				conflictTitle = 'Nama Sudah Digunakan';
-				conflictDescription = `Nama sudah digunakan. Gunakan nama yang disarankan “${conflict.suggested_name}”?`;
+				conflictTitle = { id: 'Nama Sudah Digunakan', en: 'Name Already in Use' };
+				conflictDescription = {
+					id: `Nama sudah digunakan. Gunakan nama yang disarankan “${conflict.suggested_name}”?`,
+					en: `This name is already in use. Use the suggested name “${conflict.suggested_name}”?`
+				};
 				conflictAction = async () => {
 					try {
 						await api.mutate(actionEntry!.id, { ...update, name: conflict.suggested_name });
 						await refreshStorage();
 						toast.success(
-							update.name !== undefined ? 'Nama diperbarui' : `“${actionEntry!.name}” dipindahkan`
+							update.name !== undefined
+								? tx('Nama diperbarui', 'Name updated')
+								: tx(`“${actionEntry!.name}” dipindahkan`, `“${actionEntry!.name}” moved`)
 						);
 					} catch (retryError) {
 						toast.error(
-							retryError instanceof Error ? retryError.message : 'Gagal memperbarui item'
+							retryError instanceof Error
+								? retryError.message
+								: tx('Gagal memperbarui item', 'Failed to update item')
 						);
 					}
 				};
@@ -937,11 +1069,14 @@
 		}
 		await refreshStorage();
 		toast.success(
-			update.name !== undefined ? 'Nama diperbarui' : `“${actionEntry.name}” dipindahkan`
+			update.name !== undefined
+				? tx('Nama diperbarui', 'Name updated')
+				: tx(`“${actionEntry.name}” dipindahkan`, `“${actionEntry.name}” moved`)
 		);
 	}
 
 	function onRename(name: string) {
+		if (actionEntry?.kind !== 'folder' && actionEntry?.storageAvailable === false) return;
 		if (isApiBacked) {
 			void runMutation({ name });
 			return;
@@ -950,11 +1085,13 @@
 		tree = tree.map((e) =>
 			e.id === actionEntry!.id ? { ...e, name, modifiedAt: 'Baru saja' } : e
 		);
-		toast.success('Nama diperbarui');
+		toast.success(tx('Nama diperbarui', 'Name updated'));
 	}
 
 	function onMove(targetFolderId: string | null) {
 		if (moveMultipleEntries.length > 0) {
+			if (moveMultipleEntries.some((e) => e.kind !== 'folder' && e.storageAvailable === false))
+				return;
 			const entriesToMove = [...moveMultipleEntries];
 			moveMultipleEntries = [];
 			if (isApiBacked) {
@@ -978,12 +1115,18 @@
 					selectedIds = [];
 					await refreshStorage();
 					const targetName = targetFolderId
-						? (allFolders.find((f) => f.id === targetFolderId)?.name ?? 'Folder')
+						? (allFolders.find((f) => f.id === targetFolderId)?.name ?? tx('Folder', 'Folder'))
 						: rootLabel;
 					toast.success(
 						movedCount === 1
-							? `“${entriesToMove[0].name}” dipindahkan ke “${targetName}”`
-							: `${movedCount} item dipindahkan ke “${targetName}”`
+							? tx(
+									`“${entriesToMove[0].name}” dipindahkan ke “${targetName}”`,
+									`“${entriesToMove[0].name}” moved to “${targetName}”`
+								)
+							: tx(
+									`${movedCount} item dipindahkan ke “${targetName}”`,
+									`${movedCount} items moved to “${targetName}”`
+								)
 					);
 				})();
 				return;
@@ -993,12 +1136,20 @@
 				movedSet.has(e.id) ? { ...e, parentId: targetFolderId, modifiedAt: 'Baru saja' } : e
 			);
 			selectedIds = [];
-			toast.success(`${entriesToMove.length} item dipindahkan`);
+			toast.success(
+				tx(`${entriesToMove.length} item dipindahkan`, `${entriesToMove.length} items moved`)
+			);
 			return;
 		}
-		if (!actionEntry) return;
+		if (!actionEntry || (actionEntry.kind !== 'folder' && actionEntry.storageAvailable === false))
+			return;
 		if (actionEntry.kind === 'folder' && targetFolderId === actionEntry.id) {
-			toast.error('Tidak dapat memindahkan folder ke dirinya sendiri.');
+			toast.error(
+				tx(
+					'Tidak dapat memindahkan folder ke dirinya sendiri.',
+					'A folder cannot be moved into itself.'
+				)
+			);
 			return;
 		}
 		if (isApiBacked) {
@@ -1007,12 +1158,15 @@
 				try {
 					await api.moveItem(entryToMove.id, targetFolderId);
 					await refreshStorage();
-					toast.success(`“${entryToMove.name}” dipindahkan`);
+					toast.success(tx(`“${entryToMove.name}” dipindahkan`, `“${entryToMove.name}” moved`));
 				} catch (error) {
 					const conflict = error as Error & { status?: number; suggested_name?: string };
 					if (conflict.status === 409 && conflict.suggested_name) {
-						conflictTitle = 'Nama Sudah Digunakan';
-						conflictDescription = `Nama sudah digunakan. Gunakan nama yang disarankan “${conflict.suggested_name}”?`;
+						conflictTitle = { id: 'Nama Sudah Digunakan', en: 'Name Already in Use' };
+						conflictDescription = {
+							id: `Nama sudah digunakan. Gunakan nama yang disarankan “${conflict.suggested_name}”?`,
+							en: `This name is already in use. Use the suggested name “${conflict.suggested_name}”?`
+						};
 						conflictAction = async () => {
 							try {
 								await api.mutate(entryToMove.id, {
@@ -1020,9 +1174,15 @@
 									name: conflict.suggested_name
 								});
 								await refreshStorage();
-								toast.success(`“${entryToMove.name}” dipindahkan`);
+								toast.success(
+									tx(`“${entryToMove.name}” dipindahkan`, `“${entryToMove.name}” moved`)
+								);
 							} catch (retryError) {
-								toast.error(retryError instanceof Error ? retryError.message : 'Gagal memindahkan');
+								toast.error(
+									retryError instanceof Error
+										? retryError.message
+										: tx('Gagal memindahkan', 'Failed to move')
+								);
 							}
 						};
 						conflictConfirmOpen = true;
@@ -1030,7 +1190,11 @@
 						moveConflictEntry = entryToMove;
 						moveConflictOpen = true;
 					} else {
-						toast.error(error instanceof Error ? error.message : 'Gagal memindahkan berkas');
+						toast.error(
+							error instanceof Error
+								? error.message
+								: tx('Gagal memindahkan berkas', 'Failed to move file')
+						);
 					}
 				}
 			})();
@@ -1039,18 +1203,21 @@
 		tree = tree.map((e) =>
 			e.id === actionEntry!.id ? { ...e, parentId: targetFolderId, modifiedAt: 'Baru saja' } : e
 		);
-		toast.success(`“${actionEntry.name}” dipindahkan`);
+		toast.success(tx(`“${actionEntry.name}” dipindahkan`, `“${actionEntry.name}” moved`));
 	}
 
 	async function onCopy(entry: FileEntry) {
+		if (entry.kind !== 'folder' && entry.storageAvailable === false) return;
 		if (isApiBacked) {
 			try {
 				await api.duplicate(entry.id);
 				await refreshStorage();
 				if (variant === 'my-storage') void chrome?.refreshQuota();
-				toast.success(`“${entry.name}” diduplikasi`);
+				toast.success(tx(`“${entry.name}” diduplikasi`, `“${entry.name}” duplicated`));
 			} catch (error) {
-				toast.error(error instanceof Error ? error.message : 'Gagal menduplikasi');
+				toast.error(
+					error instanceof Error ? error.message : tx('Gagal menduplikasi', 'Failed to duplicate')
+				);
 			}
 			return;
 		}
@@ -1073,10 +1240,10 @@
 				starred: false
 			}
 		];
-		toast.success(`Salinan zero-byte “${name}” dibuat`);
+		toast.success(tx(`Salinan zero-byte “${name}” dibuat`, `Zero-byte copy “${name}” created`));
 	}
-
 	async function onStar(entry: FileEntry) {
+		if (entry.kind !== 'folder' && entry.storageAvailable === false) return;
 		const nextStarred = !entry.starred;
 		if (isApiBacked) {
 			currentItems = currentItems.map((item) =>
@@ -1087,27 +1254,40 @@
 				currentItems = currentItems.map((item) =>
 					item.id === entry.id ? { ...item, starred: result.is_starred } : item
 				);
-				toast.success(result.is_starred ? 'Ditandai berbintang' : 'Bintang dihapus');
+				toast.success(
+					result.is_starred
+						? tx('Ditandai berbintang', 'Added to starred')
+						: tx('Bintang dihapus', 'Removed from starred')
+				);
 			} catch (error) {
 				currentItems = currentItems.map((item) =>
 					item.id === entry.id ? { ...item, starred: !nextStarred } : item
 				);
-				toast.error(error instanceof Error ? error.message : 'Gagal mengubah bintang');
+				toast.error(
+					error instanceof Error
+						? error.message
+						: tx('Gagal mengubah bintang', 'Failed to update star')
+				);
 			}
 		} else {
 			tree = tree.map((item) => (item.id === entry.id ? { ...item, starred: nextStarred } : item));
-			toast.success(nextStarred ? 'Ditandai berbintang' : 'Bintang dihapus');
+			toast.success(
+				nextStarred
+					? tx('Ditandai berbintang', 'Added to starred')
+					: tx('Bintang dihapus', 'Removed from starred')
+			);
 		}
 	}
 
 	function onDelete(entry: FileEntry) {
-		deleteTargetEntry = entry;
+		if (entry.kind !== 'folder' && entry.storageAvailable === false) return;
 		deleteConfirmOpen = true;
 	}
 
 	async function executeDelete() {
 		if (bulkDeleteEntries.length > 0) {
 			const toDelete = [...bulkDeleteEntries];
+			if (toDelete.some((e) => e.kind !== 'folder' && e.storageAvailable === false)) return;
 			bulkDeleteEntries = [];
 			deleteTargetEntry = null;
 			if (isApiBacked) {
@@ -1120,24 +1300,29 @@
 						// continue
 					}
 				}
-				selectedIds = [];
-				await refreshStorage();
-				if (variant === 'my-storage') void chrome?.refreshQuota();
 				toast.success(
 					variant === 'organization'
-						? `${deletedCount} item dihapus`
-						: `${deletedCount} item dipindahkan ke Trash`
+						? tx(`${deletedCount} item dihapus`, `${deletedCount} items deleted`)
+						: tx(
+								`${deletedCount} item dipindahkan ke Trash`,
+								`${deletedCount} items moved to Trash`
+							)
 				);
 				return;
 			}
 			const removeIds = new Set<string>(toDelete.map((e) => e.id));
 			tree = tree.filter((e) => !removeIds.has(e.id));
-			selectedIds = [];
-			toast.success(`${toDelete.length} item dipindahkan ke Trash (mock)`);
+			toast.success(
+				tx(
+					`${toDelete.length} item dipindahkan ke Trash (mock)`,
+					`${toDelete.length} items moved to Trash (mock)`
+				)
+			);
 			return;
 		}
 		if (!deleteTargetEntry) return;
 		const entry = deleteTargetEntry;
+		if (entry.kind !== 'folder' && entry.storageAvailable === false) return;
 		if (isApiBacked) {
 			try {
 				await api.remove(entry.id);
@@ -1153,11 +1338,15 @@
 				if (variant === 'my-storage') void chrome?.refreshQuota();
 				toast.success(
 					variant === 'organization'
-						? `“${entry.name}” dihapus`
-						: `“${entry.name}” dipindahkan ke Trash`
+						? tx(`“${entry.name}” dihapus`, `“${entry.name}” deleted`)
+						: tx(`“${entry.name}” dipindahkan ke Trash`, `“${entry.name}” moved to Trash`)
 				);
 			} catch (error) {
-				toast.error(error instanceof Error ? error.message : 'Gagal menghapus item');
+				toast.error(
+					error instanceof Error
+						? error.message
+						: tx('Gagal menghapus item', 'Failed to delete item')
+				);
 			}
 			return;
 		}
@@ -1177,19 +1366,26 @@
 		tree = tree.filter((e) => !removeIds.has(e.id));
 		selectedIds = selectedIds.filter((id) => !removeIds.has(id));
 		if (folderId && removeIds.has(folderId)) navigateFolder(entry.parentId);
-		toast.success(`“${entry.name}” dipindahkan ke Trash (mock)`);
+		toast.success(
+			tx(`“${entry.name}” dipindahkan ke Trash (mock)`, `“${entry.name}” moved to Trash (mock)`)
+		);
 	}
 
 	async function onDownload(entry: FileEntry) {
+		if (entry.kind !== 'folder' && entry.storageAvailable === false) return;
 		if (isApiBacked) {
 			try {
 				await api.download(entry.id, entry.kind === 'folder' ? `${entry.name}.zip` : entry.name);
 			} catch (error) {
-				toast.error(error instanceof Error ? error.message : 'Gagal mengunduh');
+				toast.error(
+					error instanceof Error ? error.message : tx('Gagal mengunduh', 'Failed to download')
+				);
 			}
 			return;
 		}
-		toast.info(`Mengunduh “${entry.name}” (mock)`, { description: formatSize(entry.sizeBytes) });
+		toast.info(tx(`Mengunduh “${entry.name}” (mock)`, `Downloading “${entry.name}” (mock)`), {
+			description: formatSize(entry.sizeBytes)
+		});
 	}
 
 	let draggedEntryId = $state<string | null>(null);
@@ -1213,7 +1409,7 @@
 	}
 
 	function handleItemDragStart(entry: FileEntry, e: DragEvent) {
-		if (!dragStartAllowed) {
+		if (!dragStartAllowed || (entry.kind !== 'folder' && entry.storageAvailable === false)) {
 			e.preventDefault();
 			return;
 		}
@@ -1230,6 +1426,7 @@
 	}
 
 	function handleTouchStart(entry: FileEntry, e: TouchEvent) {
+		if (entry.kind !== 'folder' && entry.storageAvailable === false) return;
 		longPressTimer = window.setTimeout(() => {
 			isDraggingViaTouch = true;
 			draggedEntryId = entry.id;
@@ -1264,6 +1461,14 @@
 							].filter(Boolean) as FileEntry[]);
 
 					if (
+						entriesToMove.some((item) => item.kind !== 'folder' && item.storageAvailable === false)
+					) {
+						isDraggingViaTouch = false;
+						draggedEntryId = null;
+						return;
+					}
+
+					if (
 						entriesToMove.length > 0 &&
 						!(entriesToMove.length === 1 && entriesToMove[0].id === targetFolder.id)
 					) {
@@ -1288,8 +1493,14 @@
 									await refreshStorage();
 									toast.success(
 										movedCount === 1
-											? `“${entriesToMove[0].name}” dipindahkan ke “${targetFolder.name}”`
-											: `${movedCount} item dipindahkan ke “${targetFolder.name}”`
+											? tx(
+													`“${entriesToMove[0].name}” dipindahkan ke “${targetFolder.name}”`,
+													`“${entriesToMove[0].name}” moved to “${targetFolder.name}”`
+												)
+											: tx(
+													`${movedCount} item dipindahkan ke “${targetFolder.name}”`,
+													`${movedCount} items moved to “${targetFolder.name}”`
+												)
 									);
 								})();
 							} else {
@@ -1300,7 +1511,12 @@
 										: ent
 								);
 								selectedIds = [];
-								toast.success(`${entriesToMove.length} item dipindahkan ke “${targetFolder.name}”`);
+								toast.success(
+									tx(
+										`${entriesToMove.length} item dipindahkan ke “${targetFolder.name}”`,
+										`${entriesToMove.length} items moved to “${targetFolder.name}”`
+									)
+								);
 							}
 							isDraggingViaTouch = false;
 							draggedEntryId = null;
@@ -1309,17 +1525,30 @@
 						const movedEntry = entriesToMove[0];
 						// Circular move check
 						if (movedEntry.kind === 'folder' && isAncestor(tree, movedEntry.id, targetFolder.id)) {
-							toast.error('Tidak bisa memindahkan folder ke dalam subfolder-nya sendiri');
+							toast.error(
+								tx(
+									'Tidak bisa memindahkan folder ke dalam subfolder-nya sendiri',
+									'A folder cannot be moved into its own subfolder'
+								)
+							);
 						} else if (isApiBacked) {
 							try {
 								await api.moveItem(movedEntry.id, targetFolder.id);
 								await refreshStorage();
-								toast.success(`“${movedEntry.name}” dipindahkan ke “${targetFolder.name}”`);
+								toast.success(
+									tx(
+										`“${movedEntry.name}” dipindahkan ke “${targetFolder.name}”`,
+										`“${movedEntry.name}” moved to “${targetFolder.name}”`
+									)
+								);
 							} catch (error) {
 								const conflict = error as Error & { status?: number; suggested_name?: string };
 								if (conflict.status === 409 && conflict.suggested_name) {
-									conflictTitle = 'Nama Sudah Digunakan';
-									conflictDescription = `Nama sudah digunakan. Gunakan nama yang disarankan “${conflict.suggested_name}”?`;
+									conflictTitle = { id: 'Nama Sudah Digunakan', en: 'Name Already in Use' };
+									conflictDescription = {
+										id: `Nama sudah digunakan. Gunakan nama yang disarankan “${conflict.suggested_name}”?`,
+										en: `This name is already in use. Use the suggested name “${conflict.suggested_name}”?`
+									};
 									conflictAction = async () => {
 										try {
 											await api.mutate(movedEntry.id, {
@@ -1327,10 +1556,17 @@
 												name: conflict.suggested_name
 											});
 											await refreshStorage();
-											toast.success(`“${movedEntry.name}” dipindahkan ke “${targetFolder.name}”`);
+											toast.success(
+												tx(
+													`“${movedEntry.name}” dipindahkan ke “${targetFolder.name}”`,
+													`“${movedEntry.name}” moved to “${targetFolder.name}”`
+												)
+											);
 										} catch (retryError) {
 											toast.error(
-												retryError instanceof Error ? retryError.message : 'Gagal memindahkan'
+												retryError instanceof Error
+													? retryError.message
+													: tx('Gagal memindahkan', 'Failed to move')
 											);
 										}
 									};
@@ -1340,7 +1576,11 @@
 									moveConflictTargetFolder = targetFolder;
 									moveConflictOpen = true;
 								} else {
-									toast.error(error instanceof Error ? error.message : 'Gagal memindahkan berkas');
+									toast.error(
+										error instanceof Error
+											? error.message
+											: tx('Gagal memindahkan berkas', 'Failed to move file')
+									);
 								}
 							}
 						} else {
@@ -1350,7 +1590,12 @@
 									? { ...ent, parentId: targetFolder.id, modifiedAt: 'Baru saja' }
 									: ent
 							);
-							toast.success(`“${movedEntry.name}” dipindahkan ke “${targetFolder.name}”`);
+							toast.success(
+								tx(
+									`“${movedEntry.name}” dipindahkan ke “${targetFolder.name}”`,
+									`“${movedEntry.name}” moved to “${targetFolder.name}”`
+								)
+							);
 						}
 					}
 				}
@@ -1396,6 +1641,11 @@
 							findEntry(tree, draggedEntryId)
 					].filter(Boolean) as FileEntry[]);
 
+			if (entriesToMove.some((item) => item.kind !== 'folder' && item.storageAvailable === false)) {
+				draggedEntryId = null;
+				return;
+			}
+
 			if (
 				entriesToMove.length === 0 ||
 				(entriesToMove.length === 1 && entriesToMove[0].id === targetFolder.id)
@@ -1414,7 +1664,10 @@
 								isAncestor(isApiBacked ? allFolders : tree, movedEntry.id, targetFolder.id)
 							) {
 								toast.error(
-									`Tidak bisa memindahkan folder “${movedEntry.name}” ke dalam subfolder-nya sendiri`
+									tx(
+										`Tidak bisa memindahkan folder “${movedEntry.name}” ke dalam subfolder-nya sendiri`,
+										`Cannot move folder “${movedEntry.name}” into its own subfolder`
+									)
 								);
 								continue;
 							}
@@ -1429,8 +1682,14 @@
 						await refreshStorage();
 						toast.success(
 							movedCount === 1
-								? `“${entriesToMove[0].name}” dipindahkan ke “${targetFolder.name}”`
-								: `${movedCount} item dipindahkan ke “${targetFolder.name}”`
+								? tx(
+										`“${entriesToMove[0].name}” dipindahkan ke “${targetFolder.name}”`,
+										`“${entriesToMove[0].name}” moved to “${targetFolder.name}”`
+									)
+								: tx(
+										`${movedCount} item dipindahkan ke “${targetFolder.name}”`,
+										`${movedCount} items moved to “${targetFolder.name}”`
+									)
 						);
 					})();
 					draggedEntryId = null;
@@ -1443,7 +1702,12 @@
 						: ent
 				);
 				selectedIds = [];
-				toast.success(`${entriesToMove.length} item dipindahkan ke “${targetFolder.name}”`);
+				toast.success(
+					tx(
+						`${entriesToMove.length} item dipindahkan ke “${targetFolder.name}”`,
+						`${entriesToMove.length} items moved to “${targetFolder.name}”`
+					)
+				);
 				draggedEntryId = null;
 				return;
 			}
@@ -1451,7 +1715,12 @@
 			const movedEntry = entriesToMove[0];
 			// Prevent circular move: folder cannot be moved into its own descendant
 			if (movedEntry.kind === 'folder' && isAncestor(tree, movedEntry.id, targetFolder.id)) {
-				toast.error('Tidak bisa memindahkan folder ke dalam subfolder-nya sendiri');
+				toast.error(
+					tx(
+						'Tidak bisa memindahkan folder ke dalam subfolder-nya sendiri',
+						'A folder cannot be moved into its own subfolder'
+					)
+				);
 				draggedEntryId = null;
 				return;
 			}
@@ -1460,12 +1729,20 @@
 				try {
 					await api.moveItem(movedEntry.id, targetFolder.id);
 					await refreshStorage();
-					toast.success(`“${movedEntry.name}” dipindahkan ke “${targetFolder.name}”`);
+					toast.success(
+						tx(
+							`“${movedEntry.name}” dipindahkan ke “${targetFolder.name}”`,
+							`“${movedEntry.name}” moved to “${targetFolder.name}”`
+						)
+					);
 				} catch (error) {
 					const conflict = error as Error & { status?: number; suggested_name?: string };
 					if (conflict.status === 409 && conflict.suggested_name) {
-						conflictTitle = 'Nama Sudah Digunakan';
-						conflictDescription = `Nama sudah digunakan. Gunakan nama yang disarankan “${conflict.suggested_name}”?`;
+						conflictTitle = { id: 'Nama Sudah Digunakan', en: 'Name Already in Use' };
+						conflictDescription = {
+							id: `Nama sudah digunakan. Gunakan nama yang disarankan “${conflict.suggested_name}”?`,
+							en: `This name is already in use. Use the suggested name “${conflict.suggested_name}”?`
+						};
 						conflictAction = async () => {
 							try {
 								await api.mutate(movedEntry.id, {
@@ -1473,9 +1750,18 @@
 									name: conflict.suggested_name
 								});
 								await refreshStorage();
-								toast.success(`“${movedEntry.name}” dipindahkan ke “${targetFolder.name}”`);
+								toast.success(
+									tx(
+										`“${movedEntry.name}” dipindahkan ke “${targetFolder.name}”`,
+										`“${movedEntry.name}” moved to “${targetFolder.name}”`
+									)
+								);
 							} catch (retryError) {
-								toast.error(retryError instanceof Error ? retryError.message : 'Gagal memindahkan');
+								toast.error(
+									retryError instanceof Error
+										? retryError.message
+										: tx('Gagal memindahkan', 'Failed to move')
+								);
 							}
 						};
 						conflictConfirmOpen = true;
@@ -1484,7 +1770,11 @@
 						moveConflictTargetFolder = targetFolder;
 						moveConflictOpen = true;
 					} else {
-						toast.error(error instanceof Error ? error.message : 'Gagal memindahkan berkas');
+						toast.error(
+							error instanceof Error
+								? error.message
+								: tx('Gagal memindahkan berkas', 'Failed to move file')
+						);
 					}
 				}
 			} else {
@@ -1493,7 +1783,12 @@
 						? { ...ent, parentId: targetFolder.id, modifiedAt: 'Baru saja' }
 						: ent
 				);
-				toast.success(`“${movedEntry.name}” dipindahkan ke "${targetFolder.name}"`);
+				toast.success(
+					tx(
+						`“${movedEntry.name}” dipindahkan ke “${targetFolder.name}”`,
+						`“${movedEntry.name}” moved to “${targetFolder.name}”`
+					)
+				);
 			}
 			draggedEntryId = null;
 			return;
@@ -1541,7 +1836,7 @@
 	bind:this={fileInput}
 	type="file"
 	class="hidden"
-	aria-label="Pilih berkas untuk diunggah"
+	aria-label={tx('Pilih berkas untuk diunggah', 'Choose files to upload')}
 	data-testid="upload-file-input"
 	multiple
 	onchange={(e) => {
@@ -1554,7 +1849,7 @@
 	bind:this={folderInput}
 	type="file"
 	class="hidden"
-	aria-label="Pilih folder untuk diunggah"
+	aria-label={tx('Pilih folder untuk diunggah', 'Choose folders to upload')}
 	data-testid="upload-folder-input"
 	multiple
 	webkitdirectory
@@ -1576,7 +1871,10 @@
 	bind:this={queueFileInput}
 	type="file"
 	class="hidden"
-	aria-label="Pilih kembali file untuk melanjutkan unggahan"
+	aria-label={tx(
+		'Pilih kembali file untuk melanjutkan unggahan',
+		'Choose the file again to resume the upload'
+	)}
 	data-testid="resume-upload-file-input"
 	onchange={handleQueuedFileSelection}
 />
@@ -1584,7 +1882,9 @@
 <div class="flex flex-col gap-4">
 	<FileExplorerBreadcrumbs segments={breadcrumbs} onNavigate={navigateFolder} />
 	{#if storageLoading}
-		<p class="text-sm text-muted" role="status">Memuat {rootLabel}…</p>
+		<p class="text-sm text-muted" role="status">
+			{tx(`Memuat ${rootLabel}…`, `Loading ${rootLabel}…`)}
+		</p>
 	{/if}
 	<FileExplorerToolbar
 		bind:category
@@ -1605,11 +1905,11 @@
 						checked={isAllSelected}
 						indeterminate={isPartiallySelected}
 						onCheckedChange={toggleSelectAll}
-						aria-label="Pilih semua berkas"
+						aria-label={tx('Pilih semua berkas', 'Select all files')}
 						data-testid="select-all-checkbox"
 					/>
 					<span class="text-sm font-medium text-main" data-testid="selected-count-label">
-						{selectedCount} item dipilih
+						{tx(`${selectedCount} item dipilih`, `${selectedCount} items selected`)}
 					</span>
 				</label>
 			</div>
@@ -1623,7 +1923,7 @@
 							variant="ghost"
 							size="icon"
 							class="rounded-full bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
-							aria-label="Aksi massal"
+							aria-label={tx('Aksi massal', 'Bulk actions')}
 							data-testid="bulk-actions-menu-trigger"
 						>
 							<MoreVertical class="size-4 stroke-2" />
@@ -1632,29 +1932,32 @@
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="end" class="min-w-48">
 					<DropdownMenu.Item
+						disabled={hasUnavailableSelection}
 						class="cursor-pointer gap-2"
 						onclick={handleBulkDownload}
 						data-testid="bulk-action-download"
 					>
 						<Download class="size-4 stroke-2" />
-						<span>Unduh selected</span>
+						<span>{tx('Unduh semua', 'Download selected')}</span>
 					</DropdownMenu.Item>
 					<DropdownMenu.Item
+						disabled={hasUnavailableSelection}
 						class="cursor-pointer gap-2"
 						onclick={handleBulkMove}
 						data-testid="bulk-action-move"
 					>
 						<FolderInput class="size-4 stroke-2" />
-						<span>Pindahkan</span>
+						<span>{tx('Pindahkan', 'Move')}</span>
 					</DropdownMenu.Item>
 					<DropdownMenu.Separator />
 					<DropdownMenu.Item
+						disabled={hasUnavailableSelection}
 						class="cursor-pointer gap-2 text-destructive focus:text-destructive"
 						onclick={handleBulkDelete}
 						data-testid="bulk-action-delete"
 					>
 						<Trash2 class="size-4 stroke-2 text-destructive" />
-						<span>Delete</span>
+						<span>{tx('Hapus', 'Delete')}</span>
 					</DropdownMenu.Item>
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
@@ -1665,8 +1968,13 @@
 			<div
 				class="overflow-hidden rounded-xl border border-subtle bg-surface px-4 py-12 text-center"
 			>
-				<p class="text-sm font-medium text-main">Folder kosong</p>
-				<p class="mt-1 text-xs text-muted">Seret berkas ke sini atau gunakan tombol Unggah.</p>
+				<p class="text-sm font-medium text-main">{tx('Folder kosong', 'Folder is empty')}</p>
+				<p class="mt-1 text-xs text-muted">
+					{tx(
+						'Seret berkas ke sini atau gunakan tombol Unggah.',
+						'Drag files here or use the Upload button.'
+					)}
+				</p>
 			</div>
 		{:else if driveView.mode === 'grid'}
 			<DriveFileGrid>
@@ -1730,24 +2038,34 @@
 								kind={entry.kind}
 								name={entry.name}
 								subtitle={entry.kind === 'folder'
-									? `Folder · ${entry.modifiedAt}`
-									: `${formatSize(entry.sizeBytes)} · ${entry.modifiedAt}`}
-								previewUrl={entry.kind !== 'folder' ? previewUrl(variant, entry.id) : undefined}
+									? `${tx('Folder', 'Folder')} · ${formatModifiedAt(entry.modifiedAt)}`
+									: `${formatSize(entry.sizeBytes)} · ${formatModifiedAt(entry.modifiedAt)}`}
+								previewUrl={entry.kind !== 'folder' && entry.storageAvailable !== false
+									? previewUrl(variant, entry.id)
+									: undefined}
 								selected={selectedIds.includes(entry.id)}
-								onSelect={() => {}}
+								disabled={entry.kind !== 'folder' && entry.storageAvailable === false}
 								onOpen={() => openEntry(entry)}
 							>
+								{#snippet badges()}
+									{#if entry.kind !== 'folder' && entry.storageAvailable === false}
+										<OfflineFileNotice />
+									{/if}
+								{/snippet}
 								{#snippet select()}
 									<button
 										type="button"
+										disabled={entry.kind !== 'folder' && entry.storageAvailable === false}
 										class={cn(
 											'inline-flex size-7 items-center justify-center rounded-lg bg-surface/90 shadow-sm backdrop-blur-sm transition-opacity hover:bg-surface focus-visible:ring-1 focus-visible:ring-primary focus-visible:outline-none',
 											selectedIds.includes(entry.id)
 												? 'opacity-100'
 												: 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
 										)}
-										title={selectedIds.includes(entry.id) ? 'Batal pilih' : 'Pilih'}
-										aria-label={`Pilih ${entry.name}`}
+										title={selectedIds.includes(entry.id)
+											? tx('Batal pilih', 'Deselect')
+											: tx('Pilih', 'Select')}
+										aria-label={tx(`Pilih ${entry.name}`, `Select ${entry.name}`)}
 										onclick={(e) => {
 											e.stopPropagation();
 											toggleSelectEntry(entry.id);
@@ -1755,6 +2073,7 @@
 									>
 										<Checkbox
 											checked={selectedIds.includes(entry.id)}
+											disabled={entry.kind !== 'folder' && entry.storageAvailable === false}
 											class="pointer-events-none"
 											tabindex={-1}
 										/>
@@ -1772,7 +2091,7 @@
 			<div
 				class="overflow-hidden rounded-xl border border-subtle bg-surface"
 				role="listbox"
-				aria-label="Daftar berkas"
+				aria-label={tx('Daftar berkas', 'File list')}
 			>
 				{#each visible as entry (entry.id)}
 					<div
@@ -1846,7 +2165,7 @@
 	<aside
 		transition:fly={{ x: 350, duration: 250 }}
 		class="fixed top-20 right-4 left-4 z-50 ml-auto w-auto max-w-sm rounded-xl border border-subtle bg-surface p-4 text-main shadow-none"
-		aria-label="Antrean unggahan"
+		aria-label={tx('Antrean unggahan', 'Upload queue')}
 		data-testid="upload-queue"
 		style={`touch-action: pan-y; ${
 			isSwipingQueue
@@ -1874,7 +2193,9 @@
 				<button
 					type="button"
 					class="inline-flex size-6 items-center justify-center rounded-md text-muted transition-colors hover:bg-muted/20 hover:text-main"
-					aria-label={queueOpen ? 'Ciutkan antrean unggahan' : 'Buka antrean unggahan'}
+					aria-label={queueOpen
+						? tx('Ciutkan antrean unggahan', 'Collapse upload queue')
+						: tx('Buka antrean unggahan', 'Expand upload queue')}
 					onclick={() => (queueOpen = !queueOpen)}
 				>
 					{#if queueOpen}
@@ -1887,7 +2208,7 @@
 					<button
 						type="button"
 						class="inline-flex size-6 items-center justify-center rounded-md text-muted transition-colors hover:bg-muted/20 hover:text-main"
-						aria-label="Tutup notifikasi unggahan"
+						aria-label={tx('Tutup notifikasi unggahan', 'Dismiss upload notification')}
 						data-testid="dismiss-upload-queue"
 						onclick={dismissQueue}
 					>
@@ -1900,7 +2221,7 @@
 			<div
 				class="mt-2 h-1.5 overflow-hidden rounded-full bg-muted/30"
 				role="progressbar"
-				aria-label="Progress unggahan"
+				aria-label={tx('Progress unggahan', 'Upload progress')}
 				aria-valuenow={uploadProgress}
 				aria-valuemin="0"
 				aria-valuemax="100"
@@ -1936,9 +2257,9 @@
 									<button
 										type="button"
 										class="text-primary hover:underline"
-										aria-label={`Jeda ${item.name}`}
+										aria-label={tx(`Jeda ${item.name}`, `Pause ${item.name}`)}
 										data-testid={`pause-upload-${item.id}`}
-										onclick={() => void pauseQueuedUpload(item.id)}>Jeda</button
+										onclick={() => void pauseQueuedUpload(item.id)}>{tx('Jeda', 'Pause')}</button
 									>
 								{/if}
 								{#if ['queued', 'paused', 'waiting-for-file', 'failed', 'expired'].includes(item.state) || (['uploading', 'retrying', 'verifying', 'committing'].includes(item.state) && !getInMemoryTransferFile(item.id))}
@@ -1955,18 +2276,23 @@
 									<button
 										type="button"
 										class="text-primary hover:underline"
-										aria-label={`Mulai ulang dari nol: ${item.name}`}
+										aria-label={tx(
+											`Mulai ulang dari nol: ${item.name}`,
+											`Start over from scratch: ${item.name}`
+										)}
 										data-testid={`restart-upload-${item.id}`}
-										onclick={() => void restartQueuedUpload(item.id)}>Mulai ulang dari nol</button
+										onclick={() => void restartQueuedUpload(item.id)}
+										>{tx('Mulai ulang dari nol', 'Start over from scratch')}</button
 									>
 								{/if}
 								{#if transferCanCancel(item)}
 									<button
 										type="button"
 										class="text-danger hover:underline"
-										aria-label={`Batalkan ${item.name}`}
+										aria-label={tx(`Batalkan ${item.name}`, `Cancel ${item.name}`)}
 										data-testid={`cancel-upload-${item.id}`}
-										onclick={() => void cancelQueuedUpload(item.id)}>Batalkan</button
+										onclick={() => void cancelQueuedUpload(item.id)}
+										>{tx('Batalkan', 'Cancel')}</button
 									>
 								{/if}
 							</div>
@@ -1989,14 +2315,17 @@
 />
 <ConflictResolutionDialog
 	bind:open={moveConflictOpen}
-	title="Nama Sudah Digunakan"
+	title={tx('Nama Sudah Digunakan', 'Name Already in Use')}
 	description={moveConflictEntry
-		? `“${moveConflictEntry.name}” sudah ada di folder tujuan. Ganti nama berkas atau batalkan pemindahan?`
+		? tx(
+				`“${moveConflictEntry.name}” sudah ada di folder tujuan. Ganti nama berkas atau batalkan pemindahan?`,
+				`“${moveConflictEntry.name}” already exists in the destination folder. Rename the file or cancel the move?`
+			)
 		: ''}
 	fileName={moveConflictEntry?.name ?? ''}
 	canReplace={false}
-	renameText="Ganti nama"
-	cancelText="Batal"
+	renameText={tx('Ganti nama', 'Rename')}
+	cancelText={tx('Batal', 'Cancel')}
 	onKeepBoth={() => {
 		if (moveConflictEntry) {
 			actionEntry = moveConflictEntry;
@@ -2045,24 +2374,36 @@
 <ConfirmDialog
 	bind:open={deleteConfirmOpen}
 	title={bulkDeleteEntries.length > 0
-		? `Pindahkan ${bulkDeleteEntries.length} Item ke Trash?`
+		? tx(
+				`Pindahkan ${bulkDeleteEntries.length} item ke Trash?`,
+				`Move ${bulkDeleteEntries.length} items to Trash?`
+			)
 		: deleteTargetEntry?.kind === 'folder'
-			? 'Pindahkan Folder ke Trash?'
-			: 'Pindahkan Berkas ke Trash?'}
+			? tx('Pindahkan Folder ke Trash?', 'Move Folder to Trash?')
+			: tx('Pindahkan Berkas ke Trash?', 'Move File to Trash?')}
 	description={bulkDeleteEntries.length > 0
-		? `Pindahkan ${bulkDeleteEntries.length} item terpilih ke Trash?`
+		? tx(
+				`Pindahkan ${bulkDeleteEntries.length} item terpilih ke Trash?`,
+				`Move ${bulkDeleteEntries.length} selected items to Trash?`
+			)
 		: deleteTargetEntry?.kind === 'folder'
-			? `Pindahkan “${deleteTargetEntry.name}” dan semua isinya ke Trash?`
-			: `Pindahkan “${deleteTargetEntry?.name}” ke Trash?`}
-	confirmText="Hapus ke Trash"
+			? tx(
+					`Pindahkan “${deleteTargetEntry.name}” dan semua isinya ke Trash?`,
+					`Move “${deleteTargetEntry.name}” and all its contents to Trash?`
+				)
+			: tx(
+					`Pindahkan “${deleteTargetEntry?.name}” ke Trash?`,
+					`Move “${deleteTargetEntry?.name}” to Trash?`
+				)}
+	confirmText={tx('Hapus ke Trash', 'Move to Trash')}
 	variant="destructive"
 	onConfirm={executeDelete}
 />
 <ConfirmDialog
 	bind:open={conflictConfirmOpen}
-	title={conflictTitle}
-	description={conflictDescription}
-	confirmText="Gunakan Nama Ini"
+	title={conflictTitleText}
+	description={conflictDescriptionText}
+	confirmText={tx('Gunakan Nama Ini', 'Use This Name')}
 	onConfirm={async () => {
 		if (conflictAction) await conflictAction();
 	}}

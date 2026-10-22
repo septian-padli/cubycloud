@@ -64,6 +64,13 @@ For browser-to-S3 uploads, a presigned PUT URL lasts 15 minutes, while its pendi
 
 Batch ZIP downloads use the existing authenticated POST endpoint. The browser submits selected IDs as form fields and handles the ZIP attachment as a native download, without collecting the response in JavaScript memory. Native downloads do not expose byte progress or reliable completion events to the page; the UI reports that the download has started, not that it has finished.
 
+## Health, storage availability, and interface-language contract
+
+- `GET /health` is unauthenticated. It returns HTTP `200` only if every currently configured storage node is accessible, and HTTP `503` if any one is inaccessible. The health check probes all registered nodes. Its public response does not expose storage names, physical paths, or credentials.
+- My Storage and Organization file-list items expose the boolean JSON field `storage_available` for each file, based on whether its associated storage node is accessible. Listings retain offline file metadata rather than converting unavailable storage into a not-found result. Folders remain navigable and available when a node is offline.
+- Regular users do not receive physical node identifiers or names. The availability signal does not identify the node.
+- The UI supports English and Indonesian. Initial language selection uses the browser language: `id*` selects Indonesian; otherwise English. An explicit choice is stored only in browser `localStorage`, keyed by authenticated account ID, allowing separate preferences per account in the same browser. The preference is never persisted server-side.
+
 ## Security boundaries
 
 - User passwords are bcrypt-hashed.

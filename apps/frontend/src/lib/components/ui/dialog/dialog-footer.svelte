@@ -4,6 +4,7 @@
 	import { cn, type WithElementRef } from "$lib/utils.js";
 	import type { HTMLAttributes } from "svelte/elements";
 
+	import { locale } from '$lib/locale.svelte.js';
 	let {
 		ref = $bindable(null),
 		class: className,
@@ -25,7 +26,9 @@
 	{#if showCloseButton}
 		<DialogPrimitive.Close>
 			{#snippet child({ props })}
-				<Button variant="outline" {...props}>Close</Button>
+				<Button variant="outline" {...props}>
+					{locale.language === 'id' ? 'Tutup' : 'Close'}
+				</Button>
 			{/snippet}
 		</DialogPrimitive.Close>
 	{/if}

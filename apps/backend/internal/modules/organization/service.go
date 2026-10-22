@@ -33,15 +33,16 @@ var (
 )
 
 type Item struct {
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	Kind       string    `json:"kind"`
-	SizeBytes  int64     `json:"size_bytes"`
-	ParentID   *string   `json:"parent_id"`
-	ModifiedAt time.Time `json:"modified_at"`
-	IsStarred  bool      `json:"is_starred"`
-	DiskKey    *string   `json:"-"`
-	CreatedBy  string    `json:"created_by,omitempty"`
+	ID               string    `json:"id"`
+	Name             string    `json:"name"`
+	Kind             string    `json:"kind"`
+	SizeBytes        int64     `json:"size_bytes"`
+	ParentID         *string   `json:"parent_id"`
+	ModifiedAt       time.Time `json:"modified_at"`
+	IsStarred        bool      `json:"is_starred"`
+	StorageAvailable bool      `json:"storage_available"`
+	DiskKey          *string   `json:"-"`
+	CreatedBy        string    `json:"created_by,omitempty"`
 }
 
 type Folder struct {
@@ -66,7 +67,7 @@ func (s *Service) List(ctx context.Context, userID string, parent *string) ([]It
 			WHEN u.id IS NULL OR u.deleted_at IS NOT NULL THEN 'deleted user'
 			ELSE u.username
 		END AS created_by,
-		CASE WHEN s.id IS NOT NULL THEN 1 ELSE 0 END AS is_starred
+		CASE WHEN s.id IS NOT NULL THEN 1 ELSE 0 END AS is_starred, COALESCE(i.storage_node_id,'')
 		FROM organization_items i
 		LEFT JOIN users u ON u.id = i.created_by
 		LEFT JOIN vfs_starred s ON s.node_id = i.id AND s.user_id = ?
@@ -91,15 +92,41 @@ func (s *Service) List(ctx context.Context, userID string, parent *string) ([]It
 		return nil, nil, err
 	}
 	defer rows.Close()
-	items := make([]Item, 0)
+	type listedItem struct {
+		item   Item
+		nodeID string
+	}
+	listed := make([]listedItem, 0)
 	for rows.Next() {
-		var i Item
-		if err = rows.Scan(&i.ID, &i.Name, &i.Kind, &i.SizeBytes, &i.ParentID, &i.ModifiedAt, &i.DiskKey, &i.CreatedBy, &i.IsStarred); err != nil {
+		var record listedItem
+		if err = rows.Scan(&record.item.ID, &record.item.Name, &record.item.Kind, &record.item.SizeBytes, &record.item.ParentID, &record.item.ModifiedAt, &record.item.DiskKey, &record.item.CreatedBy, &record.item.IsStarred, &record.nodeID); err != nil {
 			return nil, nil, err
 		}
-		items = append(items, i)
+		listed = append(listed, record)
 	}
-	return items, nil, rows.Err()
+	if err = rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	if err = rows.Close(); err != nil {
+		return nil, nil, err
+	}
+	items := make([]Item, 0, len(listed))
+	availability := make(map[string]bool)
+	for _, record := range listed {
+		item := record.item
+		if item.Kind != "folder" {
+			available, ok := availability[record.nodeID]
+			if !ok {
+				available = storage.NodeAvailable(ctx, s.storage, record.nodeID)
+				availability[record.nodeID] = available
+			}
+			item.StorageAvailable = available
+		} else {
+			item.StorageAvailable = true
+		}
+		items = append(items, item)
+	}
+	return items, nil, nil
 }
 
 func (s *Service) Folders(ctx context.Context) ([]Folder, error) {

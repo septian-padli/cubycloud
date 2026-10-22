@@ -119,10 +119,10 @@ CubyCloud menggunakan Google Font **Montserrat** sebagai satu-satunya _font fami
 
 Padding luar card **simetris** lewat `--card-spacing` (default `--spacing(4)` = 16px):
 
-| Slot | Padding |
-| ---- | ------- |
-| `Card.Root` | `py-(--card-spacing)` + `gap-(--card-spacing)` antar Header/Content/Footer |
-| `Card.Header` / `Content` / `Footer` | `px-(--card-spacing)` saja (tanpa `last:pb` / `pt` asymetris) |
+| Slot                                 | Padding                                                                    |
+| ------------------------------------ | -------------------------------------------------------------------------- |
+| `Card.Root`                          | `py-(--card-spacing)` + `gap-(--card-spacing)` antar Header/Content/Footer |
+| `Card.Header` / `Content` / `Footer` | `px-(--card-spacing)` saja (tanpa `last:pb` / `pt` asymetris)              |
 
 **Pengecualian:** shell list/tabel edge-to-edge → override Root `py-0` + Content `p-0` (contoh: daftar berkas terbesar, quota detail flat).
 
@@ -199,23 +199,23 @@ Implementasi: `$lib/components/ui/button/button.svelte` (`rounded-full`, `shadow
 
 #### Variants
 
-| Variant | Surface | Hover | Border | Contoh |
-| ------- | ------- | ----- | ------ | ------ |
-| `default` | `bg-primary` + teks putih | `bg-primary/80` | — | Unggah, Simpan, CTA utama |
-| `secondary` | `bg-surface` | `bg-app` | `border-subtle` | Kembali, Pindai ulang, Unduh backup, Kelola sampah |
-| `outline` | `bg-app` | `bg-surface` | `border-subtle` | Aksi sekunder di atas `bg-app` |
-| `destructive` | `bg-danger` + `text-white` | `bg-danger/90` | — | Hapus permanen, Kosongkan sampah |
-| `ghost` | transparan | sesuai konteks | — | Icon ⋮ (lihat di bawah) |
-| `link` | — | underline | — | Tautan teks |
+| Variant       | Surface                    | Hover           | Border          | Contoh                                             |
+| ------------- | -------------------------- | --------------- | --------------- | -------------------------------------------------- |
+| `default`     | `bg-primary` + teks putih  | `bg-primary/80` | —               | Unggah, Simpan, CTA utama                          |
+| `secondary`   | `bg-surface`               | `bg-app`        | `border-subtle` | Kembali, Pindai ulang, Unduh backup, Kelola sampah |
+| `outline`     | `bg-app`                   | `bg-surface`    | `border-subtle` | Aksi sekunder di atas `bg-app`                     |
+| `destructive` | `bg-danger` + `text-white` | `bg-danger/90`  | —               | Hapus permanen, Kosongkan sampah                   |
+| `ghost`       | transparan                 | sesuai konteks  | —               | Icon ⋮ (lihat di bawah)                            |
+| `link`        | —                          | underline       | —               | Tautan teks                                        |
 
 #### Size (tinggi = skala shadcn Vega; padding horizontal CubyCloud lebih lebar)
 
-| Size | Tinggi | Catatan |
-| ---- | ------ | ------- |
-| `default` | `h-9` | **Standar** di `/drive` & `/admin` (teks) — `px-3.5` |
-| `sm` / `lg` / `xs` | `h-8` / `h-10` / `h-6` | Hanya jika eksplisit dibutuhkan |
-| `icon` | `size-9` | **Standar** icon-only (⋮, menu) — sejajar tinggi `default` |
-| `icon-sm` / `icon-lg` / `icon-xs` | `size-8` / `size-10` / `size-6` | Opsional |
+| Size                              | Tinggi                          | Catatan                                                    |
+| --------------------------------- | ------------------------------- | ---------------------------------------------------------- |
+| `default`                         | `h-9`                           | **Standar** di `/drive` & `/admin` (teks) — `px-3.5`       |
+| `sm` / `lg` / `xs`                | `h-8` / `h-10` / `h-6`          | Hanya jika eksplisit dibutuhkan                            |
+| `icon`                            | `size-9`                        | **Standar** icon-only (⋮, menu) — sejajar tinggi `default` |
+| `icon-sm` / `icon-lg` / `icon-xs` | `size-8` / `size-10` / `size-6` | Opsional                                                   |
 
 #### Actions ⋮ (ghost icon)
 
@@ -228,10 +228,10 @@ class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-
 
 ```svelte
 <!-- Primary CTA -->
-<button class="… rounded-full bg-primary … text-white hover:bg-primary/80">Unggah Berkas</button>
+<button class="rounded-full bg-primary text-white hover:bg-primary/80 … …">Unggah Berkas</button>
 
 <!-- Danger -->
-<button class="… rounded-full bg-danger … text-white hover:bg-danger/90">Hapus Permanen</button>
+<button class="rounded-full bg-danger text-white hover:bg-danger/90 … …">Hapus Permanen</button>
 ```
 
 ---
@@ -308,6 +308,20 @@ Tidak menampilkan angka limit, persen, atau progress bar dengan cap.
 
 - Overlay modal menggunakan `bg-black/60 backdrop-blur-none` untuk menjaga performa rendering tetap ringan pada perangkat bertaraf prosesor Celeron lama.
 - Container modal dihiasi dengan sudut `rounded-xl`, latar `bg-surface`, garis `border border-subtle`, tanpa bayangan (`shadow-none`).
+
+4. **Offline-backed file rows:**
+
+- Keep the file row and its metadata visible when `storage_available` is `false`; disable actions that require access to that unavailable file.
+- Use a shadcn-svelte Popover that can open on hover or click. Its localized message says the storage node is offline and must not reveal a physical node identifier or name.
+- Do not disable folders or prevent navigation solely because a storage node is unavailable.
+
+5. **English and Indonesian UI:**
+
+- Support both English and Indonesian, selecting Indonesian when the browser language begins with `id` and English otherwise. All user-facing copy, including labels, titles, placeholders, errors, statuses, confirmations, notifications, and accessible names, follows the active locale.
+- A user-selected language is stored only in browser `localStorage`, scoped by authenticated account ID. Do not persist it server-side.
+
+
+- The global language selector pairs a Globe icon with the shadcn-svelte `Select`; its visible options are the short locale codes `id` and `en`, and its accessible name follows the active language.
 
 ---
 

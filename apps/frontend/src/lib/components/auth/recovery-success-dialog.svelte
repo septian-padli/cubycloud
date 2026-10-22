@@ -3,7 +3,8 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Check, Copy, Download, KeyRound } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
-
+	import { locale } from '$lib/locale.svelte.js';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 	let {
 		open = $bindable(false),
 		recoveryKey,
@@ -24,9 +25,14 @@
 		try {
 			await navigator.clipboard.writeText(recoveryKey);
 			saved = true;
-			toast.success('Recovery key disalin');
+			toast.success(tx('Kunci pemulihan disalin', 'Recovery key copied'));
 		} catch {
-			toast.error('Tidak dapat menyalin recovery key. Coba unduh kuncinya.');
+			toast.error(
+				tx(
+					'Tidak dapat menyalin kunci pemulihan. Coba unduh kuncinya.',
+					'Could not copy the recovery key. Try downloading it.'
+				)
+			);
 		}
 	}
 
@@ -56,37 +62,49 @@
 		}}
 	>
 		<Dialog.Header>
-			<div class="mb-2 flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+			<div
+				class="mb-2 flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary"
+			>
 				<KeyRound class="size-5 stroke-2" />
 			</div>
-			<Dialog.Title class="text-lg font-semibold text-main">Simpan Recovery Key baru</Dialog.Title>
+			<Dialog.Title class="text-lg font-semibold text-main"
+				>{tx('Simpan Kunci Pemulihan baru', 'Save your new Recovery Key')}</Dialog.Title
+			>
 			<Dialog.Description class="text-sm text-muted">
-				Kunci lama sudah tidak berlaku. Salin atau unduh kunci baru ini sekarang; kunci ini tidak akan
-				ditampilkan lagi.
+				{tx(
+					'Kunci lama sudah tidak berlaku. Salin atau unduh kunci baru ini sekarang; kunci ini tidak akan ditampilkan lagi.',
+					'Your old key is no longer valid. Copy or download this new key now; it will not be shown again.'
+				)}
 			</Dialog.Description>
 		</Dialog.Header>
 
-		<code class="block break-all rounded-lg border border-subtle bg-app px-3 py-3 text-center font-mono text-sm text-main select-all">
+		<code
+			class="block rounded-lg border border-subtle bg-app px-3 py-3 text-center font-mono text-sm break-all text-main select-all"
+		>
 			{recoveryKey}
 		</code>
 
 		<div class="grid grid-cols-2 gap-3">
 			<Button variant="outline" class="gap-2" onclick={copyKey}>
 				{#if saved}<Check class="size-4" />{:else}<Copy class="size-4" />{/if}
-				Salin
+				{tx('Salin', 'Copy')}
 			</Button>
 			<Button variant="outline" class="gap-2" onclick={downloadKey}>
 				<Download class="size-4" />
-				Unduh
+				{tx('Unduh', 'Download')}
 			</Button>
 		</div>
 
 		{#if saved}
-			<p class="text-sm text-primary" role="status">Kunci sudah disimpan. Anda bisa melanjutkan.</p>
+			<p class="text-sm text-primary" role="status">
+				{tx('Kunci sudah disimpan. Anda bisa melanjutkan.', 'Key saved. You can continue.')}
+			</p>
 		{/if}
 
 		<Dialog.Footer>
-			<Button class="w-full" disabled={!saved} onclick={onContinue}>Ke halaman Masuk</Button>
+			<Button class="w-full" disabled={!saved} onclick={onContinue}
+				>{tx('Ke halaman Masuk', 'Go to Sign in')}</Button
+			>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

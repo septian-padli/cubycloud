@@ -5,17 +5,18 @@
 	import DriveViewToggle from '$lib/components/drive/drive-view-toggle.svelte';
 	import { Plus, FolderPlus, Upload, ChevronDown, FolderUp } from '@lucide/svelte';
 	import { cn } from '$lib/utils.js';
+	import { locale } from '$lib/locale.svelte.js';
 
-	const FILTERS: { id: FileCategory; label: string }[] = [
-		{ id: 'all', label: 'Semua' },
-		{ id: 'folder', label: 'Folder' },
-		{ id: 'image', label: 'Gambar' },
-		{ id: 'video', label: 'Video' },
-		{ id: 'audio', label: 'Audio' },
-		{ id: 'document', label: 'Dokumen' },
-		{ id: 'text', label: 'Teks' },
-		{ id: 'archive', label: 'Arsip' }
-	];
+	const FILTERS = $derived([
+		{ id: 'all' as FileCategory, label: locale.language === 'id' ? 'Semua' : 'All' },
+		{ id: 'folder' as FileCategory, label: locale.language === 'id' ? 'Folder' : 'Folders' },
+		{ id: 'image' as FileCategory, label: locale.language === 'id' ? 'Gambar' : 'Images' },
+		{ id: 'video' as FileCategory, label: locale.language === 'id' ? 'Video' : 'Videos' },
+		{ id: 'audio' as FileCategory, label: 'Audio' },
+		{ id: 'document' as FileCategory, label: locale.language === 'id' ? 'Dokumen' : 'Documents' },
+		{ id: 'text' as FileCategory, label: locale.language === 'id' ? 'Teks' : 'Text' },
+		{ id: 'archive' as FileCategory, label: locale.language === 'id' ? 'Arsip' : 'Archives' }
+	]);
 
 	let {
 		category = $bindable('all' as FileCategory),
@@ -33,7 +34,11 @@
 </script>
 
 <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-	<div class="flex flex-wrap gap-1.5" role="group" aria-label="Filter kategori">
+	<div
+		class="flex flex-wrap gap-1.5"
+		role="group"
+		aria-label={locale.language === 'id' ? 'Filter kategori' : 'Category filters'}
+	>
 		{#each FILTERS as filter (filter.id)}
 			<button
 				type="button"
@@ -58,14 +63,9 @@
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger>
 				{#snippet child({ props })}
-					<Button
-						{...props}
-						type="button"
-						variant="default"
-						class="gap-1.5"
-					>
+					<Button {...props} type="button" variant="default" class="gap-1.5">
 						<Plus class="size-4 stroke-2" />
-						Tambah
+						{locale.language === 'id' ? 'Tambah' : 'Add'}
 						<ChevronDown class="size-3.5 stroke-2" />
 					</Button>
 				{/snippet}
@@ -73,16 +73,16 @@
 			<DropdownMenu.Content align="end" class="w-48">
 				<DropdownMenu.Item class="gap-2" onclick={onNewFolder}>
 					<FolderPlus class="size-4 stroke-2" />
-					Folder Baru
+					{locale.language === 'id' ? 'Folder Baru' : 'New folder'}
 				</DropdownMenu.Item>
 				<DropdownMenu.Item class="gap-2" onclick={onUpload}>
 					<Upload class="size-4 stroke-2" />
-					Upload File
+					{locale.language === 'id' ? 'Upload File' : 'Upload files'}
 				</DropdownMenu.Item>
 				{#if showFolderUpload}
 					<DropdownMenu.Item class="gap-2" onclick={onUploadFolder}>
 						<FolderUp class="size-4 stroke-2" />
-						Upload Folder
+						{locale.language === 'id' ? 'Upload Folder' : 'Upload folder'}
 					</DropdownMenu.Item>
 				{/if}
 			</DropdownMenu.Content>

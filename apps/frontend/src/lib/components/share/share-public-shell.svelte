@@ -6,7 +6,9 @@
 </script>
 
 <div class="flex min-h-dvh flex-col bg-app text-main">
-	<header class="flex w-full items-center justify-between border-b border-subtle px-6 py-4 md:px-10">
+	<header
+		class="flex w-full items-center justify-between border-b border-subtle px-6 py-4 md:px-10"
+	>
 		<a href="/" class="text-sm font-semibold text-main">CubyCloud</a>
 		<ThemeToggle />
 	</header>

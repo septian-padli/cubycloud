@@ -69,6 +69,12 @@ func main() {
 		AllowOrigins: []string{"*"},
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
 	}))
+	e.GET("/health", func(c echo.Context) error {
+		if storage.AllConfiguredNodesAvailable(c.Request().Context(), db, driver) {
+			return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+		}
+		return c.JSON(http.StatusServiceUnavailable, map[string]string{"status": "unavailable"})
+	})
 
 	// 8. Routes
 	setup.RegisterRoutes(e, db, driver, setupGuard, cfg.DataDirPath, cfg.JWTSecret)

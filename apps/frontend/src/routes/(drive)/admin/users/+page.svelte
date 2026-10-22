@@ -11,6 +11,8 @@
 	import DeleteUserDialog from '$lib/components/admin/delete-user-dialog.svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { UserPlus } from '@lucide/svelte';
+	import { locale } from '$lib/locale.svelte.js';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	let users = $state<AdminUser[]>([]);
 	let defaultQuota = $state<DefaultQuotaPolicy>(MOCK_DEFAULT_QUOTA);
@@ -61,10 +63,10 @@
 					};
 				});
 			} else if (usersRes.error) {
-				toast.error(`Gagal memuat pengguna: ${usersRes.error}`);
+				toast.error(`${tx('Gagal memuat pengguna', 'Failed to load users')}: ${usersRes.error}`);
 			}
 		} catch (err) {
-			toast.error('Gagal menghubungi server.');
+			toast.error(tx('Gagal menghubungi server.', 'Failed to reach the server.'));
 		} finally {
 			loading = false;
 		}
@@ -93,17 +95,24 @@
 		});
 
 		if (res.error) {
-			toast.error(`Gagal membuat pengguna: ${res.error}`);
+			toast.error(`${tx('Gagal membuat pengguna', 'Failed to create user')}: ${res.error}`);
 			return;
 		}
 
-		toast.success(`Pengguna “${payload.username}” berhasil dibuat.`);
+		toast.success(
+			tx(
+				`Pengguna “${payload.username}” berhasil dibuat.`,
+				`User “${payload.username}” created successfully.`
+			)
+		);
 		await loadData();
 	}
 
 	function onEditQuota(user: AdminUser) {
 		if (String(user.role).toLowerCase() === 'super_admin') {
-			toast.info('Kuota Super Admin selalu Unlimited.');
+			toast.info(
+				tx('Kuota Super Admin selalu Unlimited.', 'Super Admins always have unlimited quota.')
+			);
 			return;
 		}
 		editUser = user;
@@ -128,18 +137,23 @@
 		});
 
 		if (res.error) {
-			toast.error(`Gagal memperbarui kuota: ${res.error}`);
+			toast.error(`${tx('Gagal memperbarui kuota', 'Failed to update quota')}: ${res.error}`);
 			return;
 		}
 
-		toast.success(`Kuota “${username}” berhasil diperbarui.`);
+		toast.success(
+			tx(
+				`Kuota “${username}” berhasil diperbarui.`,
+				`Quota for “${username}” updated successfully.`
+			)
+		);
 		editUser = null;
 		await loadData();
 	}
 
 	function onRequestDelete(user: AdminUser) {
 		if (String(user.role).toLowerCase() === 'super_admin') {
-			toast.info('Super Admin tidak dapat dihapus.');
+			toast.info(tx('Super Admin tidak dapat dihapus.', 'Super Admins cannot be deleted.'));
 			return;
 		}
 		deleteUserTarget = user;
@@ -149,51 +163,48 @@
 	async function onConfirmDelete(user: AdminUser, email: string) {
 		const res = await adminAPI.deleteUser(user.id, { email });
 		if (res.error) {
-			toast.error(`Gagal menghapus pengguna: ${res.error}`);
+			toast.error(`${tx('Gagal menghapus pengguna', 'Failed to delete user')}: ${res.error}`);
 			throw new Error(res.error);
 		}
 
-		toast.success(`Pengguna “${user.username}” berhasil dihapus.`);
+		toast.success(
+			tx(
+				`Pengguna “${user.username}” berhasil dihapus.`,
+				`User “${user.username}” deleted successfully.`
+			)
+		);
 		deleteUserTarget = null;
 		await loadData();
 	}
 </script>
 
 <svelte:head>
-	<title>Users & Quotas — CubyCloud</title>
-	<meta name="description" content="Kelola pengguna dan kuota My Storage." />
+	<title>{tx('Pengguna & Kuota', 'Users & Quotas')} — CubyCloud</title>
+	<meta
+		name="description"
+		content={tx('Kelola pengguna dan kuota My Storage.', 'Manage My Storage users and quotas.')}
+	/>
 </svelte:head>
 
 <div class="flex flex-col gap-6">
 	<DrivePageHeader
-		title="Users & Quotas"
-		description="Kelola pengguna reguler dan kuota My Storage. Super Admin selalu Unlimited."
+		title={tx('Pengguna & Kuota', 'Users & Quotas')}
+		description={tx(
+			'Kelola pengguna reguler dan kuota My Storage. Super Admin selalu Unlimited.',
+			'Manage regular users and My Storage quotas. Super Admins always have unlimited quota.'
+		)}
 	>
 		{#snippet actions()}
 			<Button type="button" onclick={() => (createOpen = true)}>
 				<UserPlus class="size-4 stroke-2" />
-				Buat Pengguna
+				{tx('Buat Pengguna', 'Create User')}
 			</Button>
 		{/snippet}
 	</DrivePageHeader>
 
-	<AdminUsersTable
-		{users}
-		{defaultQuota}
-		{onEditQuota}
-		onDelete={onRequestDelete}
-	/>
+	<AdminUsersTable {users} {defaultQuota} {onEditQuota} onDelete={onRequestDelete} />
 </div>
 
 <CreateUserDialog bind:open={createOpen} {defaultQuota} {onCreate} />
-<EditQuotaDialog
-	bind:open={editOpen}
-	user={editUser}
-	{defaultQuota}
-	onSave={onSaveQuota}
-/>
-<DeleteUserDialog
-	bind:open={deleteOpen}
-	user={deleteUserTarget}
-	onConfirm={onConfirmDelete}
-/>
+<EditQuotaDialog bind:open={editOpen} user={editUser} {defaultQuota} onSave={onSaveQuota} />
+<DeleteUserDialog bind:open={deleteOpen} user={deleteUserTarget} onConfirm={onConfirmDelete} />

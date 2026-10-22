@@ -12,9 +12,10 @@
 	import { Label } from '$lib/components/ui/label/index.js';
 	import { Tabs, TabsList, TabsTrigger, TabsContent } from '$lib/components/ui/tabs/index.js';
 	import { Switch } from '$lib/components/ui/switch/index.js';
+	import { Cloud, HardDrive } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 	import { adminAPI } from '$lib/api/admin.js';
-	import { HardDrive, Cloud } from '@lucide/svelte';
+	import { locale } from '$lib/locale.svelte.js';
 
 	let {
 		open = $bindable(false),
@@ -77,7 +78,7 @@
 	async function handleAddLocal() {
 		if (!canAddLocal) return;
 		if (!localName.trim()) {
-			localNameError = 'Nama node wajib diisi';
+			localNameError = locale.language === 'id' ? 'Nama node wajib diisi' : 'Node name is required';
 			return;
 		}
 
@@ -92,10 +93,26 @@
 		adding = false;
 
 		if (resp.error) {
-			if (/name|required|duplicate|already exists/i.test(resp.error)) localNameError = resp.error;
-			else toast.error('Gagal menambah node lokal', { description: resp.error });
+			if (/name|required|duplicate|already exists/i.test(resp.error))
+				localNameError =
+					locale.language === 'id'
+						? /duplicate|already exists/i.test(resp.error)
+							? 'Nama node sudah digunakan'
+							: 'Nama node wajib diisi'
+						: /duplicate|already exists/i.test(resp.error)
+							? 'Node name already exists'
+							: 'Node name is required';
+			else
+				toast.error(
+					locale.language === 'id' ? 'Gagal menambah node lokal' : 'Failed to add local node',
+					{ description: resp.error }
+				);
 		} else {
-			toast.success('Node lokal berhasil ditambahkan');
+			toast.success(
+				locale.language === 'id'
+					? 'Node lokal berhasil ditambahkan'
+					: 'Local node added successfully'
+			);
 			resetLocalForm();
 			open = false;
 			onAdded();
@@ -105,7 +122,7 @@
 	async function handleAddCloud() {
 		if (!canAddCloud) return;
 		if (!cloudName.trim()) {
-			cloudNameError = 'Nama node wajib diisi';
+			cloudNameError = locale.language === 'id' ? 'Nama node wajib diisi' : 'Node name is required';
 			return;
 		}
 		adding = true;
@@ -124,10 +141,25 @@
 
 		if (resp.error) {
 			if (/name.*(?:required|already exists)|nama.*(?:wajib|sudah|digunakan)/i.test(resp.error))
-				cloudNameError = resp.error;
-			else toast.error('Gagal menambah node cloud', { description: resp.error });
+				cloudNameError =
+					locale.language === 'id'
+						? /already exists|sudah|digunakan/i.test(resp.error)
+							? 'Nama node sudah digunakan'
+							: 'Nama node wajib diisi'
+						: /already exists/i.test(resp.error)
+							? 'Node name already exists'
+							: 'Node name is required';
+			else
+				toast.error(
+					locale.language === 'id' ? 'Gagal menambah node cloud' : 'Failed to add cloud node',
+					{ description: resp.error }
+				);
 		} else {
-			toast.success('Node cloud berhasil ditambahkan');
+			toast.success(
+				locale.language === 'id'
+					? 'Node cloud berhasil ditambahkan'
+					: 'Cloud node added successfully'
+			);
 			resetCloudForm();
 			open = false;
 			onAdded();
@@ -148,31 +180,37 @@
 <Dialog bind:open onOpenChange={handleOpenChange}>
 	<DialogContent class="max-w-lg">
 		<DialogHeader>
-			<DialogTitle>Tambah Node Penyimpanan</DialogTitle>
-			<DialogDescription>Tambahkan disk lokal atau cloud storage S3-compatible</DialogDescription>
+			<DialogTitle
+				>{locale.language === 'id' ? 'Tambah Node Penyimpanan' : 'Add storage node'}</DialogTitle
+			>
+			<DialogDescription
+				>{locale.language === 'id'
+					? 'Tambahkan disk lokal atau penyimpanan cloud yang kompatibel dengan S3'
+					: 'Add a local disk or S3-compatible cloud storage'}</DialogDescription
+			>
 		</DialogHeader>
 
 		<Tabs bind:value={activeTab} class="w-full">
 			<TabsList variant="line" class="grid w-full grid-cols-2">
 				<TabsTrigger value="local" class="gap-1.5">
 					<HardDrive class="size-3.5" />
-					Disk Lokal
+					{locale.language === 'id' ? 'Disk Lokal' : 'Local disk'}
 				</TabsTrigger>
 				<TabsTrigger value="cloud" class="gap-1.5">
 					<Cloud class="size-3.5" />
-					Cloud (S3)
+					{locale.language === 'id' ? 'Cloud (S3)' : 'Cloud (S3)'}
 				</TabsTrigger>
 			</TabsList>
 
 			<TabsContent value="local" class="space-y-4 pt-4">
 				<div class="space-y-2">
-					<Label for="local-name">Nama Node</Label>
+					<Label for="local-name">{locale.language === 'id' ? 'Nama Node' : 'Node name'}</Label>
 					<Input
 						id="local-name"
 						data-testid="input-local-node-name"
 						bind:value={localName}
 						oninput={() => (localNameError = '')}
-						placeholder="Disk Lokal 2"
+						placeholder={locale.language === 'id' ? 'Disk Lokal 2' : 'Local disk 2'}
 						disabled={adding}
 						aria-invalid={!!localNameError}
 						aria-describedby={localNameError ? 'local-name-error' : undefined}
@@ -190,7 +228,9 @@
 				</div>
 
 				<div class="space-y-2">
-					<Label for="local-path">Path Direktori</Label>
+					<Label for="local-path"
+						>{locale.language === 'id' ? 'Path Direktori' : 'Directory path'}</Label
+					>
 					<Input
 						id="local-path"
 						bind:value={localPath}
@@ -198,12 +238,16 @@
 						disabled={adding}
 					/>
 					<p class="text-xs text-muted">
-						Path absolut ke direktori storage. Direktori harus sudah ada.
+						{locale.language === 'id'
+							? 'Path absolut ke direktori penyimpanan. Direktori harus sudah ada.'
+							: 'Absolute path to the storage directory. The directory must already exist.'}
 					</p>
 				</div>
 
 				<div class="space-y-2">
-					<Label for="local-capacity">Kapasitas Maksimal (GB)</Label>
+					<Label for="local-capacity"
+						>{locale.language === 'id' ? 'Kapasitas Maksimal (GB)' : 'Maximum capacity (GB)'}</Label
+					>
 					<Input
 						id="local-capacity"
 						type="number"
@@ -212,14 +256,22 @@
 						disabled={adding}
 					/>
 					<p class="text-xs text-muted">
-						Batas kapasitas yang diizinkan untuk node ini (minimal 1 GB).
+						{locale.language === 'id'
+							? 'Batas kapasitas node ini (minimal 1 GB).'
+							: 'Capacity limit for this node (minimum 1 GB).'}
 					</p>
 				</div>
 
 				<div class="flex items-center justify-between">
 					<div class="space-y-0.5">
-						<Label for="local-enabled">Aktifkan Node</Label>
-						<p class="text-xs text-muted">Node langsung digunakan setelah ditambahkan</p>
+						<Label for="local-enabled"
+							>{locale.language === 'id' ? 'Aktifkan Node' : 'Enable node'}</Label
+						>
+						<p class="text-xs text-muted">
+							{locale.language === 'id'
+								? 'Node langsung digunakan setelah ditambahkan'
+								: 'The node will be used immediately after being added'}
+						</p>
 					</div>
 					<Switch id="local-enabled" bind:checked={localEnabled} disabled={adding} />
 				</div>
@@ -227,13 +279,13 @@
 
 			<TabsContent value="cloud" class="space-y-4 pt-4">
 				<div class="space-y-2">
-					<Label for="cloud-name">Nama Node</Label>
+					<Label for="cloud-name">{locale.language === 'id' ? 'Nama Node' : 'Node name'}</Label>
 					<Input
 						id="cloud-name"
 						data-testid="input-cloud-node-name"
 						bind:value={cloudName}
 						oninput={() => (cloudNameError = '')}
-						placeholder="S3 Production"
+						placeholder={locale.language === 'id' ? 'S3 Produksi' : 'S3 Production'}
 						disabled={adding}
 						aria-invalid={!!cloudNameError}
 						aria-describedby={cloudNameError ? 'cloud-name-error' : undefined}
@@ -266,7 +318,7 @@
 						/>
 					</div>
 					<div class="space-y-2">
-						<Label for="cloud-region">Region</Label>
+						<Label for="cloud-region">{locale.language === 'id' ? 'Wilayah' : 'Region'}</Label>
 						<Input
 							id="cloud-region"
 							bind:value={cloudRegion}
@@ -277,7 +329,9 @@
 				</div>
 
 				<div class="space-y-2">
-					<Label for="cloud-access-key">Access Key</Label>
+					<Label for="cloud-access-key"
+						>{locale.language === 'id' ? 'Kunci Akses' : 'Access key'}</Label
+					>
 					<Input
 						id="cloud-access-key"
 						bind:value={cloudAccessKey}
@@ -287,7 +341,9 @@
 				</div>
 
 				<div class="space-y-2">
-					<Label for="cloud-secret-key">Secret Key</Label>
+					<Label for="cloud-secret-key"
+						>{locale.language === 'id' ? 'Kunci Rahasia' : 'Secret key'}</Label
+					>
 					<Input
 						id="cloud-secret-key"
 						type="password"
@@ -298,7 +354,9 @@
 				</div>
 
 				<div class="space-y-2">
-					<Label for="cloud-capacity">Kapasitas Maksimal (GB)</Label>
+					<Label for="cloud-capacity"
+						>{locale.language === 'id' ? 'Kapasitas Maksimal (GB)' : 'Maximum capacity (GB)'}</Label
+					>
 					<Input
 						id="cloud-capacity"
 						type="number"
@@ -306,13 +364,23 @@
 						bind:value={cloudCapacity}
 						disabled={adding}
 					/>
-					<p class="text-xs text-muted">Batas kapasitas untuk cloud storage ini (minimal 1 GB).</p>
+					<p class="text-xs text-muted">
+						{locale.language === 'id'
+							? 'Batas kapasitas penyimpanan cloud ini (minimal 1 GB).'
+							: 'Capacity limit for this cloud storage (minimum 1 GB).'}
+					</p>
 				</div>
 
 				<div class="flex items-center justify-between">
 					<div class="space-y-0.5">
-						<Label for="cloud-enabled">Aktifkan Node</Label>
-						<p class="text-xs text-muted">Node langsung digunakan setelah ditambahkan</p>
+						<Label for="cloud-enabled"
+							>{locale.language === 'id' ? 'Aktifkan Node' : 'Enable node'}</Label
+						>
+						<p class="text-xs text-muted">
+							{locale.language === 'id'
+								? 'Node langsung digunakan setelah ditambahkan'
+								: 'The node will be used immediately after being added'}
+						</p>
 					</div>
 					<Switch id="cloud-enabled" bind:checked={cloudEnabled} disabled={adding} />
 				</div>
@@ -320,14 +388,28 @@
 		</Tabs>
 
 		<DialogFooter>
-			<Button variant="outline" onclick={() => (open = false)} disabled={adding}>Batal</Button>
+			<Button variant="outline" onclick={() => (open = false)} disabled={adding}
+				>{locale.language === 'id' ? 'Batal' : 'Cancel'}</Button
+			>
 			{#if activeTab === 'local'}
 				<Button onclick={handleAddLocal} disabled={!canAddLocal || adding}>
-					{adding ? 'Menambahkan...' : 'Tambah Node Lokal'}
+					{adding
+						? locale.language === 'id'
+							? 'Menambahkan...'
+							: 'Adding...'
+						: locale.language === 'id'
+							? 'Tambah Node Lokal'
+							: 'Add local node'}
 				</Button>
 			{:else}
 				<Button onclick={handleAddCloud} disabled={!canAddCloud || adding}>
-					{adding ? 'Menambahkan...' : 'Tambah Node Cloud'}
+					{adding
+						? locale.language === 'id'
+							? 'Menambahkan...'
+							: 'Adding...'
+						: locale.language === 'id'
+							? 'Tambah Node Cloud'
+							: 'Add cloud node'}
 				</Button>
 			{/if}
 		</DialogFooter>

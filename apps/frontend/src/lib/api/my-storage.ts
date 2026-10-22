@@ -6,6 +6,7 @@ import {
 	type UploadIntent
 } from '$lib/api/cloud-transfer.js';
 import { createResumableUploadDriver } from '$lib/api/resumable-upload.js';
+import { locale } from '$lib/locale.svelte.js';
 
 const base = '/api/v1/drive/my-storage';
 export interface VFSNode {
@@ -16,6 +17,7 @@ export interface VFSNode {
 	parent_id: string | null;
 	modified_at: string;
 	is_starred?: boolean;
+	storage_available?: boolean;
 }
 
 export type StorageItem = VFSNode;
@@ -55,25 +57,31 @@ export interface CategoryUsageResponse {
 	}[];
 }
 
-function formatFileDate(isoString: string): string {
-	try {
-		const date = new Date(isoString);
-		if (isNaN(date.getTime())) return isoString;
-		return new Intl.DateTimeFormat('id-ID', {
-			day: 'numeric',
-			month: 'short',
-			year: 'numeric'
-		}).format(date);
-	} catch {
-		return isoString;
-	}
-}
-
 function storageErrorMessage(error: string, status?: number): string {
-	if (error === 'USER_QUOTA_EXCEEDED') return 'Kuota My Storage penuh. Hubungi admin.';
-	if (error === 'STORAGE_POOL_FULL') return 'Penyimpanan server penuh.';
-	if (error === 'name already in use') return 'Nama sudah digunakan di folder tujuan.';
-	return error || `HTTP ${status ?? 'error'}`;
+	if (error === 'USER_QUOTA_EXCEEDED') {
+		return locale.language === 'id'
+			? 'Kuota My Storage penuh. Hubungi admin.'
+			: 'My Storage quota is full. Contact an administrator.';
+	}
+	if (error === 'STORAGE_POOL_FULL') {
+		return locale.language === 'id' ? 'Penyimpanan server penuh.' : 'Server storage is full.';
+	}
+	if (error === 'name already in use') {
+		return locale.language === 'id'
+			? 'Nama sudah digunakan di folder tujuan.'
+			: 'That name is already in use in the destination folder.';
+	}
+	if (error === 'storage_unavailable' || error === 'STORAGE_UNAVAILABLE') {
+		return locale.language === 'id'
+			? 'Node penyimpanan sedang tidak tersedia. Coba lagi nanti.'
+			: 'The storage node is unavailable. Please try again later.';
+	}
+	if (error === 'NETWORK_ERROR') {
+		return locale.language === 'id' ? 'Kesalahan jaringan.' : 'Network error.';
+	}
+	return locale.language === 'id'
+		? `Permintaan My Storage gagal (HTTP ${status ?? 'error'})`
+		: `My Storage request failed (HTTP ${status ?? 'error'})`;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -184,7 +192,11 @@ async function uploadTus(
 
 	const location = initRes.headers.get('Location');
 	if (!location) {
-		throw new Error('Header Location tidak ditemukan pada respon TUS');
+		throw new Error(
+			locale.language === 'id'
+				? 'Header Location tidak ditemukan pada respons TUS.'
+				: 'Location header was not found in the TUS response.'
+		);
 	}
 	const uploadUrl = location.startsWith('http')
 		? location
@@ -250,7 +262,10 @@ async function uploadTus(
 						text: xhr.responseText
 					});
 				};
-				xhr.onerror = () => patchReject(new Error('Network error'));
+				xhr.onerror = () =>
+					patchReject(
+						new Error(locale.language === 'id' ? 'Kesalahan jaringan.' : 'Network error.')
+					);
 				xhr.send(chunk);
 				const patchRes = await patchPromise;
 				if (patchRes.ok) {
@@ -284,7 +299,11 @@ async function uploadTus(
 						err.code = body.error;
 						throw err;
 					}
-					throw new Error(`PATCH request failed with status ${patchRes.status}`);
+					throw new Error(
+						locale.language === 'id'
+							? `Permintaan PATCH gagal dengan status ${patchRes.status}`
+							: `PATCH request failed with status ${patchRes.status}`
+					);
 				}
 			} catch (err: unknown) {
 				if (err && typeof err === 'object' && 'status' in err && typeof err.status === 'number') {
@@ -325,7 +344,11 @@ async function uploadTus(
 		}
 
 		if (!success) {
-			throw new Error('Gagal melanjutkan upload TUS setelah beberapa percobaan');
+			throw new Error(
+				locale.language === 'id'
+					? 'Gagal melanjutkan upload TUS setelah beberapa percobaan'
+					: 'Failed to continue the TUS upload after several attempts'
+			);
 		}
 	}
 
@@ -480,7 +503,13 @@ export const myStorageAPI = {
 			})
 		});
 		if (intent.placement === 's3') {
-			if (!intent.url || !intent.upload_id) throw new Error('Respons cloud upload tidak lengkap');
+			if (!intent.url || !intent.upload_id) {
+				throw new Error(
+					locale.language === 'id'
+						? 'Respons upload cloud tidak lengkap.'
+						: 'Cloud upload response is incomplete.'
+				);
+			}
 			try {
 				await putPresigned(intent.url, intent.headers ?? {}, file, progress);
 			} catch (error) {
@@ -529,7 +558,8 @@ export const myStorageAPI = {
 			sizeBytes: item.size_bytes,
 			parentId: item.parent_id,
 			modifiedAt: item.modified_at,
-			starred: item.is_starred ?? false
+			starred: item.is_starred ?? false,
+			storageAvailable: item.kind === 'folder' ? true : (item.storage_available ?? true)
 		};
 	},
 	async largestFiles(limit = 20, offset = 0): Promise<LargestFilesResponse> {
@@ -565,7 +595,7 @@ export const myStorageAPI = {
 			kind: category,
 			sizeBytes: raw.size_bytes,
 			location: raw.location || 'My Storage',
-			modifiedAt: formatFileDate(raw.modified_at)
+			modifiedAt: raw.modified_at
 		};
 	},
 	downloadUrl(id: string): string {

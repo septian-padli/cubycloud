@@ -1,3 +1,4 @@
+import { locale } from '$lib/locale.svelte.js';
 export interface UploadIntent {
 	placement: 'local' | 's3';
 	upload_id?: string;
@@ -23,8 +24,21 @@ export function putPresigned(
 	};
 	xhr.onload = () => xhr.status >= 200 && xhr.status < 300
 		? resolve()
-		: reject(new Error(`Upload ke cloud gagal (HTTP ${xhr.status})`));
-	xhr.onerror = () => reject(new Error('Koneksi ke cloud storage gagal'));
+		: reject(
+				new Error(
+					locale.language === 'id'
+						? `Unggah ke cloud gagal (HTTP ${xhr.status})`
+						: `Cloud upload failed (HTTP ${xhr.status})`
+				)
+			);
+	xhr.onerror = () =>
+		reject(
+			new Error(
+				locale.language === 'id'
+					? 'Koneksi ke cloud storage gagal'
+					: 'Connection to cloud storage failed'
+			)
+		);
 	xhr.send(file);
 	return promise;
 }
@@ -35,8 +49,11 @@ export async function downloadObject(base: string, id: string, name: string, fol
 	if (!folder) {
 		const response = await fetch(`${base}/${encodeURIComponent(id)}/download-url`, { credentials: 'include' });
 		if (!response.ok) {
-			const body = await response.json().catch(() => null);
-			throw new Error(body?.error ?? 'Gagal menyiapkan unduhan');
+			throw new Error(
+				locale.language === 'id'
+					? `Gagal menyiapkan unduhan (HTTP ${response.status})`
+					: `Failed to prepare download (HTTP ${response.status})`
+			);
 		}
 		const signed = await response.json() as { url: string | null };
 		if (signed.url) url = signed.url;
@@ -60,20 +77,15 @@ export function downloadBatchZip(base: string, ids: string[], onError?: (message
 	const frame = document.createElement('iframe');
 	frame.name = activeZipFrames.size === 0 ? 'cubycloud-zip-download' : `cubycloud-zip-download-${++zipDownloadCounter}`;
 	activeZipFrames.add(frame);
-	frame.title = 'Unduhan ZIP';
+	frame.title = locale.language === 'id' ? 'Unduhan ZIP' : 'ZIP download';
 	frame.hidden = true;
 	document.body.append(frame);
 	frame.onload = () => {
 		if (frame.contentDocument?.URL === 'about:blank') return;
 		const body = frame.contentDocument?.body?.textContent?.trim();
 		if (!body) return;
-		let message = 'Gagal mengunduh berkas ZIP';
-		try {
-			const response = JSON.parse(body) as { error?: string };
-			if (response.error) message = response.error;
-		} catch {
-			// Non-JSON error pages have no safe structured message to display.
-		}
+		const message =
+			locale.language === 'id' ? 'Gagal mengunduh berkas ZIP' : 'Failed to download ZIP file';
 		onError?.(message);
 	};
 	const form = document.createElement('form');

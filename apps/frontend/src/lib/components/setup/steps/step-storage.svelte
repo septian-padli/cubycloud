@@ -11,7 +11,8 @@
 	import { RefreshCw } from '@lucide/svelte';
 	import { scanStorageNodes } from '$lib/api/setup';
 	import { toast } from 'svelte-sonner';
-
+	import { locale } from '$lib/locale.svelte.js';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 	let {
 		nodes = $bindable(),
 		devices = $bindable(),
@@ -40,7 +41,7 @@
 				capacityCapGb: Math.round(n.capacity_bytes / 1e9)
 			}));
 		} catch {
-			toast.error('Scan gagal');
+			toast.error(tx('Pemindaian gagal', 'Scan failed'));
 		} finally {
 			scanning = false;
 		}
@@ -55,10 +56,16 @@
 <Card.Root class="rounded-xl border-subtle bg-surface shadow-none">
 	<Card.Header class="flex flex-row items-start justify-between gap-3 space-y-0">
 		<div>
-			<Card.Title class="text-lg font-semibold text-main">Penyimpanan Lokal (Opsional)</Card.Title>
+			<Card.Title class="text-lg font-semibold text-main"
+				>{tx('Penyimpanan Lokal (Opsional)', 'Local Storage (Optional)')}</Card.Title
+			>
 			<Card.Description class="text-sm text-muted">
-				Pilih volume di <code class="text-xs">/app/data/storage/</code> dan tetapkan batas kapasitas
-				node. Bisa dilewati jika hanya memakai penyimpanan cloud.
+				{tx('Pilih volume di', 'Choose a volume in')}
+				<code class="text-xs">/app/data/storage/</code>
+				{tx(
+					'dan tetapkan batas kapasitas node. Bisa dilewati jika hanya memakai penyimpanan cloud.',
+					'and set the node capacity limit. Skip this if using cloud storage only.'
+				)}
 			</Card.Description>
 		</div>
 		<Button
@@ -69,13 +76,13 @@
 			onclick={rescan}
 		>
 			<RefreshCw class="size-3.5 stroke-2 {scanning ? 'animate-spin' : ''}" />
-			Pindai Ulang
+			{tx('Pindai Ulang', 'Rescan')}
 		</Button>
 	</Card.Header>
 	<Card.Content class="space-y-4">
 		{#if scanning || loading}
 			<div class="space-y-2 rounded-lg border border-subtle bg-app px-4 py-3">
-				<p class="text-xs font-medium text-muted">Memindai volume…</p>
+				<p class="text-xs font-medium text-muted">{tx('Memindai volume…', 'Scanning volumes…')}</p>
 				<Progress value={66} max={100} />
 			</div>
 		{:else}
@@ -97,7 +104,7 @@
 										{node.name}
 									</Label>
 									<Badge
-										class="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-main dark:text-app hover:bg-secondary"
+										class="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-main hover:bg-secondary dark:text-app"
 									>
 										{node.kind}
 									</Badge>
@@ -105,8 +112,8 @@
 								<p class="text-xs text-muted">{node.path}</p>
 								<div>
 									<div class="mb-1.5 flex justify-between text-xs text-muted">
-										<span>{node.freeGb} GB bebas</span>
-										<span>{node.totalGb} GB total</span>
+										<span>{node.freeGb} GB {tx('bebas', 'free')}</span>
+										<span>{node.totalGb} GB {tx('total', 'total')}</span>
 									</div>
 									<div class="h-1.5 rounded-full bg-black/10 dark:bg-white/10">
 										<div
@@ -118,7 +125,7 @@
 								{#if node.enabled}
 									<div class="space-y-2">
 										<Label for="cap-{node.id}" class="text-xs text-muted">
-											Batas kapasitas node (GB)
+											{tx('Batas kapasitas node (GB)', 'Node capacity limit (GB)')}
 										</Label>
 										<Input
 											id="cap-{node.id}"
@@ -140,9 +147,14 @@
 		<Separator />
 
 		<div>
-			<p class="text-sm font-medium text-main">Device Linux (opsional)</p>
+			<p class="text-sm font-medium text-main">
+				{tx('Perangkat Linux (opsional)', 'Linux devices (optional)')}
+			</p>
 			<p class="mt-1 text-xs text-muted">
-				Daftarkan device terdeteksi sebagai node tambahan. (Mock UI — belum di-mount.)
+				{tx(
+					'Daftarkan perangkat yang terdeteksi sebagai node tambahan. (Simulasi antarmuka — belum terpasang.)',
+					'Register detected devices as additional nodes. (Mock UI — not yet mounted.)'
+				)}
 			</p>
 			<div class="mt-3 space-y-2">
 				{#each devices as device, i (device.id)}

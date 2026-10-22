@@ -2,15 +2,7 @@
 	import type { FileKind } from '$lib/types/drive.js';
 	import type { Snippet } from 'svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
-	import {
-		Archive,
-		File,
-		FileAudio,
-		FileImage,
-		FileText,
-		FileVideo,
-		Folder
-	} from '@lucide/svelte';
+	import { Archive, File, FileAudio, FileImage, FileText, FileVideo, Folder } from '@lucide/svelte';
 	import type { Component } from 'svelte';
 	import { cn } from '$lib/utils.js';
 	import GridThumbnail from './grid-thumbnail.svelte';
@@ -20,6 +12,7 @@
 		name,
 		subtitle,
 		selected = false,
+		disabled = false,
 		previewUrl,
 		onSelect,
 		onOpen,
@@ -32,6 +25,7 @@
 		name: string;
 		subtitle: string;
 		selected?: boolean;
+		disabled?: boolean;
 		previewUrl?: string;
 		onSelect?: () => void;
 		onOpen?: () => void;
@@ -58,11 +52,15 @@
 	role="option"
 	tabindex="0"
 	aria-selected={selected}
-	class="group relative cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-	onclick={() => onSelect?.()}
-	ondblclick={() => onOpen?.()}
+	aria-disabled={disabled}
+	class={cn(
+		'group relative cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+		disabled && 'cursor-not-allowed opacity-60'
+	)}
+	onclick={() => !disabled && onSelect?.()}
+	ondblclick={() => !disabled && onOpen?.()}
 	onkeydown={(e) => {
-		if (e.key === 'Enter') onOpen?.();
+		if (e.key === 'Enter' && !disabled) onOpen?.();
 	}}
 >
 	<Card.Root
@@ -72,35 +70,35 @@
 		)}
 	>
 		<Card.Content class="flex flex-col gap-3">
-				{#if select}
-					<div
-						role="presentation"
-						class="absolute start-2 top-2 z-10"
-						onclick={(e) => e.stopPropagation()}
-						onkeydown={(e) => e.stopPropagation()}
-					>
-						{@render select()}
-					</div>
-				{:else if star}
-					<div
-						role="presentation"
-						class="absolute start-2 top-2 z-10"
-						onclick={(e) => e.stopPropagation()}
-						onkeydown={(e) => e.stopPropagation()}
-					>
-						{@render star()}
-					</div>
-				{/if}
-				{#if menu}
-					<div
-						role="presentation"
-						class="absolute end-2 top-2 z-10"
-						onclick={(e) => e.stopPropagation()}
-						onkeydown={(e) => e.stopPropagation()}
-					>
-						{@render menu()}
-					</div>
-				{/if}
+			{#if select}
+				<div
+					role="presentation"
+					class="absolute start-2 top-2 z-10"
+					onclick={(e) => e.stopPropagation()}
+					onkeydown={(e) => e.stopPropagation()}
+				>
+					{@render select()}
+				</div>
+			{:else if star}
+				<div
+					role="presentation"
+					class="absolute start-2 top-2 z-10"
+					onclick={(e) => e.stopPropagation()}
+					onkeydown={(e) => e.stopPropagation()}
+				>
+					{@render star()}
+				</div>
+			{/if}
+			{#if menu}
+				<div
+					role="presentation"
+					class="absolute end-2 top-2 z-10"
+					onclick={(e) => e.stopPropagation()}
+					onkeydown={(e) => e.stopPropagation()}
+				>
+					{@render menu()}
+				</div>
+			{/if}
 			<div
 				class="relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-lg bg-primary/10 text-primary"
 				data-testid="grid-card-thumbnail"

@@ -299,6 +299,13 @@ Fitur Download as ZIP adalah fitur core file manager yang tetap aktif dan terpas
 
 - **In-App Toast & Notification Center:** Notifikasi aktivitas (seperti upload selesai, proses kompresi selesai, atau peringatan kuota user / node hampir penuh) ditampilkan via _Toast popup_ melayang dan panel notifikasi bawaan aplikasi.
 
+#### 10. Service Health, Offline Files & Interface Language
+
+- **`GET /health`:** Public, unauthenticated health endpoint. Return HTTP `200` only when every currently configured storage node is accessible; return HTTP `503` if any configured node is inaccessible. Probe every registered node rather than sampling one. The public response must not disclose storage names, physical paths, or credentials.
+- **Offline file listings:** My Storage and Organization file-list items include the JSON boolean `storage_available`, indicating whether the file's associated storage node is accessible. Keep offline files and their metadata visible; do not report them as not found. Disable file actions that require the unavailable storage and provide a shadcn-svelte Popover on hover or click explaining in the current UI language that the storage node is offline, without identifying the node. Folders remain navigable and available and are not disabled solely because a node is unavailable.
+- **Physical-storage privacy:** Regular users must not receive physical node identifiers or names. Node availability may be communicated without revealing the associated node's identity.
+- **Bilingual UI:** Support English and Indonesian. Choose the initial language from the browser language (`id*` selects Indonesian; all other browser languages select English). Store a user's language choice only in browser `localStorage`, scoped by authenticated account ID so accounts in one browser may choose independently. Never persist this preference server-side. All user-facing UI copy—including labels, titles, placeholders, validation and error messages, statuses, confirmations, notifications, and accessible names—must follow the active language. Keep established product/technical terms and user-provided content unchanged where translation is inappropriate.
+
 ---
 
 ### 3.2 Out-of-Scope (Sengaja Ditunda ke Fase Berikutnya / Roadmap)

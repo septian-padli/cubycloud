@@ -1,21 +1,15 @@
 <script lang="ts">
+	import { locale } from '$lib/locale.svelte.js';
 	import type { SharedFileItem } from '$lib/types/drive.js';
 	import { formatSize } from '$lib/mocks/file-tree.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import * as ContextMenu from '$lib/components/ui/context-menu/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import {
-		Download,
-		Eye,
-		FolderOpen,
-		Info,
-		MoreVertical,
-		Pencil,
-		Trash2
-	} from '@lucide/svelte';
+	import { Download, Eye, FolderOpen, Info, MoreVertical, Pencil, Trash2 } from '@lucide/svelte';
 	import DriveListRow from './drive-list-row.svelte';
 	import PermissionBadge from './permission-badge.svelte';
 	import FileKindIcon from './explorer/file-kind-icon.svelte';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	let {
 		entry,
@@ -44,11 +38,7 @@
 
 <ContextMenu.Root>
 	<ContextMenu.Trigger class="block w-full">
-		<DriveListRow
-			{selected}
-			onSelect={() => onSelect(entry)}
-			onOpen={() => onOpen(entry)}
-		>
+		<DriveListRow {selected} onSelect={() => onSelect(entry)} onOpen={() => onOpen(entry)}>
 			{#snippet leading()}
 				<FileKindIcon kind={entry.kind} />
 			{/snippet}
@@ -56,9 +46,10 @@
 				<p class="truncate text-sm font-medium text-main">{entry.name}</p>
 				<p class="text-xs text-muted">
 					{#if isFolder}
-						Folder · Dari {entry.ownerName} · {entry.modifiedAt}
+						Folder · {tx('Dari', 'From')} {entry.ownerName} · {locale.formatDate(entry.modifiedAt)}
 					{:else}
-						{formatSize(entry.sizeBytes)} · Dari {entry.ownerName} · {entry.modifiedAt}
+						{formatSize(entry.sizeBytes)} · {tx('Dari', 'From')}
+						{entry.ownerName} · {locale.formatDate(entry.modifiedAt)}
 					{/if}
 				</p>
 			{/snippet}
@@ -73,39 +64,39 @@
 								variant="ghost"
 								size="icon"
 								class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
-								aria-label="Aksi berkas"
+								aria-label={tx('Aksi berkas', 'File actions')}
 								onclick={(e: MouseEvent) => e.stopPropagation()}
 							>
 								<MoreVertical class="size-4 stroke-2" />
 							</Button>
 						{/snippet}
 					</DropdownMenu.Trigger>
-					<DropdownMenu.Content align="end" class="min-w-48 bg-surface border-subtle">
+					<DropdownMenu.Content align="end" class="min-w-48 border-subtle bg-surface">
 						{#if isFolder}
 							<DropdownMenu.Item class="gap-2" onclick={() => onOpen(entry)}>
 								<FolderOpen class="size-4 stroke-2" />
-								Buka folder
+								{tx('Buka folder', 'Open folder')}
 							</DropdownMenu.Item>
 						{:else}
 							<DropdownMenu.Item class="gap-2" onclick={() => onOpen(entry)}>
 								<Eye class="size-4 stroke-2" />
-								Pratinjau
+								{tx('Pratinjau', 'Preview')}
 							</DropdownMenu.Item>
 						{/if}
 						<DropdownMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 							<Download class="size-4 stroke-2" />
-							Unduh
+							{tx('Unduh', 'Download')}
 						</DropdownMenu.Item>
 						<DropdownMenu.Item class="gap-2" onclick={() => onDetails(entry)}>
 							<Info class="size-4 stroke-2" />
-							Detail berbagi
+							{tx('Detail berbagi', 'Sharing details')}
 						</DropdownMenu.Item>
 						{#if canEdit}
 							<DropdownMenu.Separator />
 							{#if onRename}
 								<DropdownMenu.Item class="gap-2" onclick={() => onRename(entry)}>
 									<Pencil class="size-4 stroke-2" />
-									Ubah nama
+									{tx('Ubah nama', 'Rename')}
 								</DropdownMenu.Item>
 							{/if}
 							{#if onDelete}
@@ -115,7 +106,7 @@
 									onclick={() => onDelete(entry)}
 								>
 									<Trash2 class="size-4 stroke-2" />
-									Hapus
+									{tx('Hapus', 'Delete')}
 								</DropdownMenu.Item>
 							{/if}
 						{/if}
@@ -124,38 +115,38 @@
 			{/snippet}
 		</DriveListRow>
 	</ContextMenu.Trigger>
-	<ContextMenu.Content class="min-w-48 bg-surface border-subtle">
+	<ContextMenu.Content class="min-w-48 border-subtle bg-surface">
 		{#if isFolder}
 			<ContextMenu.Item class="gap-2" onclick={() => onOpen(entry)}>
 				<FolderOpen class="size-4 stroke-2" />
-				Buka folder
+				{tx('Buka folder', 'Open folder')}
 			</ContextMenu.Item>
 		{:else}
 			<ContextMenu.Item class="gap-2" onclick={() => onOpen(entry)}>
 				<Eye class="size-4 stroke-2" />
-				Pratinjau
+				{tx('Pratinjau', 'Preview')}
 			</ContextMenu.Item>
 		{/if}
 		<ContextMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 			<Download class="size-4 stroke-2" />
-			Unduh
+			{tx('Unduh', 'Download')}
 		</ContextMenu.Item>
 		<ContextMenu.Item class="gap-2" onclick={() => onDetails(entry)}>
 			<Info class="size-4 stroke-2" />
-			Detail berbagi
+			{tx('Detail berbagi', 'Sharing details')}
 		</ContextMenu.Item>
 		{#if canEdit}
 			<ContextMenu.Separator />
 			{#if onRename}
 				<ContextMenu.Item class="gap-2" onclick={() => onRename(entry)}>
 					<Pencil class="size-4 stroke-2" />
-					Ubah nama
+					{tx('Ubah nama', 'Rename')}
 				</ContextMenu.Item>
 			{/if}
 			{#if onDelete}
 				<ContextMenu.Item variant="destructive" class="gap-2" onclick={() => onDelete(entry)}>
 					<Trash2 class="size-4 stroke-2" />
-					Hapus
+					{tx('Hapus', 'Delete')}
 				</ContextMenu.Item>
 			{/if}
 		{/if}

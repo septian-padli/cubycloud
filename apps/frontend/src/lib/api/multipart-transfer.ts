@@ -1,3 +1,4 @@
+import { locale } from '$lib/locale.svelte.js';
 /**
  * Direct presigned multipart transport (browser → provider UploadPart).
  *
@@ -95,9 +96,13 @@ export class MultipartError extends Error {
 export class MultipartSessionGoneError extends MultipartError {
 	constructor(code: string, status: number) {
 		super(
-			code === 'multipart_session_expired'
-				? 'Sesi upload kedaluwarsa. Mulai ulang upload berkas ini.'
-				: 'Sesi upload tidak dapat dilanjutkan.',
+			locale.language === 'id'
+				? code === 'multipart_session_expired'
+					? 'Sesi upload kedaluwarsa. Mulai ulang upload berkas ini.'
+					: 'Sesi upload tidak dapat dilanjutkan.'
+				: code === 'multipart_session_expired'
+					? 'The upload session has expired. Restart this file upload.'
+					: 'This upload session cannot be resumed.',
 			code,
 			status
 		);
@@ -105,15 +110,24 @@ export class MultipartSessionGoneError extends MultipartError {
 }
 
 function multipartErrorMessage(body: { error?: string } | undefined, status: number): string {
-	if (body?.error === 'USER_QUOTA_EXCEEDED') return 'Kuota penyimpanan penuh. Hubungi admin.';
-	if (body?.error === 'STORAGE_POOL_FULL') return 'Penyimpanan server penuh.';
+	const id = locale.language === 'id';
+	if (body?.error === 'USER_QUOTA_EXCEEDED')
+		return id ? 'Kuota penyimpanan penuh. Hubungi admin.' : 'Storage quota is full. Contact an administrator.';
+	if (body?.error === 'STORAGE_POOL_FULL')
+		return id ? 'Penyimpanan server penuh.' : 'Server storage is full.';
 	if (body?.error === 'multipart_session_expired')
-		return 'Sesi upload kedaluwarsa. Mulai ulang upload berkas ini.';
+		return id
+			? 'Sesi upload kedaluwarsa. Mulai ulang upload berkas ini.'
+			: 'The upload session has expired. Restart this file upload.';
 	if (body?.error === 'multipart_unrecoverable')
-		return 'Sesi upload tidak dapat dilanjutkan. Mulai ulang upload berkas ini.';
+		return id
+			? 'Sesi upload tidak dapat dilanjutkan. Mulai ulang upload berkas ini.'
+			: 'This upload session cannot be resumed. Restart this file upload.';
 	if (body?.error === 'multipart_parts_incomplete')
-		return 'Sebagian bagian berkas belum terunggah.';
-	return body?.error || `HTTP ${status}`;
+		return id ? 'Sebagian bagian berkas belum terunggah.' : 'Some file parts have not uploaded.';
+	return locale.language === 'id'
+		? `Permintaan upload gagal (HTTP ${status})`
+		: `Upload request failed (HTTP ${status})`;
 }
 
 async function multipartRequest<T>(path: string, init?: RequestInit): Promise<T> {
@@ -187,7 +201,16 @@ export function defaultPartTransport(
 			post(Math.round((event.loaded / event.total) * 100), part.part_number);
 	};
 	xhr.onabort = () => reject(signal?.reason ?? new DOMException('Aborted', 'AbortError'));
-	xhr.onerror = () => reject(new MultipartError('Koneksi ke cloud storage gagal', 'network', 0));
+	xhr.onerror = () =>
+		reject(
+			new MultipartError(
+				locale.language === 'id'
+					? 'Koneksi ke cloud storage gagal'
+					: 'Connection to cloud storage failed',
+				'network',
+				0
+			)
+		);
 	xhr.onload = () => {
 		const etag = xhr.getResponseHeader('ETag');
 		if (xhr.status >= 200 && xhr.status < 300 && etag) {
@@ -196,7 +219,9 @@ export function defaultPartTransport(
 		} else if (xhr.status >= 200 && xhr.status < 300) {
 			reject(
 				new MultipartError(
-					`Respons upload part ${part.part_number} tanpa ETag`,
+					locale.language === 'id'
+						? `Respons upload bagian ${part.part_number} tidak memiliki ETag`
+						: `Upload part ${part.part_number} response has no ETag`,
 					'missing_etag',
 					xhr.status
 				)
@@ -204,7 +229,9 @@ export function defaultPartTransport(
 		} else {
 			reject(
 				new MultipartError(
-					`Upload part ${part.part_number} gagal (HTTP ${xhr.status})`,
+					locale.language === 'id'
+						? `Upload bagian ${part.part_number} gagal (HTTP ${xhr.status})`
+						: `Upload part ${part.part_number} failed (HTTP ${xhr.status})`,
 					'part_transport',
 					xhr.status
 				)

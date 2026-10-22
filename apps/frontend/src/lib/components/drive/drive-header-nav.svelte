@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { locale } from '$lib/locale.svelte.js';
 	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import ThemeToggle from '$lib/components/theme-toggle.svelte';
@@ -12,6 +13,7 @@
 	} from '$lib/header-upload.js';
 	import { Loader2, Menu, Upload } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	let {
 		onMenuClick
@@ -36,7 +38,12 @@
 			context.permission
 		);
 		if (target.action === 'denied') {
-			denialReason = target.reason ?? 'Anda tidak memiliki izin mengunggah ke folder bersama ini';
+			denialReason =
+				target.reason ??
+				tx(
+					'Anda tidak memiliki izin mengunggah ke folder bersama ini',
+					'You do not have permission to upload to this shared folder'
+				);
 			denialOpen = true;
 			return;
 		}
@@ -53,7 +60,12 @@
 		if (!files.length || !target) return;
 
 		if (target.action === 'upload-my-storage' && !chrome.user.id) {
-			toast.error('Sesi pengguna tidak tersedia. Silakan masuk kembali.');
+			toast.error(
+				tx(
+					'Sesi pengguna tidak tersedia. Silakan masuk kembali.',
+					'User session is unavailable. Please sign in again.'
+				)
+			);
 			return;
 		}
 
@@ -68,15 +80,30 @@
 					onSuccess: () =>
 						toast.success(
 							files.length === 1
-								? `“${files[0].name}” berhasil diunggah`
-								: `${files.length} berkas berhasil diunggah`
+								? tx(
+										`“${files[0].name}” berhasil diunggah`,
+										`“${files[0].name}” uploaded successfully`
+									)
+								: tx(
+										`${files.length} berkas berhasil diunggah`,
+										`${files.length} files uploaded successfully`
+									)
 						),
 					onError: (error) => {
-						const message = error instanceof Error ? error.message : 'Gagal mengunggah berkas';
+						const message =
+							error instanceof Error
+								? error.message
+								: tx('Gagal mengunggah berkas', 'Failed to upload files');
 						if (target.action === 'upload-my-storage' && message.toLowerCase().includes('quota')) {
-							toast.error('Kuota My Storage penuh');
+							toast.error(tx('Kuota My Storage penuh', 'My Storage quota is full'));
 						} else {
-							toast.error('Sebagian atau seluruh berkas gagal diunggah', { description: message });
+							toast.error(
+								tx(
+									'Sebagian atau seluruh berkas gagal diunggah',
+									'Some or all files failed to upload'
+								),
+								{ description: message }
+							);
 						}
 					}
 				},
@@ -103,7 +130,7 @@
 		variant="ghost"
 		size="icon"
 		class="md:hidden"
-		aria-label="Buka menu navigasi"
+		aria-label={tx('Buka menu navigasi', 'Open navigation menu')}
 		onclick={onMenuClick}
 	>
 		<Menu class="size-4 stroke-2" />
@@ -130,10 +157,12 @@
 		>
 			{#if isUploading}
 				<Loader2 class="size-4 animate-spin" />
-				<span class="hidden sm:inline">Mengunggah {uploadProgress}%</span>
+				<span class="hidden sm:inline"
+					>{tx(`Mengunggah ${uploadProgress}%`, `Uploading ${uploadProgress}%`)}</span
+				>
 			{:else}
 				<Upload class="size-4 stroke-2" />
-				<span class="hidden sm:inline">Unggah</span>
+				<span class="hidden sm:inline">{tx('Unggah', 'Upload')}</span>
 			{/if}
 		</Button>
 

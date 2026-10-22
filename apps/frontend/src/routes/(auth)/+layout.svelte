@@ -3,6 +3,7 @@
 	import { getSetupStatus } from '$lib/api/setup';
 	import AuthSplitShell from '$lib/components/auth/auth-split-shell.svelte';
 	import ErrorPage from '$lib/components/error/error-page.svelte';
+	import { locale } from '$lib/locale.svelte.js';
 
 	let { children } = $props();
 
@@ -25,7 +26,9 @@
 	{#if !isCompleted}
 		<ErrorPage
 			status={403}
-			message="Setup sistem belum diselesaikan. Silakan selesaikan setup terlebih dahulu."
+			message={locale.language === 'id'
+				? 'Setup sistem belum diselesaikan. Silakan selesaikan setup terlebih dahulu.'
+				: 'System setup is incomplete. Please complete setup first.'}
 		/>
 	{:else}
 		<AuthSplitShell>

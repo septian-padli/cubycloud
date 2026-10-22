@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { SharePermission } from '$lib/types/drive.js';
 	import { cn } from '$lib/utils.js';
+	import { locale } from '$lib/locale.svelte.js';
 
 	let {
 		permission
@@ -8,7 +9,9 @@
 		permission: SharePermission;
 	} = $props();
 
-	const label = $derived(permission === 'editor' ? 'Editor' : 'Viewer');
+	const label = $derived(
+		permission === 'editor' ? 'Editor' : locale.language === 'id' ? 'Pemirsa' : 'Viewer'
+	);
 </script>
 
 <span

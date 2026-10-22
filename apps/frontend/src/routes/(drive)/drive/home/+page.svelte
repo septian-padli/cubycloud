@@ -8,6 +8,8 @@
 	import { getDriveChrome } from '$lib/drive-context.svelte.js';
 	import { fetchHomeData } from '$lib/api/drive-home.js';
 	import type { ActivityItem, QuickAccessItem } from '$lib/types/drive.js';
+	import { locale } from '$lib/locale.svelte.js';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	const chrome = getDriveChrome();
 	let quickAccess = $state<QuickAccessItem[]>([]);
@@ -28,15 +30,24 @@
 </script>
 
 <svelte:head>
-	<title>Beranda — CubyCloud</title>
-	<meta name="description" content="Beranda CubyCloud: akses cepat, aktivitas, dan ringkasan kuota." />
+	<title>{tx('Beranda', 'Home')} — CubyCloud</title>
+	<meta
+		name="description"
+		content={tx(
+			'Beranda CubyCloud: akses cepat, aktivitas, dan ringkasan kuota.',
+			'CubyCloud home: quick access, activity, and quota summary.'
+		)}
+	/>
 </svelte:head>
 
 <div class="flex flex-col gap-6">
 	<DrivePageHeader
-		eyebrow="Selamat datang"
-		title="Beranda"
-		description="Akses cepat berkas, aktivitas terbaru, dan ringkasan My Storage."
+		eyebrow={tx('Selamat datang', 'Welcome')}
+		title={tx('Beranda', 'Home')}
+		description={tx(
+			'Akses cepat berkas, aktivitas terbaru, dan ringkasan My Storage.',
+			'Quick access to files, recent activity, and a My Storage summary.'
+		)}
 	>
 		{#snippet actions()}
 			<DriveViewToggle />
@@ -44,7 +55,7 @@
 	</DrivePageHeader>
 
 	{#if loading}
-		<div class="space-y-6 animate-pulse" data-testid="home-loading">
+		<div class="animate-pulse space-y-6" data-testid="home-loading">
 			<div class="h-40 rounded-xl border border-subtle bg-surface/50"></div>
 			<div class="h-40 rounded-xl border border-subtle bg-surface/50"></div>
 		</div>

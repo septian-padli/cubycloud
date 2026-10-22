@@ -1,5 +1,6 @@
 <script lang="ts">
 	import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+	import { locale } from '$lib/locale.svelte.js';
 	let { url }: { url: string } = $props();
 	let canvas: HTMLCanvasElement;
 	let document: import('pdfjs-dist').PDFDocumentProxy | null = $state(null);
@@ -29,7 +30,10 @@
 			} catch {
 				if (!disposed) {
 					loading = false;
-					error = 'Gagal memuat PDF. Unduh berkas untuk membukanya di perangkat Anda.';
+					error =
+						locale.language === 'id'
+							? 'Gagal memuat PDF. Unduh berkas untuk membukanya di perangkat Anda.'
+							: 'Unable to load the PDF. Download the file to open it on your device.';
 				}
 			}
 		})();
@@ -61,7 +65,10 @@
 				canvas.width = Math.floor(viewport.width);
 				canvas.height = Math.floor(viewport.height);
 				const context = canvas.getContext('2d');
-				if (!context) throw new Error('Canvas tidak tersedia');
+				if (!context)
+					throw new Error(
+						locale.language === 'id' ? 'Canvas tidak tersedia' : 'Canvas is unavailable'
+					);
 				render = loadedPage.render({ canvasContext: context, canvas, viewport });
 				previousRender = render.promise.catch(() => {});
 				await render.promise;
@@ -69,7 +76,10 @@
 			} catch {
 				if (!disposed) {
 					loading = false;
-					error = 'Gagal menampilkan halaman PDF. Unduh berkas untuk membukanya.';
+					error =
+						locale.language === 'id'
+							? 'Gagal menampilkan halaman PDF. Unduh berkas untuk membukanya.'
+							: 'Unable to display the PDF page. Download the file to open it.';
 				}
 			}
 		})();
@@ -83,13 +93,37 @@
 
 <div class="flex w-full flex-col items-center gap-3" data-testid="pdf-preview">
 	{#if document}
-		<nav aria-label="Navigasi halaman PDF" class="flex items-center gap-3 text-sm">
-			<button type="button" class="rounded-lg border border-subtle px-3 py-1 disabled:opacity-50" disabled={pageNumber <= 1} onclick={() => pageNumber--}>Sebelumnya</button>
-			<span>Halaman {pageNumber} dari {document.numPages}</span>
-			<button type="button" class="rounded-lg border border-subtle px-3 py-1 disabled:opacity-50" disabled={pageNumber >= document.numPages} onclick={() => pageNumber++}>Berikutnya</button>
+		<nav
+			aria-label={locale.language === 'id' ? 'Navigasi halaman PDF' : 'PDF page navigation'}
+			class="flex items-center gap-3 text-sm"
+		>
+			<button
+				type="button"
+				class="rounded-lg border border-subtle px-3 py-1 disabled:opacity-50"
+				disabled={pageNumber <= 1}
+				onclick={() => pageNumber--}>{locale.language === 'id' ? 'Sebelumnya' : 'Previous'}</button
+			>
+			<span
+				>{locale.language === 'id'
+					? `Halaman ${pageNumber} dari ${document.numPages}`
+					: `Page ${pageNumber} of ${document.numPages}`}</span
+			>
+			<button
+				type="button"
+				class="rounded-lg border border-subtle px-3 py-1 disabled:opacity-50"
+				disabled={pageNumber >= document.numPages}
+				onclick={() => pageNumber++}>{locale.language === 'id' ? 'Berikutnya' : 'Next'}</button
+			>
 		</nav>
 	{/if}
-	{#if loading}<p role="status" class="text-sm text-muted">Memuat PDF…</p>{/if}
+	{#if loading}<p role="status" class="text-sm text-muted">
+			{locale.language === 'id' ? 'Memuat PDF…' : 'Loading PDF…'}
+		</p>{/if}
 	{#if error}<p role="alert" class="text-sm text-muted">{error}</p>{/if}
-	<canvas bind:this={canvas} aria-label="Halaman PDF {pageNumber}" class="max-h-96 max-w-full object-contain" class:hidden={loading || !!error}></canvas>
+	<canvas
+		bind:this={canvas}
+		aria-label={locale.language === 'id' ? `Halaman PDF ${pageNumber}` : `PDF page ${pageNumber}`}
+		class="max-h-96 max-w-full object-contain"
+		class:hidden={loading || !!error}
+	></canvas>
 </div>

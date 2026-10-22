@@ -6,6 +6,7 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { isAncestor } from '$lib/mocks/file-tree.js';
 	import { cn } from '$lib/utils.js';
+	import { locale } from '$lib/locale.svelte.js';
 	import {
 		Folder,
 		FolderOpen,
@@ -49,14 +50,16 @@
 	const effectiveCurrentParentId = $derived(targetList[0]?.parentId ?? currentParentId ?? null);
 
 	const currentLocationName = $derived.by(() => {
-		if (!effectiveCurrentParentId) return 'Drive Saya';
+		if (!effectiveCurrentParentId) return locale.language === 'id' ? 'Drive Saya' : 'My Drive';
 		const parentFolder = folders.find((f) => f.id === effectiveCurrentParentId);
-		return parentFolder ? parentFolder.name : 'Folder';
+		return parentFolder ? parentFolder.name : locale.language === 'id' ? 'Folder' : 'Folder';
 	});
-
 	const breadcrumbs = $derived.by(() => {
-		if (!currentFolderId) return [{ id: null, name: 'Drive Saya' }];
-		const trail: { id: string | null; name: string }[] = [{ id: null, name: 'Drive Saya' }];
+		if (!currentFolderId)
+			return [{ id: null, name: locale.language === 'id' ? 'Drive Saya' : 'My Drive' }];
+		const trail: { id: string | null; name: string }[] = [
+			{ id: null, name: locale.language === 'id' ? 'Drive Saya' : 'My Drive' }
+		];
 		const segments: { id: string; name: string }[] = [];
 		let curr = folders.find((f) => f.id === currentFolderId);
 		while (curr) {
@@ -123,17 +126,19 @@
 			<div class="flex items-start justify-between gap-4">
 				<div class="min-w-0 space-y-1 pr-6">
 					<Dialog.Title class="text-xl font-medium tracking-tight text-main">
-						Pindahkan
+						{locale.language === 'id' ? 'Pindahkan' : 'Move'}
 					</Dialog.Title>
 					<p class="truncate text-sm font-medium text-main/90">
 						{#if targetList.length > 1}
-							{targetList.length} item dipilih
+							{locale.language === 'id'
+								? `${targetList.length} item dipilih`
+								: `${targetList.length} items selected`}
 						{:else}
-							“{targetList[0]?.name ?? 'Berkas'}”
+							“{targetList[0]?.name ?? (locale.language === 'id' ? 'Berkas' : 'File')}”
 						{/if}
 					</p>
 					<div class="flex items-center gap-2 pt-1 text-xs text-muted">
-						<span>Lokasi saat ini:</span>
+						<span>{locale.language === 'id' ? 'Lokasi saat ini:' : 'Current location:'}</span>
 						<span
 							class="inline-flex items-center gap-1.5 rounded-full border border-subtle bg-app/80 px-2.5 py-0.5 text-xs font-medium text-main"
 						>
@@ -151,18 +156,22 @@
 				<Tabs.List variant="line" class="gap-6">
 					<Tabs.Trigger value="drive" class="gap-2" data-testid="move-tab-drive-saya">
 						<HardDrive class="size-4" />
-						Drive Saya
+						{locale.language === 'id' ? 'Drive Saya' : 'My Drive'}
 					</Tabs.Trigger>
 					<Tabs.Trigger
 						value="organization"
 						disabled
 						class="cursor-not-allowed gap-2"
 						data-testid="move-tab-organisasi"
-						title="Organisasi belum tersedia"
+						title={locale.language === 'id'
+							? 'Organisasi belum tersedia'
+							: 'Organization is not available yet'}
 					>
 						<Building2 class="size-4" />
-						Organisasi
-						<span class="py-0.2 rounded bg-muted/15 px-1.5 text-[10px]">Segera</span>
+						{locale.language === 'id' ? 'Organisasi' : 'Organization'}
+						<span class="py-0.2 rounded bg-muted/15 px-1.5 text-[10px]"
+							>{locale.language === 'id' ? 'Segera' : 'Coming soon'}</span
+						>
 					</Tabs.Trigger>
 				</Tabs.List>
 
@@ -172,7 +181,7 @@
 							<Search class="pointer-events-none absolute start-2.5 size-3.5 stroke-2 text-muted" />
 							<Input
 								type="text"
-								placeholder="Cari folder..."
+								placeholder={locale.language === 'id' ? 'Cari folder...' : 'Search folders...'}
 								bind:value={searchQuery}
 								class="h-8 w-36 ps-8 pe-7 text-xs sm:w-44"
 							/>
@@ -181,6 +190,7 @@
 									type="button"
 									onclick={() => (searchQuery = '')}
 									class="absolute end-6 text-muted hover:text-main"
+									aria-label={locale.language === 'id' ? 'Hapus pencarian' : 'Clear search'}
 								>
 									<X class="size-3" />
 								</button>
@@ -192,6 +202,7 @@
 									searchQuery = '';
 								}}
 								class="absolute end-2 text-muted hover:text-main"
+								aria-label={locale.language === 'id' ? 'Tutup pencarian' : 'Close search'}
 							>
 								<X class="size-3.5" />
 							</button>
@@ -201,8 +212,8 @@
 							type="button"
 							class="rounded-full p-1.5 text-muted transition-colors hover:bg-app hover:text-main"
 							onclick={() => (showSearch = true)}
-							title="Cari folder"
-							aria-label="Cari folder"
+							title={locale.language === 'id' ? 'Cari folder' : 'Search folders'}
+							aria-label={locale.language === 'id' ? 'Cari folder' : 'Search folders'}
 						>
 							<Search class="size-4" />
 						</button>
@@ -218,14 +229,18 @@
 							type="button"
 							class="rounded-md p-1 text-main transition-colors hover:bg-surface"
 							onclick={navigateUp}
-							title="Kembali ke folder sebelumnya"
-							aria-label="Kembali ke folder sebelumnya"
+							title={locale.language === 'id'
+								? 'Kembali ke folder sebelumnya'
+								: 'Go to parent folder'}
+							aria-label={locale.language === 'id'
+								? 'Kembali ke folder sebelumnya'
+								: 'Go to parent folder'}
 						>
 							<ArrowLeft class="size-4" />
 						</button>
 						<nav
 							class="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto"
-							aria-label="Breadcrumb"
+							aria-label={locale.language === 'id' ? 'Jejak navigasi' : 'Breadcrumb'}
 						>
 							{#each breadcrumbs as seg, idx (seg.id ?? 'root')}
 								{#if idx > 0}
@@ -252,8 +267,14 @@
 					{#if currentLevelFolders.length === 0}
 						<div class="flex flex-col items-center justify-center py-16 text-center text-muted">
 							<FolderOpen class="mb-2 size-10 stroke-1 text-muted/50" />
-							<p class="text-sm font-medium text-main/80">Folder ini kosong</p>
-							<p class="mt-0.5 text-xs text-muted">Tidak ada folder tujuan di lokasi ini</p>
+							<p class="text-sm font-medium text-main/80">
+								{locale.language === 'id' ? 'Folder ini kosong' : 'This folder is empty'}
+							</p>
+							<p class="mt-0.5 text-xs text-muted">
+								{locale.language === 'id'
+									? 'Tidak ada folder tujuan di lokasi ini'
+									: 'There are no destination folders here'}
+							</p>
 						</div>
 					{:else}
 						{#each currentLevelFolders as folder (folder.id)}
@@ -286,13 +307,13 @@
 										<span
 											class="shrink-0 rounded-full border border-subtle bg-app px-2 py-0.5 text-[10px] text-muted"
 										>
-											Lokasi saat ini
+											{locale.language === 'id' ? 'Lokasi saat ini' : 'Current location'}
 										</span>
 									{:else if invalid}
 										<span
 											class="shrink-0 rounded-full border border-subtle bg-app px-2 py-0.5 text-[10px] text-muted"
 										>
-											Tidak valid
+											{locale.language === 'id' ? 'Tidak valid' : 'Unavailable'}
 										</span>
 									{/if}
 								</div>
@@ -309,15 +330,17 @@
 												executeMove(folder.id);
 											}}
 										>
-											Pindahkan
+											{locale.language === 'id' ? 'Pindahkan' : 'Move'}
 										</Button>
 									{/if}
 									<button
 										type="button"
 										disabled={invalid}
 										class="rounded-md p-1 text-muted transition-colors group-hover:text-main hover:bg-surface disabled:opacity-40"
-										title="Buka folder"
-										aria-label="Buka folder {folder.name}"
+										title={locale.language === 'id' ? 'Buka folder' : 'Open folder'}
+										aria-label={locale.language === 'id'
+											? `Buka folder ${folder.name}`
+											: `Open folder ${folder.name}`}
 										onclick={(e) => {
 											e.stopPropagation();
 											if (!invalid) currentFolderId = folder.id;
@@ -336,9 +359,15 @@
 					<div class="max-w-[200px] truncate text-xs text-muted">
 						{#if currentFolderId}
 							{@const activeFolder = folders.find((f) => f.id === currentFolderId)}
-							Target: <span class="font-medium text-main">{activeFolder?.name ?? 'Folder'}</span>
+							{locale.language === 'id' ? 'Tujuan:' : 'Destination:'}
+							<span class="font-medium text-main"
+								>{activeFolder?.name ?? (locale.language === 'id' ? 'Folder' : 'Folder')}</span
+							>
 						{:else}
-							Target: <span class="font-medium text-main">Drive Saya (Root)</span>
+							{locale.language === 'id' ? 'Tujuan:' : 'Destination:'}
+							<span class="font-medium text-main"
+								>{locale.language === 'id' ? 'Drive Saya (Root)' : 'My Drive (Root)'}</span
+							>
 						{/if}
 					</div>
 
@@ -349,7 +378,7 @@
 							data-testid="btn-move-cancel"
 							onclick={() => (open = false)}
 						>
-							Batal
+							{locale.language === 'id' ? 'Batal' : 'Cancel'}
 						</Button>
 						<Button
 							type="button"
@@ -357,7 +386,7 @@
 							data-testid="btn-move-footer"
 							onclick={() => executeMove(currentFolderId)}
 						>
-							Pindahkan
+							{locale.language === 'id' ? 'Pindahkan' : 'Move'}
 						</Button>
 					</div>
 				</div>

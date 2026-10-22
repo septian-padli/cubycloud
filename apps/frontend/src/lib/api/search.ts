@@ -1,3 +1,4 @@
+import { locale } from '$lib/locale.svelte.js';
 export interface SearchItem {
 	id: string;
 	name: string;
@@ -57,10 +58,12 @@ export async function searchFiles(
 		credentials: 'include',
 		signal: options.signal
 	});
-
 	if (!res.ok) {
-		const text = await res.text().catch(() => '');
-		throw new Error(text || `Pencarian gagal: HTTP ${res.status}`);
+		throw new Error(
+			locale.language === 'id'
+				? `Pencarian gagal (HTTP ${res.status})`
+				: `Search failed (HTTP ${res.status})`
+		);
 	}
 
 	return (await res.json()) as SearchResponse;

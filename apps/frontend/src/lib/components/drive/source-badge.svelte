@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { locale } from '$lib/locale.svelte.js';
 	import type { FileSource } from '$lib/types/drive.js';
 	import { cn } from '$lib/utils.js';
 
@@ -9,6 +10,17 @@
 		source: FileSource;
 		label: string;
 	} = $props();
+
+	const displayLabel = $derived.by(() => {
+		const id = locale.language === 'id';
+		if (source === 'organization') {
+			return label.replace(/^(Organization|Organisasi)/, id ? 'Organisasi' : 'Organization');
+		}
+		if (source === 'shared') {
+			return label.replace(/^(Dibagikan|Shared)/, id ? 'Dibagikan' : 'Shared');
+		}
+		return label;
+	});
 </script>
 
 <span
@@ -20,7 +32,7 @@
 				? 'bg-secondary text-main'
 				: 'border border-subtle bg-app text-muted'
 	)}
-	title={label}
+	title={displayLabel}
 >
-	{label}
+	{displayLabel}
 </span>

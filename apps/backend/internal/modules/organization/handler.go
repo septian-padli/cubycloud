@@ -331,6 +331,8 @@ func respond(c echo.Context, err error) error {
 		return echo.NewHTTPError(http.StatusNotFound, map[string]string{"error": "not_found"})
 	case errors.Is(err, errStorageFull):
 		return echo.NewHTTPError(http.StatusRequestEntityTooLarge, map[string]string{"error": "STORAGE_POOL_FULL"})
+	case errors.Is(err, storage.ErrUnavailable):
+		return echo.NewHTTPError(http.StatusServiceUnavailable, map[string]string{"error": "storage_unavailable"})
 	case errors.Is(err, errConflict):
 		return echo.NewHTTPError(http.StatusConflict, map[string]string{"error": "name_conflict"})
 	case errors.Is(err, errInvalidName), errors.Is(err, errBadParent), errors.Is(err, errMoveCycle):

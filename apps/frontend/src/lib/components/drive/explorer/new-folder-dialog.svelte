@@ -3,6 +3,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
+	import { locale } from '$lib/locale.svelte.js';
 
 	let {
 		open = $bindable(false),
@@ -29,8 +30,12 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="bg-surface text-main">
 		<Dialog.Header>
-			<Dialog.Title>Folder Baru</Dialog.Title>
-			<Dialog.Description>Buat folder di lokasi saat ini.</Dialog.Description>
+			<Dialog.Title>{locale.language === 'id' ? 'Folder Baru' : 'New folder'}</Dialog.Title>
+			<Dialog.Description
+				>{locale.language === 'id'
+					? 'Buat folder di lokasi saat ini.'
+					: 'Create a folder in the current location.'}</Dialog.Description
+			>
 		</Dialog.Header>
 		<form
 			class="grid gap-4"
@@ -40,17 +45,23 @@
 			}}
 		>
 			<div class="grid gap-2">
-				<Label for="new-folder-name">Nama folder</Label>
+				<Label for="new-folder-name"
+					>{locale.language === 'id' ? 'Nama folder' : 'Folder name'}</Label
+				>
 				<Input
 					id="new-folder-name"
 					bind:value={name}
-					placeholder="mis. Dokumen"
+					placeholder={locale.language === 'id' ? 'mis. Dokumen' : 'e.g. Documents'}
 					autocomplete="off"
 				/>
 			</div>
 			<Dialog.Footer>
-				<Button type="button" variant="secondary" onclick={() => (open = false)}>Batal</Button>
-				<Button type="submit" disabled={!name.trim()}>Buat</Button>
+				<Button type="button" variant="secondary" onclick={() => (open = false)}
+					>{locale.language === 'id' ? 'Batal' : 'Cancel'}</Button
+				>
+				<Button type="submit" disabled={!name.trim()}
+					>{locale.language === 'id' ? 'Buat' : 'Create'}</Button
+				>
 			</Dialog.Footer>
 		</form>
 	</Dialog.Content>

@@ -1,16 +1,17 @@
 <script lang="ts">
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import { locale } from '$lib/locale.svelte.js';
 
 	let {
 		open = $bindable(false),
-		title = 'Berkas sudah ada',
+		title,
 		description,
 		fileName = '',
 		canReplace = true,
-		replaceText = 'Ganti',
-		renameText = 'Ganti nama',
-		cancelText = 'Batal',
+		replaceText,
+		renameText,
+		cancelText,
 		onReplace,
 		onKeepBoth,
 		onCancel = () => {}
@@ -27,17 +28,25 @@
 		onKeepBoth?: () => void;
 		onCancel?: () => void;
 	} = $props();
+
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
+	const titleText = $derived(title ?? tx('Berkas sudah ada', 'File already exists'));
+	const replaceLabel = $derived(replaceText ?? tx('Ganti', 'Replace'));
+	const renameLabel = $derived(renameText ?? tx('Ganti nama', 'Keep both'));
+	const cancelLabel = $derived(cancelText ?? tx('Batal', 'Cancel'));
 </script>
 
 <Dialog.Root bind:open>
 	<Dialog.Content class="border-subtle bg-surface text-main shadow-none">
 		<Dialog.Header>
-			<Dialog.Title>{title}</Dialog.Title>
+			<Dialog.Title>{titleText}</Dialog.Title>
 			<Dialog.Description>
 				{#if description}
 					{description}
 				{:else}
-					“{fileName}” sudah ada di folder ini. {canReplace ? 'Ganti atau simpan keduanya?' : 'Simpan dengan nama berikutnya atau batalkan?'}
+					{locale.language === 'id'
+						? `“${fileName}” sudah ada di folder ini. ${canReplace ? 'Ganti atau simpan keduanya?' : 'Simpan dengan nama berikutnya atau batalkan?'}`
+						: `“${fileName}” already exists in this folder. ${canReplace ? 'Replace it or keep both?' : 'Save with the next available name or cancel?'}`}
 				{/if}
 			</Dialog.Description>
 		</Dialog.Header>
@@ -50,7 +59,7 @@
 					open = false;
 				}}
 			>
-				{cancelText}
+				{cancelLabel}
 			</Button>
 			{#if onKeepBoth}
 				<Button
@@ -61,7 +70,7 @@
 						open = false;
 					}}
 				>
-					{renameText}
+					{renameLabel}
 				</Button>
 			{/if}
 			{#if canReplace && onReplace}
@@ -72,7 +81,7 @@
 						open = false;
 					}}
 				>
-					{replaceText}
+					{replaceLabel}
 				</Button>
 			{/if}
 		</Dialog.Footer>

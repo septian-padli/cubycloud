@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { locale } from '$lib/locale.svelte.js';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { untrack } from 'svelte';
@@ -17,6 +18,7 @@
 	import DriveFileGrid from './drive-file-grid.svelte';
 	import FileGridCard from './file-grid-card.svelte';
 
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 	let {
 		initialItems
 	}: {
@@ -29,9 +31,7 @@
 	let actionEntry = $state<StarredFileItem | null>(null);
 
 	const previewId = $derived(page.url.searchParams.get('preview'));
-	const previewEntry = $derived(
-		previewId ? (items.find((e) => e.id === previewId) ?? null) : null
-	);
+	const previewEntry = $derived(previewId ? (items.find((e) => e.id === previewId) ?? null) : null);
 	const previewOpen = $derived(!!previewEntry);
 
 	function syncPreview(id: string | null) {
@@ -48,7 +48,12 @@
 
 	function onPreview(entry: StarredFileItem) {
 		if (entry.kind === 'folder') {
-			toast.info(`Buka folder “${entry.name}” dari sumber asalnya.`);
+			toast.info(
+				tx(
+					`Buka folder “${entry.name}” dari sumber asalnya.`,
+					`Open folder “${entry.name}” from its original location.`
+				)
+			);
 			return;
 		}
 		syncPreview(entry.id);
@@ -58,19 +63,24 @@
 		items = items.filter((e) => e.id !== entry.id);
 		if (selectedId === entry.id) selectedId = null;
 		if (previewId === entry.id) syncPreview(null);
-		toast.success(`Bintang dihapus dari “${entry.name}”`);
+		toast.success(tx(`Bintang dihapus dari “${entry.name}”`, `Removed star from “${entry.name}”`));
 	}
 </script>
 
 {#if items.length === 0}
 	<div class="overflow-hidden rounded-xl border border-subtle bg-surface px-4 py-12 text-center">
-		<p class="text-sm font-medium text-main">Belum ada berkas berbintang</p>
+		<p class="text-sm font-medium text-main">
+			{tx('Belum ada berkas berbintang', 'No starred files yet')}
+		</p>
 		<p class="mt-1 text-xs text-muted">
-			Tandai berkas dengan bintang dari My Storage atau Organization.
+			{tx(
+				'Tandai berkas dengan bintang dari My Storage atau Organization.',
+				'Star files from My Storage or Organization to see them here.'
+			)}
 		</p>
 	</div>
 {:else if driveView.mode === 'grid'}
-	<DriveFileGrid label="Berkas berbintang">
+	<DriveFileGrid label={tx('Berkas berbintang', 'Starred files')}>
 		{#each items as entry (entry.id)}
 			<ContextMenu.Root>
 				<ContextMenu.Trigger class="block w-full">
@@ -78,9 +88,11 @@
 						kind={entry.kind}
 						name={entry.name}
 						subtitle={entry.kind === 'folder'
-							? `Folder · ${entry.modifiedAt}`
-							: `${formatSize(entry.sizeBytes)} · ${entry.modifiedAt}`}
-						previewUrl={entry.kind !== 'folder' ? previewUrl((entry.source as PreviewSource) || 'my-storage', entry.id) : undefined}
+							? `Folder · ${locale.formatDate(entry.modifiedAt)}`
+							: `${formatSize(entry.sizeBytes)} · ${locale.formatDate(entry.modifiedAt)}`}
+						previewUrl={entry.kind !== 'folder'
+							? previewUrl((entry.source as PreviewSource) || 'my-storage', entry.id)
+							: undefined}
 						selected={selectedId === entry.id}
 						onSelect={() => (selectedId = entry.id)}
 						onOpen={() => onPreview(entry)}
@@ -95,7 +107,7 @@
 											variant="ghost"
 											size="icon"
 											class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
-											aria-label="Aksi berkas"
+											aria-label={tx('Aksi berkas', 'File actions')}
 											onclick={(e: MouseEvent) => e.stopPropagation()}
 										>
 											<MoreVertical class="size-4 stroke-2" />
@@ -106,7 +118,7 @@
 									{#if entry.kind !== 'folder'}
 										<DropdownMenu.Item class="gap-2" onclick={() => onPreview(entry)}>
 											<Eye class="size-4 stroke-2" />
-											Pratinjau
+											{tx('Pratinjau', 'Preview')}
 										</DropdownMenu.Item>
 									{/if}
 									<DropdownMenu.Item
@@ -117,11 +129,11 @@
 										}}
 									>
 										<Share2 class="size-4 stroke-2" />
-										Bagikan
+										{tx('Bagikan', 'Share')}
 									</DropdownMenu.Item>
 									<DropdownMenu.Item class="gap-2" onclick={() => onUnstar(entry)}>
 										<Star class="size-4 stroke-2" />
-										Hapus bintang
+										{tx('Hapus bintang', 'Remove star')}
 									</DropdownMenu.Item>
 								</DropdownMenu.Content>
 							</DropdownMenu.Root>
@@ -132,7 +144,7 @@
 					{#if entry.kind !== 'folder'}
 						<ContextMenu.Item class="gap-2" onclick={() => onPreview(entry)}>
 							<Eye class="size-4 stroke-2" />
-							Pratinjau
+							{tx('Pratinjau', 'Preview')}
 						</ContextMenu.Item>
 					{/if}
 					<ContextMenu.Item
@@ -143,11 +155,11 @@
 						}}
 					>
 						<Share2 class="size-4 stroke-2" />
-						Bagikan
+						{tx('Bagikan', 'Share')}
 					</ContextMenu.Item>
 					<ContextMenu.Item class="gap-2" onclick={() => onUnstar(entry)}>
 						<Star class="size-4 stroke-2" />
-						Hapus bintang
+						{tx('Hapus bintang', 'Remove star')}
 					</ContextMenu.Item>
 				</ContextMenu.Content>
 			</ContextMenu.Root>
@@ -157,23 +169,28 @@
 	<div
 		class="overflow-hidden rounded-xl border border-subtle bg-surface"
 		role="listbox"
-		aria-label="Berkas berbintang"
+		aria-label={tx('Berkas berbintang', 'Starred files')}
 	>
 		{#each items as entry (entry.id)}
 			<StarredFileRow
 				{entry}
 				selected={selectedId === entry.id}
 				onSelect={(e) => (selectedId = e.id)}
-				onPreview={onPreview}
+				{onPreview}
 				onShare={(e) => {
 					actionEntry = e;
 					shareOpen = true;
 				}}
-				onUnstar={onUnstar}
+				{onUnstar}
 			/>
 		{/each}
 	</div>
 {/if}
 
 <ShareSheet bind:open={shareOpen} entry={actionEntry} />
-<FilePreviewDialog open={previewOpen} entry={previewEntry} source={previewEntry?.source} onClose={() => syncPreview(null)} />
+<FilePreviewDialog
+	open={previewOpen}
+	entry={previewEntry}
+	source={previewEntry?.source}
+	onClose={() => syncPreview(null)}
+/>

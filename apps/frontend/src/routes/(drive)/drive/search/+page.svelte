@@ -18,6 +18,9 @@
 		ChevronLeft,
 		ChevronRight
 	} from '@lucide/svelte';
+	import { locale } from '$lib/locale.svelte.js';
+
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	const PAGE_SIZE = 25;
 
@@ -63,7 +66,12 @@
 				if (!ac.signal.aborted) {
 					loading = false;
 					errorMessage =
-						err instanceof Error ? err.message : 'Terjadi kesalahan saat memuat hasil pencarian';
+						err instanceof Error
+							? err.message
+							: tx(
+									'Terjadi kesalahan saat memuat hasil pencarian',
+									'An error occurred while loading search results'
+								);
 				}
 			});
 
@@ -119,33 +127,37 @@
 	}
 
 	function formatDate(isoString: string): string {
-		try {
-			const d = new Date(isoString);
-			if (isNaN(d.getTime())) return isoString;
-			return new Intl.DateTimeFormat('id-ID', {
-				day: 'numeric',
-				month: 'short',
-				year: 'numeric',
-				hour: '2-digit',
-				minute: '2-digit'
-			}).format(d);
-		} catch {
-			return isoString;
-		}
+		return locale.formatDate(isoString);
 	}
 </script>
 
 <svelte:head>
-	<title>{query ? `Hasil pencarian untuk "${query}"` : 'Pencarian Berkas'} — CubyCloud</title>
-	<meta name="description" content="Hasil pencarian berkas dan folder di CubyCloud." />
+	<title>
+		{query
+			? tx(`Hasil pencarian untuk "${query}"`, `Search results for "${query}"`)
+			: tx('Pencarian Berkas', 'File Search')} — CubyCloud
+	</title>
+	<meta
+		name="description"
+		content={tx(
+			'Hasil pencarian berkas dan folder di CubyCloud.',
+			'Search results for files and folders in CubyCloud.'
+		)}
+	/>
 </svelte:head>
 
 <div class="flex flex-col gap-6" data-testid="search-results-page">
 	<DrivePageHeader
-		title="Pencarian Berkas"
+		title={tx('Pencarian Berkas', 'File Search')}
 		description={query.trim()
-			? `Hasil pencarian untuk "${query}" (${total} ditemukan)`
-			: 'Cari berkas dan folder di My Storage, Organisasi, dan Dibagikan.'}
+			? tx(
+					`Hasil pencarian untuk "${query}" (${new Intl.NumberFormat(locale.language === 'id' ? 'id-ID' : 'en-US').format(total)} ditemukan)`,
+					`Search results for "${query}" (${new Intl.NumberFormat(locale.language === 'id' ? 'id-ID' : 'en-US').format(total)} found)`
+				)
+			: tx(
+					'Cari berkas dan folder di My Storage, Organisasi, dan Dibagikan.',
+					'Search files and folders in My Storage, Organization, and Shared.'
+				)}
 	/>
 
 	{#if errorMessage}
@@ -156,7 +168,9 @@
 		>
 			<AlertCircle class="size-5 shrink-0" />
 			<div class="flex-1">
-				<p class="font-medium">Gagal memuat hasil pencarian</p>
+				<p class="font-medium">
+					{tx('Gagal memuat hasil pencarian', 'Failed to load search results')}
+				</p>
 				<p class="text-xs opacity-90">{errorMessage}</p>
 			</div>
 			<Button
@@ -168,7 +182,7 @@
 					goToPage(p);
 				}}
 			>
-				Coba Lagi
+				{tx('Coba Lagi', 'Try Again')}
 			</Button>
 		</div>
 	{:else if !query.trim()}
@@ -179,9 +193,14 @@
 			<div class="flex size-14 items-center justify-center rounded-2xl bg-muted/20 text-muted">
 				<Search class="size-7 stroke-2" />
 			</div>
-			<h2 class="mt-4 text-base font-semibold text-foreground">Mulai Pencarian</h2>
+			<h2 class="mt-4 text-base font-semibold text-foreground">
+				{tx('Mulai Pencarian', 'Start Searching')}
+			</h2>
 			<p class="mt-1.5 max-w-sm text-sm text-muted">
-				Ketik nama berkas atau folder pada kotak pencarian di bagian atas untuk mencari di seluruh penyimpanan.
+				{tx(
+					'Ketik nama berkas atau folder pada kotak pencarian di bagian atas untuk mencari di seluruh penyimpanan.',
+					'Type a file or folder name in the search box above to search across all your storage.'
+				)}
 			</p>
 		</div>
 	{:else if loading}
@@ -190,7 +209,9 @@
 			data-testid="search-loading"
 		>
 			<Loader2 class="size-8 animate-spin text-primary" />
-			<p class="mt-3 text-sm text-muted">Mencari berkas yang cocok…</p>
+			<p class="mt-3 text-sm text-muted">
+				{tx('Mencari berkas yang cocok…', 'Searching for matching files…')}
+			</p>
 		</div>
 	{:else if items.length === 0}
 		<div
@@ -201,10 +222,16 @@
 				<Search class="size-7 stroke-2" />
 			</div>
 			<h2 class="mt-4 text-base font-semibold text-foreground">
-				Tidak ada berkas yang cocok dengan pencarian Anda
+				{tx('Tidak ada berkas yang cocok dengan pencarian Anda', 'No files match your search')}
 			</h2>
 			<p class="mt-1.5 max-w-sm text-sm text-muted">
-				Tidak ditemukan berkas atau folder dengan nama “<span class="font-medium text-foreground">{query}</span>”. Coba gunakan kata kunci lain atau periksa ejaan Anda.
+				{tx(
+					'Tidak ditemukan berkas atau folder dengan nama “',
+					'No files or folders found with the name “'
+				)}<span class="font-medium text-foreground">{query}</span>{tx(
+					'”. Coba gunakan kata kunci lain atau periksa ejaan Anda.',
+					'”. Try another keyword or check your spelling.'
+				)}
 			</p>
 		</div>
 	{:else}
@@ -214,12 +241,14 @@
 				<table class="w-full text-start text-sm" data-testid="search-results-table">
 					<thead class="border-b border-subtle bg-accent/30 text-xs font-medium text-muted">
 						<tr>
-							<th scope="col" class="px-4 py-3 text-start">Nama</th>
-							<th scope="col" class="px-4 py-3 text-start">Tipe</th>
-							<th scope="col" class="px-4 py-3 text-start">Sumber</th>
-							<th scope="col" class="px-4 py-3 text-start">Lokasi</th>
-							<th scope="col" class="px-4 py-3 text-end">Ukuran</th>
-							<th scope="col" class="px-4 py-3 text-start">Terakhir Diubah</th>
+							<th scope="col" class="px-4 py-3 text-start">{tx('Nama', 'Name')}</th>
+							<th scope="col" class="px-4 py-3 text-start">{tx('Tipe', 'Type')}</th>
+							<th scope="col" class="px-4 py-3 text-start">{tx('Sumber', 'Source')}</th>
+							<th scope="col" class="px-4 py-3 text-start">{tx('Lokasi', 'Location')}</th>
+							<th scope="col" class="px-4 py-3 text-end">{tx('Ukuran', 'Size')}</th>
+							<th scope="col" class="px-4 py-3 text-start"
+								>{tx('Terakhir Diubah', 'Last Modified')}</th
+							>
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-subtle/60">
@@ -246,7 +275,9 @@
 										>
 											<Icon class="size-4 stroke-2" />
 										</div>
-										<span class="truncate max-w-xs md:max-w-md font-medium text-foreground hover:underline">
+										<span
+											class="max-w-xs truncate font-medium text-foreground hover:underline md:max-w-md"
+										>
 											{item.name}
 										</span>
 									</div>
@@ -254,7 +285,7 @@
 
 								<!-- Type -->
 								<td class="px-4 py-3 text-muted">
-									{item.type === 'folder' ? 'Folder' : 'Berkas'}
+									{item.type === 'folder' ? tx('Folder', 'Folder') : tx('Berkas', 'File')}
 								</td>
 
 								<!-- Source -->
@@ -269,31 +300,31 @@
 										<span
 											class="inline-flex rounded-full bg-violet-500/10 px-2 py-0.5 text-xs font-medium text-violet-600 dark:text-violet-400"
 										>
-											Organisasi
+											{tx('Organisasi', 'Organization')}
 										</span>
 									{:else}
 										<span
 											class="inline-flex rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-600 dark:text-emerald-400"
 										>
-											Dibagikan
+											{tx('Dibagikan', 'Shared')}
 										</span>
 									{/if}
 								</td>
 
 								<!-- Location -->
 								<td class="px-4 py-3 text-muted">
-									<span class="truncate block max-w-xs" title={item.location}>
+									<span class="block max-w-xs truncate" title={item.location}>
 										{item.location}
 									</span>
 								</td>
 
 								<!-- Size -->
-								<td class="px-4 py-3 text-end text-muted font-mono text-xs">
+								<td class="px-4 py-3 text-end font-mono text-xs text-muted">
 									{item.type === 'folder' ? '—' : formatSize(item.size_bytes)}
 								</td>
 
 								<!-- Last Modified -->
-								<td class="px-4 py-3 text-muted text-xs whitespace-nowrap">
+								<td class="px-4 py-3 text-xs whitespace-nowrap text-muted">
 									{formatDate(item.updated_at)}
 								</td>
 							</tr>
@@ -308,24 +339,29 @@
 				data-testid="search-pagination"
 			>
 				<p class="text-xs text-muted">
-					Menampilkan <span class="font-medium text-foreground">{fromItem}</span>–<span
-						class="font-medium text-foreground">{toItem}</span
+					{tx('Menampilkan', 'Showing')}
+					<span class="font-medium text-foreground">{new Intl.NumberFormat(locale.language === 'id' ? 'id-ID' : 'en-US').format(fromItem)}</span>–<span
+						class="font-medium text-foreground">{new Intl.NumberFormat(locale.language === 'id' ? 'id-ID' : 'en-US').format(toItem)}</span
 					>
-					dari <span class="font-medium text-foreground">{total}</span> hasil
+					{tx('dari', 'of')} <span class="font-medium text-foreground">{new Intl.NumberFormat(locale.language === 'id' ? 'id-ID' : 'en-US').format(total)}</span>
+					{tx('hasil', 'results')}
 				</p>
 
-				<nav class="flex items-center gap-1.5" aria-label="Navigasi halaman">
+				<nav
+					class="flex items-center gap-1.5"
+					aria-label={tx('Navigasi halaman', 'Page navigation')}
+				>
 					<Button
 						variant="outline"
 						size="sm"
 						class="gap-1 px-2.5"
 						disabled={currentPage <= 1}
 						onclick={() => goToPage(currentPage - 1)}
-						aria-label="Halaman sebelumnya"
+						aria-label={tx('Halaman sebelumnya', 'Previous page')}
 						data-testid="search-page-prev"
 					>
 						<ChevronLeft class="size-4 stroke-2" />
-						<span class="hidden sm:inline">Sebelumnya</span>
+						<span class="hidden sm:inline">{tx('Sebelumnya', 'Previous')}</span>
 					</Button>
 
 					<div class="flex items-center gap-1">
@@ -353,10 +389,10 @@
 						class="gap-1 px-2.5"
 						disabled={currentPage >= totalPages}
 						onclick={() => goToPage(currentPage + 1)}
-						aria-label="Halaman selanjutnya"
+						aria-label={tx('Halaman selanjutnya', 'Next page')}
 						data-testid="search-page-next"
 					>
-						<span class="hidden sm:inline">Selanjutnya</span>
+						<span class="hidden sm:inline">{tx('Selanjutnya', 'Next')}</span>
 						<ChevronRight class="size-4 stroke-2" />
 					</Button>
 				</nav>
