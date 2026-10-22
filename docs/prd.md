@@ -1,966 +1,317 @@
-# Product Requirement Document (PRD)
+# CubyCloud — Product Requirements Document (PRD)
 
-## CubyCloud — Self-Hosted Modular Cloud Storage (v1.0)
+> **Product:** CubyCloud, self-hosted modular cloud storage · **Scope:** v1.0 product contract  
+> **Status:** Draft / In Review · **Original author:** Septian Padli · **Created:** 7 August 2026  
+> **Historical target launch:** 1 October 2026 (a planning date, **not** proof of release)  
+> **Audience:** Core engineering, design, QA, contributors
 
----
+## Reading guide for OMP and developers
 
-## 1. Document Control & Executive Summary
+**This document is the product/behavior source of truth, not a checklist that every agent must read cover to cover.** Start with the module index, read the relevant module and any applicable cross-cutting requirements (§3, §5), and expand only for dependencies or contract changes. Scoped `AGENTS.md` govern agent execution; `docs/architecture.md` governs system implementation; `apps/frontend/SITEMAP.md` governs routes and UI interactions; `apps/frontend/DESIGN.md` governs visual tokens. For a full PRD revision or cross-cutting architectural decision, review all affected modules and linked contracts.
 
-### 1.1 Document Control
+| Change area | Read first | Also inspect when applicable |
+| --- | --- | --- |
+| Setup/recovery | §4.1, §5.2 | §4.9, architecture, SITEMAP |
+| Storage nodes/health | §4.2, §3.2 | §4.10, §5.3–5.4 |
+| Home and explorer | §4.3–4.4 | §4.8, §4.10, §5.1 |
+| Transfer/upload/download | §4.4 | §4.2, §4.10, §5.3 |
+| Search | §4.4 (search) | §4.8, §5.2, SITEMAP |
+| Trash/starred/stats | §4.5–4.7 | §4.10 |
+| Sharing/Organization | §4.8, §4.11 | §4.4, §4.10, §5.2 |
+| Admin/users/quota | §4.2, §4.9–4.10 | §5.2 |
+| Archive/workers | §4.12 | §4.4, §5.3 |
+| Profile/auth/session | §4.13, §5.2 | §4.1, §4.9 |
+| Infrastructure/release | §3.2, §5, §6 | architecture, Dockerfile, Makefile |
 
-| Parameter             | Detail                                                          |
-| --------------------- | --------------------------------------------------------------- |
-| **Nama Proyek**       | **CubyCloud**                                                   |
-| **Penyusun (Author)** | **Septian Padli**                                               |
-| **Versi Dokumen**     | `v1.0.0 (Draft)`                                                |
-| **Status Dokumen**    | In Review / Draft                                               |
-| **Tanggal Pembuatan** | 7 Agustus 2026                                                  |
-| **Target Launching**  | **1 Oktober 2026**                                              |
-| **Target Audience**   | Core Engineering Team, UI/UX Designer, Open-Source Contributors |
-
----
-
-### 1.2 Executive Summary
-
-**CubyCloud** adalah aplikasi _self-hosted modular cloud storage_ modern yang dirancang sebagai alternatif berkinerja tinggi untuk **Nextcloud** dan **Google Drive**. CubyCloud hadir untuk menyelesaikan masalah kompleksitas instalasi dan konsumsi sumber daya (_resource hogging_) yang sering dialami oleh pengguna platform _self-hosted_ tradisional.
-
-Dengan pendekatan **Single-Container Architecture** (Go backend dengan embedded SvelteKit frontend), CubyCloud memberikan pengalaman menggunakan Google Drive pribadi tanpa memerlukan konfigurasi CLI (_Command Line Interface_) yang rumit. Mulai dari proses instalasi awal (_onboarding_), pengalokasian penyimpanan disk lokal, hingga integrasi cloud pihak ketiga (S3/R2) dapat dilakukan seluruhnya melalui antarmuka Web GUI berbasis **Flat Earthy Design System** (lihat [`apps/frontend/DESIGN.md`](../apps/frontend/DESIGN.md)).
-
-**Visi jangka panjang** (di luar scope v1.0): CubyCloud akan dilengkapi **AI Workspace & MCP RAG Engine** (bergaya _NotebookLM_) agar folder tertentu dapat dijadikan basis pengetahuan (_knowledge base_) privat via LLM lokal (Ollama) maupun cloud provider. Fitur ini dijadwalkan pada **Fase 2/3 Roadmap**, bukan rilis awal 1 Oktober 2026.
+**Contract discipline:** An explicit, newer approved user decision overrides an older requirement for the active task; update this PRD when the product contract changes. Distinguish requirements/targets from implemented, tested, or released features. Do not infer delivery status from this document. See the **Open alignment checks** section for known discrepancies requiring deliberate resolution.
 
 ---
 
-### 1.3 Problem Statement & Opportunity
+## 1. Product vision, audience, and success criteria
 
-- **Problem (Masalah):**
+### 1.1 Purpose and positioning
 
-1. **Kompleksitas & Resource Heavy:** Platform seperti Nextcloud cenderung berat, membutuhkan spesifikasi server yang tinggi, dan sering kali membingungkan pengguna awam karena banyaknya ketergantungan _dependency_ serta pengaturan CLI.
-2. **Vendor Lock-in & Privasi:** Layanan cloud komersial (seperti Google Drive) memungut biaya langganan bulanan yang terus meningkat dan memproses data/dokumen pengguna pada server pihak ketiga untuk pelatihan model AI.
-3. **Fragmentasi Media Penyimpanan:** Pengguna _homelab_ kesulitan menggabungkan beberapa harddisk/SSD bekas dengan kapasitas berbeda serta bucket cloud hemat biaya (seperti Cloudflare R2) ke dalam satu direktori tunggal yang terpadu.
+CubyCloud is a **lightweight, modern, modular self-hosted alternative to Nextcloud and commercial cloud drives**. It integrates several local disks and S3-compatible buckets behind one virtual directory, with a simple web-based setup and a Google Drive-like interface. The primary value is owning your data and managing heterogeneous storage on low-resource hardware without maintaining multiple runtime services.
 
-- **Opportunity (Peluang):**
-  CubyCloud mengisi celah pasar dengan menghadirkan cloud storage yang **ringan, estetik, modular, dan fleksibel**, mampu berjalan lancar pada perangkat server kelas bawah (_legacy/budget hardware_) tanpa mengurangi fitur-fitur modern seperti transfer langsung (_presigned direct transfer_) dan penduplikatan file tanpa makan memori (_zero-byte copy_). Fondasi privasi & penyimpanan terpadu di v1.0 juga membuka jalan untuk AI Workspace berbasis RAG pada roadmap berikutnya.
+The product must remain **single-container / single-executable**, with a Go backend and embedded SvelteKit SPA, SQLite, local and S3-compatible storage, and zero-CLI initial configuration from the web. Privacy means storage under operator control; the application does **not** promise end-to-end encryption or automatic encryption of physical file bytes.
 
----
+### 1.2 Target users
 
-### 1.4 Vision & Position Statement
+| Persona | Environment and needs | Key outcomes |
+| --- | --- | --- |
+| Homelab enthusiast / minimal sysadmin | Legacy Celeron server, 2 GB RAM, mixed HDD/SSD + optional R2/S3 | One small deployable, unified storage pool, low operations burden |
+| Privacy-conscious researcher / creator | PDF/documents and sensitive archives without third-party dependency | Secure shares, previews, Organization collaboration; AI Workspace only later |
+| Nontechnical family/team member | Desktop/mobile browsers, simple storage tasks | Intuitive upload, download, sharing, preview, responsive interface |
 
-> **"Google Drive versi self-hosted yang ultra-ringan, modern, dan modular. Tanpa keribetan perintah CLI, siap berjalan di home server berdaya rendah."**
+Major pain points: high idle footprint and complex self-hosted maintenance; vendor lock-in and recurring cloud-storage costs; difficulty pooling local and cloud capacity. No claim about competitors' actual runtime usage is a verified benchmark for CubyCloud.
 
----
+### 1.3 Targets (not measured outcomes)
 
-### 1.5 Success Metrics & Key Performance Indicators (KPIs)
+| KPI | Target / assumption |
+| --- | --- |
+| Baseline server | Intel Celeron 2-core, 2 GB RAM, ~10 GB OS storage |
+| Idle memory | **< 200 MB** |
+| Peak active transfer memory | **< 600 MB** |
+| Idle CPU | **< 10%** on baseline device |
+| LAN metadata API latency | **< 50 ms** target |
+| LAN page navigation | **< 1.0 second** |
+| First Contentful Paint | **< 800 ms** target |
+| Production image | **< 150 MB** target |
+| First-run web onboarding | **< 3 minutes** target |
+| Runtime distribution | One container or one executable, no required external services |
 
-Untuk memastikan CubyCloud memenuhi kriteria performa pada perangkat berspesifikasi minim, berikut adalah target indikator keberhasilan teknis dan pengalaman pengguna (_User Experience_):
-
-#### A. Performa & Resource Efficiency (Target Utama)
-
-| Metric / KPI                     | Target Benchmark                         | Keterangan / Conditions                                            |
-| -------------------------------- | ---------------------------------------- | ------------------------------------------------------------------ |
-| **Base Hardware Spec**           | Intel Celeron 2-Core (Legacy) + 2 GB RAM | Spesifikasi batas minimum server target                            |
-| **Idle RAM Consumption**         | **< 200 MB**                             | Penggunaan memori saat tidak ada aktivitas pengguna                |
-| **Active RAM Consumption**       | **< 600 MB**                             | Penggunaan memori puncak saat proses upload/download intensif      |
-| **Page Navigation Latency**      | **< 1.0 Detik**                          | Respon waktu pembukaan antar halaman drive pada jaringan LAN lokal |
-| **First Contentful Paint (FCP)** | **< 800 ms**                             | Kecepatan pemuatan awal antarmuka frontend SvelteKit               |
-
-#### B. Functional & Deployment KPIs
-
-- **Zero-CLI Onboarding:** 100% proses konfigurasi awal (_Super Admin, Storage Node Discovery, Placement Strategy_) selesai melalui Web Setup Wizard dalam waktu **< 3 menit**.
-- **Deployment Footprint:** Didistribusikan dalam bentuk **1 Image Docker** atau **1 Single Executable Binary** tanpa butuh _dependency_ eksternal tambahan.
-- **Direct Transfer Efficiency:** 0% beban CPU server terbuang untuk _bouncing data_ saat melakukan upload/download berkas dari penyedia cloud (AWS S3 / Cloudflare R2) berkat penggunaan _Presigned URLs_.
+Use real profiling on the target hardware before claiming these targets are achieved. Cloud presigned transfer should keep object payload off the Go server data path where supported; “zero CPU/bandwidth” is an architectural goal, not a literal promise that all control-plane work costs nothing.
 
 ---
 
-## 2. Target Users & User Personas
+## 2. Product scope and non-goals
+
+### 2.1 In scope for v1.0
+
+- Initial web setup: Super Admin, local node scan, node capacity cap, placement strategy, optional cloud credentials, Emergency Recovery Key.
+- Virtual filesystem combining local SSD/HDD and S3/R2; backend storage driver, physical capacity rules, direct cloud transfers where available.
+- My Storage personal explorer, fixed shared Organization tree, Shared With Me, Home, Starred, Trash, Stats, and Super Admin pages.
+- File/folder CRUD, upload, direct download, previews (image/video/audio/text/code/PDF), recursive folder operations, conflict-safe naming, share links and internal Viewer/Editor permissions.
+- Persistent/recoverable upload queue for supported transports, HTTP Range on supported regular file downloads, direct S3 downloads, streaming ZIP.
+- Per-user My Storage quota, separate node-capacity enforcement; soft-delete/restore/purge; in-app toasts/status/notifications.
+- Server health and offline-file metadata availability, account-scoped English/Indonesian UI, global filename/folder search, profile updates and password/session security.
+- Core archive/download ZIP without a separately installed add-on; SQLite-backed background jobs.
+
+### 2.2 Explicitly deferred
+
+AI Workspace, MCP/RAG/vector database/Ollama integration; file versioning/history; PWA/offline app cache; native desktop/mobile background sync; live office collaboration (OnlyOffice/Collabora); SMTP/email notifications and verification; server-side heavyweight video transcoding; SaaS registration/billing/payment gateways. Do not silently include these in MVP tasks.
+
+**Historical discrepancy to resolve:** The original v1.0 PRD explicitly deferred **Grid View** and specified List View only, while the latest frontend SITEMAP/DESIGN describe an existing List/Grid toggle. Preserve the existing UI without removing it during unrelated work. A product decision is needed to reconcile the out-of-scope line and the established frontend contract; see **Open alignment checks**.
+
+### 2.3 Global boundaries
+
+- All pages and APIs enforce backend authorization; a hidden UI element is not an access control.
+- **Super Admin:** global administration; file physical-node badges/identifiers in authorized contexts; always unlimited personal quota.
+- **Regular User:** personal files only unless Organization or explicit sharing grants access; never expose physical storage node identities.
+- **Organization:** fixed shared tree, all authenticated users have full access; no user quota (physical capacity still applies).
+- **Shared:** Viewer/Editor permissions on granted files and descendants; owner pays storage quota.
+- File moves and copies crossing owners/scopes must enforce destination permissions and accounting.
 
 ---
 
-### 2.1 Target User Segmentation
+## 3. Cross-cutting product contracts
 
-CubyCloud ditujukan untuk ekosistem pengguna _self-hosted_ dan tim skala kecil/menengah yang membutuhkan efisiensi penyimpanan, privasi tinggi, dan antarmuka modern tanpa dibebani oleh _overhead_ teknis.
+### 3.1 Deployment and runtime
 
-```text
-                               ┌─────────────────────────────────────────┐
-                               │            CUBYCLOUD USERS              │
-                               └────────────────────┬────────────────────┘
-                                                    │
-         ┌──────────────────────────────────────────┼──────────────────────────────────────────┐
-         ▼                                          ▼                                          ▼
-┌─────────────────────────┐              ┌─────────────────────────┐              ┌─────────────────────────┐
-│   SysAdmin Minimalis    │              │   Privacy Researcher    │              │    Non-Tech End User    │
-│  (Homelab Enthusiast)   │              │   & Content Creator     │              │ (Family / Team Member)  │
-└─────────────────────────┘              └─────────────────────────┘              └─────────────────────────┘
+Single image/binary; Go serves embedded static SvelteKit SPA, HTTP API, and background workers. SQLite WAL and internal job queue eliminate required Redis, RabbitMQ, Kafka, PostgreSQL, Node.js runtime, or MinIO. Optional S3-compatible providers are external storage **options**, never required local services.
 
-```
+### 3.2 Storage placement, availability, and privacy
 
----
+- Pools multiple local nodes and S3-compatible cloud nodes behind a virtual file tree; available placement strategies: **`FILL_FIRST`**, **`ROUND_ROBIN`**, **`MOST_FREE_SPACE`**.
+- Operators configure physical node capacity caps separately from logical per-user quotas.
+- Periodically inspect local free capacity (e.g. `unix.Statfs`). Nodes with **< 5% physical capacity remaining** are marked `READ_ONLY`; new writes select another suitable node where possible. When no suitable node exists, report **physical storage full**, never user quota full.
+- Public unauthenticated **`GET /health`** probes every configured node, returns HTTP **200** only if all are accessible, and **503** if any node is inaccessible. Public payload must not expose node paths, names, identifiers, or credentials.
+- My Storage and Organization file records expose boolean `storage_available`. An offline physical node does **not** make file metadata disappear; render file/folder metadata and leave folders navigable. Disable operations requiring inaccessible bytes and explain via localized hover/click popover without leaking node identity. Physical node badges are for Super Admin only.
 
-### 2.2 Detailed User Personas
+### 3.3 User interface language and global behavior
 
-#### Persona A: Homelab Enthusiast & SysAdmin Minimalis ("Budi, 28")
-
-- **Role / Demografi:** IT Support Specialist / Hobbyist Homelab.
-- **Lingkungan Hardware:** Home server berbasis PC tua/bekas (Intel Celeron 2-Core, 2 GB RAM, 3 unit SSD/HDD bervariasi).
-- **Tingkat Keahlian Teknis:** Menengah ke Atas (Bisa menjalankan `docker run` / `docker-compose`, namun enggan menghabiskan waktu merawat file konfigurasi CLI yang rumit).
-- **Goals (Tujuan):**
-- Menggabungkan seluruh harddisk bekas dan akun Cloudflare R2 gratisan menjadi satu direktori penyimpanan besar (_Unified Directory_).
-- Memiliki cloud storage pribadi yang berjalan ringan di server tua tanpa menghabiskan RAM/CPU.
-
-- **Pain Points (Kekesalan):**
-- **Frustrasi pada Nextcloud:** Sangat berat (_resource-hogging_), lambat di server spek Celeron, dan sering _breakdown_ saat proses pembaruan versi via CLI.
-- **Frustrasi pada NAS Proprietary (Synology/QNAP):** Biaya _hardware_ resmi terlalu mahal.
-
-- **Solusi CubyCloud:**
-- Cukup jalankan 1 container Docker, seluruh konfigurasi disk dan alokasi kuota diatur lewat **Web Setup Wizard**.
-- Penggunaan RAM idle **< 200 MB** sehingga server tidak _overheat_ atau _crash_.
+- Support **Indonesian** and **English**. Browser locales beginning with `id` default to Indonesian; all other browser locales default to English.
+- Manual language choice is stored **in browser `localStorage` keyed by authenticated account ID**, not persisted server-side. UI titles, labels, errors, placeholders, accessible names, confirmations, and notifications follow the selected language. Do not translate identifiers, technical terms, or user content inappropriately.
+- The global language control uses a Globe icon and shadcn-svelte Select displaying `id`/`en`.
+- Header search and upload are available throughout authenticated drive pages; see §4.4 for behaviors and exceptions.
 
 ---
 
-#### Persona B: Privacy-Conscious Researcher & Creator ("Siti, 24")
+## 4. Functional requirements by module
 
-- **Role / Demografi:** Mahasiswa Tingkat Akhir / Penulis / Researcher.
-- **Lingkungan Hardware:** Laptop kerja harian + Akses ke CubyCloud Server milik tim/pribadi.
-- **Tingkat Keahlian Teknis:** Pemula - Menengah (Paham dasar penggunaan web app, tidak mengerti manajemen server).
-- **Goals (Tujuan):**
-- Menyimpan ratusan dokumen jurnal PDF, skripsi, dan catatan riset di cloud pribadi yang aman dan mudah diakses.
-- Menjaga privasi data riset tanpa bergantung pada vendor cloud publik; kelak siap untuk AI Workspace lokal (roadmap).
+### 4.1 Onboarding and emergency recovery (`/setup`, `/recovery`)
 
-- **Pain Points (Kekesalan):**
-- **Frustrasi pada Google Drive:** Khawatir dokumen privat diproses/di-scrape oleh vendor cloud.
-- **Frustrasi pada tool self-hosted berat:** Sulit mendapatkan storage pribadi yang ringan, cepat, dan nyaman untuk arsip riset.
+**Precondition:** When `is_setup_completed` is false, direct the app to the first-boot setup; completed setup proceeds to `/drive/home`. Avoid creating a second Super Admin through repeated onboarding.
 
-- **Solusi CubyCloud (v1.0):**
-- Cloud storage pribadi ringan dengan preview dokumen, share berproteksi, dan Organization Folder untuk kolaborasi tim.
-- **Roadmap (Fase 2/3):** Klik kanan folder → **"Set as AI Workspace"** + chat privat via Ollama — bukan bagian rilis v1.0.
+1. Create initial Super Admin with username, unique email, password (**minimum 8 characters**).
+2. Discover local nodes under `/app/data/storage/` by default; optionally discover Linux devices for mounting/registration. Show total/free capacity; let admin choose enabled nodes and each node capacity cap.
+3. Choose placement strategy `FILL_FIRST`, `ROUND_ROBIN`, or `MOST_FREE_SPACE`.
+4. Optionally register Cloudflare R2, AWS S3, or S3-compatible storage using endpoint, bucket, access key, and secret key; never expose stored secrets to regular users.
+5. Generate in the browser a cryptographically secure **30-character uppercase alphanumeric Emergency Recovery Key**, formatted **six groups of five** (`XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`). Offer copy/download and explicit acknowledgment. Store only SHA-256 of the canonical value without separators, not plaintext.
+6. Emergency reset is **single-use and atomic**: verify current key, reset Super Admin password, consume old key and return replacement `new_recovery_key`. Require saving the replacement and login again.
+7. Migration-only backend compatibility accepts a legacy 64-hex-character key solely for an account with a legacy bcrypt recovery hash. Successful use rotates to the current key/hash scheme. The frontend UI does **not** generate or accept the legacy format.
 
----
+### 4.2 Virtual storage and Super Admin settings (`/admin/settings`, `/admin/storage`)
 
-#### Persona C: Non-Tech End User & Family Member ("Rian, 32")
+- Storage driver and VFS abstract physical nodes from regular users. Super Admin can inspect nodes, node names, capacity and actual usage, with local/cloud storage badges as specified by UI contracts.
+- If local free capacity drops below **5%**, mark node read-only and fail over new uploads to a healthy writable node where possible. If no node can accept the write, return a distinct **physical pool full** message.
+- Allow **Rescan Storage Nodes** without rerunning onboarding. Handle `Detach Node` by moving it to read-only and safely migrating its physical files to another node through background jobs.
+- Admin configures **Default User Quota** in GB or Unlimited, applying only to **new users**; existing users retain their effective settings unless explicitly updated.
+- **Audit-log retention:** default **90 days**, selectable **7/14/30/60/90** days, cleaned with `AUDIT_CLEANUP_JOB`.
+- **Background worker concurrency:** configurable, default **2**. Queued heavy operations remain `PENDING` until worker capacity is available.
+- `/admin/storage` shows node count/cumulative declared capacity, used physical space and available capacity, and users ranked by logical usage with pagination. The backend is authoritative for all numbers.
+- Provide **Download DB Backup** action for a consistent `cubycloud.db` SQLite snapshot. This is **database-only**, not a verified full-file backup; full disaster recovery also requires storage blobs and relevant secure configuration/credentials. Do not label DB backup as complete system backup.
 
-- **Role / Demografi:** Karyawan Swasta / Anggota Keluarga Pengguna Server.
-- **Lingkungan Hardware:** Smartphone & Web Browser Desktop.
-- **Tingkat Keahlian Teknis:** Pemula (Hanya familiar dengan antarmuka populer seperti Google Drive, Notion, atau WhatsApp).
-- **Goals (Tujuan):**
-- Mengunggah, mengunduh, dan berbagi foto/dokumen harian dengan cepat dan tanpa hambatan teknis.
-- Melihat pratinjau file (_preview_) langsung di browser tanpa perlu mengunduhnya terlebih dahulu.
+### 4.3 Drive Home (`/drive/home`)
 
-- **Pain Points (Kekesalan):**
-- Antarmuka aplikasi _self-hosted_ pada umumnya terasa kaku, membingungkan, dan lambat.
-- Tautan berbagi (_share link_) yang rumit tanpa fitur keamanan dasar.
+- Default authenticated landing after successful login/setup.
+- **Quick Access:** last **5** opened files/folders by current account, sorted newest-first, persisted per account across devices as specified in the product contract.
+- **Recent Activities:** latest **5 distinct** items uploaded or changed by current account (including rename/move) in My Storage or Organization, deduplicated by item.
+- My Storage quota summary matches the sidebar; quick upload drawer writes to My Storage and enforces logical user quota and physical capacity.
 
-- **Solusi CubyCloud:**
-- Antarmuka **flat & earthy** yang bersih, responsif, dan nyaman untuk sesi penggunaan panjang — mengikuti token di [`apps/frontend/DESIGN.md`](../apps/frontend/DESIGN.md).
-- Fitur berbagi file dengan kata sandi (_Password Protection_) dan masa berlaku (_Expiration Date_) yang instan.
+### 4.4 Explorer, search, transfer, preview, and global upload
 
----
+**My Storage route:** `/drive/my-storage` with `?folder=...&preview=...`. Organization and Shared use their own page/permission contracts. The existing frontend list/grid UI must not be removed without resolving the historical scope contradiction in §2.2.
 
-### 2.3 User Frustrations & Competitive Pain Point Matrix
+**File operations and conflicts**
 
-| Dimensi Evaluasi        | Google Drive (Public Cloud)                 | Nextcloud (Self-Hosted Traditional)                          | **CubyCloud (Solusi Kita)**                                                                    |
-| ----------------------- | ------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| **Biaya & Kuota**       | Berlangganan bulanan mahal; kuota terbatas. | Gratis (Self-hosted), namun butuh server mahal agar lancar.  | **Gratis & Hemat:** Optimal di PC tua Celeron 2 GB RAM.                                        |
-| **Penggunaan Resource** | N/A (Cloud Vendor)                          | **Sangat Berat:** RAM idle > 1-2 GB, sering _lag_ di LAN.    | **Ultra-Ringan:** RAM idle **< 200 MB**, respon LAN **< 1s**.                                  |
-| **Kompleksitas Setup**  | Tanpa Setup (Instan).                       | **Sangat Rumit:** Membutuhkan instalasi PHP, DB, Redis, CLI. | **Zero-CLI Wizard:** 1 Command Docker -> Web Wizard GUI.                                       |
-| **Manajemen Storage**   | Terkunci pada kuota vendor.                 | Terbatas pada konfigurasi mount titik awal Linux.            | **Unified Directory:** Gabung SSD 1, SSD 2, & Cloud R2/S3.                                     |
-| **Privasi Data**        | Risiko pemrosesan data oleh vendor cloud.   | Self-hosted, namun setup & resource berat.                   | **Self-hosted ringan:** Data di server milikmu; AI Workspace (RAG/Ollama) di roadmap Fase 2/3. |
+- File/folder picker uploads, nested folder uploads, drag/drop, downloads, rename, move, zero-byte-reference duplicate, star/unstar, share, recursive delete-to-Trash; handle partially failed folder uploads per item. No arbitrary application-wide file-size ceiling: practical limits come from available node capacity and supported transport capabilities.
+- A name conflicts only with a sibling at the destination path. Upload and duplicate automatically choose the next available numbered suffix (`Report (1).pdf`). Rename/move offer a suffix or cancel, **never overwrite** or silently merge folders. Different folders may contain identical names.
+- Moving or copying items into a different owner/scope must recheck permissions and quota; recursive operations account for descendant files.
 
----
+**Global filename/folder search**
 
-### 2.4 Critical User Workflows (Core User Journeys)
+- Server-side, case-insensitive search across **own My Storage**, **Organization**, and authorized **Shared With Me subtrees**, including nested shared folders. Search **names**, not file contents or OCR. Exclude Trash and unrelated public share links.
+- Header uses debounced preview (up to **5** results), keyboard navigation, and a **View all results** action; Enter navigates to `/drive/search?q=...&page=...` with paginated results (**25 per page**).
+- Results show name, file/folder type, origin, accessible location, size and modified time. Search and result navigation enforce backend permissions; never expose private ancestors above a shared root or leak inaccessible metadata when permissions are revoked.
+- Quick category filters cover image (PNG/JPG/WebP/GIF/SVG), video (MP4/WebM), audio (MP3/WAV/OGG), document (PDF/TXT/MD/CSV/DOCX), and archive (ZIP/RAR/7Z) types.
+- Empty/invalid query, special wildcard characters, duplicates at different paths, deleted/moved files, stale queries, and pagination must produce safe, understandable behavior.
 
-#### 1. Onboarding Pertama Kali (First-Boot Journey)
+**Persistent uploads and resume**
 
-1. Admin menjalankan container dengan volume data, contoh: `docker run -p 8080:8080 -v cuby-data:/app/data cubycloud/app:latest`.
-2. Admin membuka `http://localhost:8080/setup` di browser.
-3. System menampilkan **Setup Wizard**:
+- My Storage and Organization use the supported resumable upload paths. **Local:** TUS (including small-file path as implemented). **S3/R2:** direct presigned upload, single PUT for files **under 100 MiB**, multipart for files **from 100 MiB**, default **16 MiB parts**, at most **3 parts concurrently**.
+- Backend is authoritative for TUS offsets and multipart part reconciliation (`ListParts`); presigned part URLs expire and must be regenerated as needed.
+- Persistent transfer metadata/queue belongs in **IndexedDB**. Do not persist raw file bytes or cloud secrets. Server resumable sessions expire after **24 hours**; cleanup must not delete valid committed data.
+- Following page reload, browser close, or server restart, allow explicit recovery using **the same reselected file**, verified with streaming/bounded-memory SHA-256. Incompatible, missing, or expired session/file requires clear user action to restart; no silent duplicate upload.
+- Queue states: `Uploading`, `Retrying`, `Paused`, `Waiting for File`, `Verifying`, `Committing`, `Completed`, `Failed`, `Expired`. Support pause/resume/cancel, reconnect retry and cross-tab single-owner coordination; keep progress honest until server commit.
+- Show an expandable upload progress surface near the upper-right header, retained until dismissed; show completion toast in the normal location. Support item-level failure reporting and quota/capacity errors.
 
-- Membuat akun Super Admin.
-- **Storage Node Discovery (hybrid):**
-  - **Default:** memindai mount/volume di `/app/data/storage/`.
-  - **Opsional:** menampilkan device Linux terdeteksi (mis. `/dev/sdb`, `/dev/sdc`) untuk di-_mount_/didaftarkan sebagai node.
-- Memilih strategi alokasi penyimpanan (_Fill-First / Round-Robin / Most-Free-Space_).
-- (Opsional) Memasukkan API Key Cloudflare R2 / AWS S3.
+**Global header upload destination**
 
-4. Sistem menyimpan konfigurasi dan langsung mengarahkan Admin ke Beranda `/drive/home`.
+- Normally upload to **My Storage root**, regardless of current My Storage/Organization folder or other drive page. Use the unified transfer infrastructure rather than a separate direct-upload path.
+- **Exception: `/drive/shared` while viewing an actual folder with effective `Editor` permission.** Upload to that active shared folder, subject to backend ownership, quota, and permission enforcement.
+- On Shared root/list or insufficient permission (including `Viewer`), display a clear **denial dialog**; do **not** silently fall back to My Storage. If the shared upload transport is not resumable, do not claim resume is supported.
 
-#### 2. Workflow Manajemen & Transfer Direct File
+**Preview and download**
 
-1. Pengguna melakukan _drag-and-drop_ berkas video/dokumen berukuran besar ke area browser.
-2. Jika destinasi fisik berkas adalah Cloudflare R2, backend Go menerbitkan _Presigned Upload URL_.
-3. Browser mengunggah berkas **langsung ke R2** tanpa melewati CPU/RAM server CubyCloud lokal.
-4. Tampilan UI memperbarui daftar berkas secara real-time. Label _Storage Node Badge_ (`[R2]`, `[SSD-1]`) **hanya terlihat oleh Super Admin**; Regular User tidak melihat lokasi fisik node.
+- Preview authorized image (PNG/JPG/WebP/GIF/SVG), video (MP4/WebM with Vidstack), audio (MP3/WAV/OGG), text/code/Markdown/JSON/CSV/log (as text, PrismJS where supported), and PDF (PDF.js), in My Storage, Organization, Shared, and public/restricted share according to access rights.
+- Page-level `?preview=file_id` opens URL-driven lightbox; download endpoint `?preview=1` opts into safe inline MIME and `Content-Disposition: inline`; standard downloads remain attachment.
+- Regular local downloads in My Storage and Organization support **HTTP Range and HEAD**: proper `200`, `206`, `416`, `Content-Range`, `Content-Length`, `Accept-Ranges`, `ETag`, `If-Range`; keep browser-native downloads. S3/R2 regular downloads use direct presigned GET. ZIP remains streaming and **is not resumable**.
 
----
+### 4.5 Trash and lifecycle (`/drive/trash`)
 
-## 3. Product Scope & Boundaries
+- Delete marks item/folder subtree `is_trashed=true`, retaining physical bytes and personal quota until permanent purge.
+- Automatic purge after **30 days** using a daily background worker (original schedule: **00:00**); reduce usage and reclaim physical references safely.
+- Manual restore or permanent purge are supported. If original parent was permanently removed, require confirmation before restoring to **My Storage root**.
+- Prevent restore conflicts, incorrect quota release, and orphaned physical blobs; return clear results on partial failures.
 
-```text
-┌─────────────────────────────────────────────────────────────────────────┐
-│                       CUBYCLOUD SCOPE MATRIX (v1.0)                     │
-├──────────────────────────────────────┬──────────────────────────────────┤
-│           IN-SCOPE (v1.0)            │       OUT-OF-SCOPE (Deferred)    │
-├──────────────────────────────────────┼──────────────────────────────────┤
-│ • Go Backend + SvelteKit SPA (Embed) │ • AI Workspace & MCP RAG Engine  │
-│ • Single Container Deployment        │ • File Versioning & History      │
-│ • Zero-CLI Web Setup Wizard          │ • Progressive Web App (PWA)      │
-│ • Multi-Node Storage Pooling (VFS)   │ • Desktop & Mobile Native Sync   │
-│ • Resumable Upload/Download (TUS)    │ • Real-time Office Editing       │
-│ • Duplicate Handling (Numeric Suffix) │ • Email / SMTP Notifications     │
-│ • Auto-Purge Trash (30 Days)         │ • Heavy Background Transcoding   │
-│ • Preview (Pic/Vid/Aud/Text/PDF)     │ • SaaS Billing & Payment Gateway │
-│ • Core Archive (Download as ZIP)     │                                  │
-│ • User-to-User & Share Link Engine   │                                  │
-│ • Drive Home / Org / Starred / Stats │                                  │
-│ • Per-User Storage Quota (My Storage)│                                  │
-│ • In-App Toasts & Notification Bar   │                                  │
-└──────────────────────────────────────┴──────────────────────────────────┘
+### 4.6 Starred (`/drive/starred`)
 
-```
+- Star/unstar is **per-user**, aggregates My Storage, Organization and Shared where accessible. Show starred items with preview/share actions subject to the source's permissions; unstar is immediately available.
 
----
+### 4.7 Storage Stats (`/drive/storage-stats`)
 
-### 3.1 In-Scope Features (Ruang Lingkup v1.0 — Target Launch 1 Oktober 2026)
+- Show **Used / Limit GB** for limited accounts; only **Used: X GB** for Unlimited, without a fictional limit or progress cap. Super Admin always Unlimited.
+- Category usage chart: Video, Gambar, Dokumen, Arsip, Trash. List **10 largest** owned files (My Storage + Trash; exclude Organization) and offer cleanup advisor and `/drive/trash` shortcut.
 
-Seluruh fitur di bawah ini **wajib ada, teruji, dan berfungsi penuh** pada rilis awal versi 1.0.0:
+### 4.8 Internal sharing and Organization
 
-#### 1. Core Architecture & Single-Container Distribution
+- User-to-user internal share grants **Viewer** (read/preview/download) or **Editor** (read/download/add/edit/delete within shared tree). Permissions propagate to accessible descendants and must be enforced on API and navigation, not just hidden UI.
+- Shared storage consumption remains with **owner**; recipients do not accrue extra personal usage by accessing shared files. Write and move operations require effective permission and correct quota accounting.
+- **Organization** is a **fixed, distinct shared virtual tree**, not a My Storage folder that an Admin marks as an Organization folder. All authenticated users have full Read/Write/Download/Rename/Delete access; data does **not** count toward any personal quota. Physical capacity remains enforced.
+- Moving Organization → My Storage must enforce the destination user's personal quota before completing.
 
-- **Single Binary / Single Container:** Aplikasi berjalan dalam 1 Image Docker yang menggabungkan Go Backend dan _static build_ **SvelteKit** (di-embed menggunakan `go:embed`).
-- **SvelteKit SPA Mode:** Frontend dibangun sebagai Single Page Application (SPA) murni menggunakan `@sveltejs/adapter-static` yang ultra-ringan dan responsif.
-- **Zero-CLI Setup Wizard (`/setup`):** Pemasangan awal Super Admin, auto-discovery disk lokal, pemilihan _Placement Strategy_, dan ekspor _Emergency Recovery Key_ seluruhnya berbasis Web GUI.
+### 4.9 User management (`/admin/users`)
 
-#### 2. Virtual Storage Engine & Network Resiliency
+- **Super Admin only.** View username, email, role, effective quota, usage and status. Create regular users with default quota or explicitly specified override.
+- Edit personal quota to a GB value or Unlimited and support **Reset to Default** as product-defined. Super Admin's personal quota remains Unlimited.
+- Separate user administration from self-service Account Profile, and enforce ownership/roles server-side.
 
-- **Multi-Node Virtual Storage Pooling:** Menggabungkan beberapa disk lokal (SSD/HDD) dan cloud storage (AWS S3 / Cloudflare R2) ke dalam satu _Unified Virtual Directory_ tanpa RAID/LVM.
-- **Placement Strategies:** Algoritma alokasi file otomatis (_Fill-First_, _Round-Robin_, dan _Most-Free-Space_).
-- **Direct Presigned Cloud Transfer:** Transfer file ke Cloud (S3/R2) dilakukan _direct_ dari browser untuk menghemat CPU & bandwidth server lokal.
-- **Zero-Byte Reference Copy:** Duplikasi file/folder instan tanpa memakan memori fisik tambahan di disk.
-- **Resumable Upload & Download Engine:** Pengunggahan dan pengunduhan berkas mendukung mekanisme _pause & resume_ (misal via protokol TUS / _chunked transfer_) agar file besar tidak gagal saat koneksi jaringan terputus atau tidak stabil.
-- **Unlimited File Size Support:** Tidak ada batasan buatan (_hard-limit_) untuk ukuran berkas; batas upload murni mengikuti sisa kapasitas fisik storage node.
+### 4.10 Logical quota engine
 
-#### 3. Drive Workspace Surfaces
+- Personal usage includes owned non-Organization items **including Trash until purge**. Owner-preserving zero-byte duplicate does not increase physical bytes; copying across owners increases destination owner's **logical** usage as applicable.
+- Effective quota: **Super Admin Unlimited**; otherwise a configured personal override (GB or Unlimited), else system default quota.
+- For My Storage uploads/imports/move-ins/copy-to-new-owner: at **≥80%** of limit show a warning; if proposed usage exceeds quota reject with **`USER_QUOTA_EXCEEDED`** and a localized message equivalent to *“Kuota My Storage penuh. Hubungi admin.”*
+- Organization writes ignore personal quota but enforce node capacity. Distinguish physical-pool-full errors from logical-quota errors, including in UI and HTTP/API responses.
+- Do not allow concurrent writes or unfinished uploads to bypass quota enforcement.
 
-- **Beranda (`/drive/home`):** Landing default setelah login/setup — quick access, recent activity, ringkasan kuota.
-- **My Storage (`/drive/my-storage`):** File manager pribadi (CRUD, filter, preview, share drawer).
-- **Organization (`/drive/organization`):** Drive bersama organisasi — Full Access, **tidak** dihitung ke user quota.
-- **Shared (`/drive/shared`):** Berkas yang dibagikan ke akun aktif (Viewer / Editor).
-- **Starred (`/drive/starred`):** Shortcut berkas/folder yang di-_star_ dari route mana pun.
-- **Trash (`/drive/trash`):** Soft-delete + restore + purge (30 hari).
-- **Storage Stats (`/drive/storage-stats`):** Chart usage, largest files, widget kuota user.
+### 4.11 Share links (`/s/:token`)
 
-#### 4. File Operations & Conflict Handling (`/drive/my-storage`)
+- Generate unique unguessable share-link tokens. **Public** links can be opened by holders; **Restricted** links require an authenticated registered user.
+- Support optional **bcrypt-hashed password protection** and **expiration date**; expired/invalid links must deny access. Password challenge precedes file disclosure.
+- No link download-count limit in v1.0. Authorized link viewers can preview/download and, for permitted folders/items, stream ZIP; backend validates tokens and restrictions on every sensitive action.
 
-- **Flat Earthy UI Design System:** Tampilan 100% flat (_no hard shadows_ kecuali modal/toast), _earthy tones_ (Parchment Cream, Olive Moss), tipografi **Montserrat**, dan _list view_ storage-first — spesifikasi lengkap di [`apps/frontend/DESIGN.md`](../apps/frontend/DESIGN.md).
-- **Storage Node Badge Visibility:** Badge `[R2]` / `[SSD-n]` **hanya untuk Super Admin**. Regular User tidak melihat lokasi fisik node.
-- Konflik nama mengikuti kebijakan same-path di §4.4: upload/duplicate memilih suffix angka otomatis; rename/move menawarkan suffix yang tersedia atau membatalkan; tidak ada overwrite atau merge folder.
+### 4.12 Core archive and background jobs
 
-- **File Previewer bawaan:** Pratinjau tersedia di My Storage, Organization, Shared, dan tautan publik/restricted sesuai izin akses masing-masing:
-- 📄 **Text/Code:** TXT, Markdown (.md), JSON, CSV, Log; tampilkan sebagai teks biasa dengan syntax highlighting PrismJS untuk format kode yang didukung.
-- 🖼️ **Gambar:** PNG, JPEG, WebP, GIF, SVG; tampilkan langsung secara native.
-- 🎥 **Video:** MP4, WebM; gunakan Vidstack dengan pemutaran media native browser.
-- 🎵 **Audio:** MP3, WAV, OGG; perilaku pemutar audio yang sudah ada tetap berlaku.
-- 📑 **PDF:** tampilkan menggunakan PDF.js (`pdfjs-dist`); selalu tersedia tanpa aktivasi add-on Admin.
+- **Download as ZIP** streams selected files/folders as one `.zip`; **Compress to ZIP** stores selected content as an archive. Both are **core**, not an opt-in add-on. `/admin/addons` is removed.
+- Background operations, including archive compression, image conversion where supported, and maintenance tasks, use SQLite transactional jobs and a bounded Go worker pool (default concurrency **2**). States include `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`.
+- Job failures (e.g. disk full, corrupt input) must not leave partial committed output; surface user-facing error/notification and appropriate Admin audit diagnostics; support safe recovery/retry.
 
-#### 5. Per-User Storage Quota (My Storage Only)
+### 4.13 Account Profile and session security (`/drive/profile/:userId`)
 
-- **Default User Quota:** Super Admin menetapkan kuota default (satuan **GB**) atau **Unlimited** di `/admin/settings`. Berlaku untuk **user baru saja**.
-- **Per-User Override:** Di `/admin/users`, Admin dapat mengubah limit satu user (mis. 50 GB) atau menandai **Unlimited**.
-- **Scope:** Hanya file dengan `owner_id = user` di luar **Organization Folder**. File Organization **tidak** dihitung ke quota user.
-- **Trash:** Ukuran file di Trash **tetap dihitung** sampai purge permanen.
-- **Zero-Byte Copy:** Owner sama → tidak menambah usage; copy ke owner berbeda → menambah usage **owner baru**.
-- **Super Admin:** Selalu **Unlimited** (tidak kena user quota).
-- **Enforcement:** Toast warning pada **≥ 80%**; **block upload** My Storage pada **100%**. Pesan error terpisah dari kegagalan pool fisik.
-- **UI User:** Widget kuota di **sidebar** + detail di `/drive/storage-stats`. Jika Unlimited: tampilkan hanya `Used: X GB`.
-
-#### 6. Trash Bin & Lifecycle Management (`/drive/trash`)
-
-- **Soft Delete:** File yang dihapus dipindahkan ke Trash Bin sementara.
-- **Automated 30-Day Purge Engine:** Latar belakang sistem (_worker_) akan menghapus file fisik secara permanen jika sudah berada di Trash Bin lebih dari 30 hari.
-- **Manual Purge & Restore:** Pengguna memiliki opsi untuk mengembalikan file (_restore_) ke folder asal atau mengosongkan sampah (_Purge Trash_) secara manual kapan saja.
-
-#### 7. Sharing & Access Control (`/drive/shared` & `/s/:token`)
-
-- **User-to-User Internal Sharing:** Pengguna dapat membagikan file/folder ke pengguna lain yang terdaftar dalam sistem (mirip Google Drive share permission).
-- **Share Link Engine:** Menerbitkan tautan berbagi dengan mode **Public** atau **Restricted**.
-- **Link Security Controls:** Pengaturan proteksi kata sandi (_Password Protection_) dan batas tanggal kedaluwarsa (_Expiration Date_).
-- **Access Scope Settings:** Opsi pembatasan tautan:
-- _Restricted:_ Hanya bisa dibuka oleh pengguna yang memiliki akun & sudah login.
-- _Public:_ Dapat dibuka/diunduh oleh siapa saja di internet yang memiliki link/password.
-- **Quota on Share (Owner Pays):** Ukuran file tetap dihitung ke quota **owner** asli; berbagi ke user lain tidak menduplikasi pemakaian quota.
-
-#### 8. Core File Operations & Compression (Download as ZIP)
-
-Fitur Download as ZIP adalah fitur core file manager yang tetap aktif dan terpasang secara bawaan tanpa memerlukan modul Add-on Manager:
-
-- 📥 **Download as ZIP:** Mengunduh beberapa file atau folder sekaligus yang dipaketkan secara langsung sebagai satu berkas `.zip`.
-- 🗜️ **Compress to ZIP:** Fitur untuk mengarsip beberapa berkas atau folder terpilih menjadi file `.zip` di dalam storage.
-
-#### 9. Notifications & Feedback
-
-- **In-App Toast & Notification Center:** Notifikasi aktivitas (seperti upload selesai, proses kompresi selesai, atau peringatan kuota user / node hampir penuh) ditampilkan via _Toast popup_ melayang dan panel notifikasi bawaan aplikasi.
-
-#### 10. Service Health, Offline Files & Interface Language
-
-- **`GET /health`:** Public, unauthenticated health endpoint. Return HTTP `200` only when every currently configured storage node is accessible; return HTTP `503` if any configured node is inaccessible. Probe every registered node rather than sampling one. The public response must not disclose storage names, physical paths, or credentials.
-- **Offline file listings:** My Storage and Organization file-list items include the JSON boolean `storage_available`, indicating whether the file's associated storage node is accessible. Keep offline files and their metadata visible; do not report them as not found. Disable file actions that require the unavailable storage and provide a shadcn-svelte Popover on hover or click explaining in the current UI language that the storage node is offline, without identifying the node. Folders remain navigable and available and are not disabled solely because a node is unavailable.
-- **Physical-storage privacy:** Regular users must not receive physical node identifiers or names. Node availability may be communicated without revealing the associated node's identity.
-- **Bilingual UI:** Support English and Indonesian. Choose the initial language from the browser language (`id*` selects Indonesian; all other browser languages select English). Store a user's language choice only in browser `localStorage`, scoped by authenticated account ID so accounts in one browser may choose independently. Never persist this preference server-side. All user-facing UI copy—including labels, titles, placeholders, validation and error messages, statuses, confirmations, notifications, and accessible names—must follow the active language. Keep established product/technical terms and user-provided content unchanged where translation is inappropriate.
+- Show **display name, email, username, role, effective quota, actual usage** from the backend. Username, role, and quota are read-only here.
+- Users may **read and edit only their own** display name/email. **Only Super Admin** may read another user's profile, and that view is **read-only**. Regular users may not view or modify another profile.
+- Email changes require **current password**, valid normalized address and **case-insensitive uniqueness**. Reject invalid or duplicate emails atomically; conflicting concurrent edits must not overwrite newer data and should require refresh/retry.
+- Password change requires current password, valid new password (**at least 8 characters**) and matching confirmation. Change revokes **all existing sessions**, including current, and forces re-login, using account token/session version invalidation or equivalent server-enforced mechanism.
+- Do not implement avatar uploading, username changes, account deletion, or SMTP validation as part of this MVP contract.
 
 ---
 
-### 3.2 Out-of-Scope (Sengaja Ditunda ke Fase Berikutnya / Roadmap)
+## 5. Non-functional and security requirements
 
-Fitur-fitur berikut **secara eksplisit TIDAK dimasukkan** ke dalam rilis v1.0 untuk menjaga performa ringan dan menjamin target rilis 1 Oktober 2026:
+### 5.1 Performance and browser support
 
-- 🚫 **AI Workspace & MCP RAG Engine:** Tidak ada pemrosesan vector database, indeksasi dokumen RAG, maupun integrasi Ollama/LLM di v1.0 (ditunda ke Fase 2/3 Roadmap).
-- 🚫 **Grid View (File Explorer):** v1.0 hanya **List View**; toggle tampilan grid ditunda ke fase berikutnya.
-- 🚫 **File Versioning & History:** Tidak ada pencatatan riwayat versi file lama (v1, v2). Konflik nama tidak menimpa item lama; lihat kebijakan suffix di §4.4.
-- 🚫 **Progressive Web App (PWA):** Tidak ada dukungan instalasi PWA atau _offline caching asset_ di v1.0.
-- 🚫 **Desktop & Mobile Native Sync Client:** Tidak ada aplikasi _background sync_ (seperti Google Drive for Desktop).
-- 🚫 **Real-time Collaborative Office Editing:** Tidak ada integrasi OnlyOffice/Collabora untuk edit dokumen bersama secara live.
-- 🚫 **Email / SMTP Notification Integration:** Tidak ada pengiriman email otomatis untuk verifikasi, lupa password, atau notifikasi share link.
-- 🚫 **Heavy Video Transcoding Engine:** Tidak ada konversi video otomatis via FFmpeg di server.
-- 🚫 **Public SaaS Registration & Payment Gateway:** Tidak ada sistem pendaftaran publik bebas atau integrasi pembayaran berbayar.
+The thresholds in §1.3 are **benchmarks to test**, not assertions of measured performance. Minimize memory pressure, CPU, I/O and concurrent heavy tasks on Celeron/2 GB systems.
 
----
+Target responsive compatibility: current Chrome/Firefox/Edge on Windows, Linux, macOS; Safari macOS 14+/Safari 17+; WebKit browsers on iOS/iPadOS; Chrome/Firefox mobile on Android (roughly the latest two-year browser window stated in the original requirements). Use semantic HTML5, standard web APIs, CSS Grid/Flexbox and avoid large vendor-specific polyfills.
 
-### 3.3 Technical Constraints & Performance Assumptions (Batasan Teknis)
+### 5.2 Authentication, secrets, and authorization
 
-1. **Hardware Ceiling Target (Strict Target):**
+- JWT tokens signed with **HS256** in **HttpOnly cookie** (`SameSite=Lax`; `Secure` whenever deployed through HTTPS, including TLS-terminating proxies). No separate refresh-token service is required in v1.0.
+- **Original PRD specified a 24-hour token lifetime**; the backend at the preceding code audit used a seven-day cookie/JWT. This discrepancy is explicitly unresolved; do not silently change session lifetime as part of unrelated documentation work. All password changes must still revoke existing sessions regardless of token expiry.
+- Passwords for users and protected share links use **bcrypt (cost 10)** per original requirement; ensure safe verification, throttling, and error handling.
+- Emergency 6×5 Recovery Key uses **SHA-256 of canonical value**, single-use rotation; legacy bcrypt-hashed 64-hex key compatibility is backend migration-only, never UI-generated.
+- No automatic application-level encryption of physical uploaded file contents; rely on OS/container volume permissions and operator controls. Storage credentials and other application secrets require secure handling and must not be exposed via API, log, or public health response.
+- Apply backend authorization to profile routes, private file identifiers, search results, nested shares, moves, downloads, metadata and cross-user actions. Consider CSRF, IDOR, rate limiting, path traversal, leaked tokens, and race conditions.
 
-- **Base Hardware Spec:** Intel Celeron 2-Core (Legacy), 2 GB RAM, 10 GB Storage OS.
-- **RAM Footprint:** Idle RAM **< 200 MB**, Active Transfer Peak RAM **< 600 MB**.
-- **LAN Response Time:** Respon perpindahan halaman drive **< 1.0 detik** di jaringan lokal.
+### 5.3 Durability and failure recovery
 
-2. **Framework & Architecture Constraints:**
+- SQLite **WAL** with appropriate transaction durability and integrity checks; original configuration requirement: `PRAGMA journal_mode=WAL` and `synchronous=NORMAL`. WAL improves crash recovery but does not replace backups or make every failure mode impossible.
+- Startup orphan-file audit reconciles `physical_blobs` and storage to remove genuinely abandoned upload debris **without deleting valid resumable sessions or referenced data**.
+- Interrupted jobs recover safely; the original design marks unfinished jobs `FAILED` at restart and permits explicit safe retry. Respect atomic claims, idempotency, clean rollback, and consistent VFS metadata/physical bytes.
+- Interrupted upload and multipart sessions follow the recovery rules in §4.4; never report successful commit or resume support without backend evidence.
 
-- **Frontend:** SvelteKit (SPA Static Mode via `@sveltejs/adapter-static`), Svelte 5 Runes, Tailwind CSS v4, shadcn-svelte; build tooling **Bun** (`apps/frontend/AGENTS.md`).
-- **UI/UX:** Wajib mengikuti [`apps/frontend/DESIGN.md`](../apps/frontend/DESIGN.md) — token warna via CSS variables, **dilarang** _arbitrary Tailwind values_.
-- **Backend:** Go (Golang) Single Executable Binary dengan asset frontend di-embed via `go:embed`.
-- **Database & Queue:** SQLite (WAL Mode) sebagai database utama sekaligus _Job Queue_ asinkron tanpa Redis/RabbitMQ.
+### 5.4 Deployment, backups, and maintainability
 
-3. **Network Constraints:**
-
-- Pengunggahan berkas lokal menggunakan _chunked HTTP/TUS protocol_ untuk menjamin ketahanan terhadap koneksi yang terputus-putus (_network resiliency_).
+- Multi-stage build: Bun builds static frontend, Go builds backend with embedded assets, small final image (Alpine or equivalent), aiming for **<150 MB**.
+- No mandatory runtime services beyond the packaged backend/SQLite and selected storage backends. Version/build targets must be verified against the actual `go.mod`, Dockerfile and lockfiles rather than outdated example versions.
+- Admin can download a **database snapshot** from the GUI. It is **not** a full disaster-recovery archive: stored files, secret material and deployment configuration must also be backed up and restoration tested before claiming complete recovery.
+- Keep operational procedures documented without mixing implementation manuals into this PRD; `docs/architecture.md`, `README.md`, `Makefile`, and deployment files own technical details.
 
 ---
 
-## 4. Detailed Functional Requirements
+## 6. Technology contract and ownership
 
-### 4.1 Module 1: Onboarding & Initial Setup Wizard (`/setup`)
+| Layer | Selected technology / rule |
+| --- | --- |
+| Backend | Go, Echo v4, SQL-first Bun ORM (`uptrace/bun`), `database/sql`, SQLite pure-Go driver (`glebarez/go-sqlite`) |
+| Auth | `golang-jwt/jwt/v5`, `golang.org/x/crypto` bcrypt, HTTP-only cookie |
+| Object storage | AWS SDK for Go v2, S3-compatible endpoints including R2, presigned multipart/GET as applicable |
+| Data/jobs | SQLite WAL, transactional jobs, limited goroutine workers; no required Redis or message broker |
+| Frontend | SvelteKit SPA, `adapter-static`, Svelte 5 Runes, TypeScript, Tailwind CSS v4 |
+| Components | shadcn-svelte / bits-ui, `@lucide/svelte`, Montserrat; visual contracts in DESIGN |
+| Tooling | Bun for frontend build/package management, Go toolchain for backend, Makefile and Docker multi-stage build |
+| Distribution | One Go executable / one Docker container with embedded SPA |
 
-Modul ini bertanggung jawab menginsialisasi sistem saat pertama kali dijalankan (_first-boot_). Pengguna tidak perlu menyentuh terminal/CLI untuk konfigurasi awal.
+Version numbers in the earlier PRD (such as Go 1.22+, framework minimums, or `latest`) are **historical baseline examples**. The version actually required by `go.mod`, lockfiles, source imports and production build must be verified at implementation time. Updating tooling versions is not permission to change established product behavior.
 
-```text
-[First Boot Detected] ──► [/setup]
-    ├── Step 1: Super Admin Account Setup (Min 8 Characters)
-    ├── Step 2: Storage Node Discovery (Volume Path + Optional Devices)
-    ├── Step 3: Placement Strategy Selection (Fill-First / Round-Robin / Most-Free)
-    ├── Step 4: Optional Cloud Node Setup (S3 / Cloudflare R2 API Credentials)
-    └── Step 5: Generate and export Recovery Key (`XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`)
+### Source-of-truth ownership
 
-```
-
-#### Functional Specifications:
-
-1. **Setup State Detection:**
-
-- Backend Go memeriksa status `is_setup_completed` pada SQLite.
-- Jika `false`, seluruh _route_ aplikasi selain `/setup` dan permukaan auth (`/login`, `/recovery`) akan di-redirect secara otomatis ke `/setup`.
-
-2. **Step 1 — Super Admin Creation:**
-
-- Form pembuatan akun Super Admin pertama (`username`, `email`, `password`).
-- Validasi password: **Minimal 8 karakter**.
-
-3. **Step 2 — Storage Node Discovery (Hybrid):**
-
-- **Default (volume path):** Sistem memindai direktori `/app/data/storage/` untuk menemukan mount/volume yang terhubung (model Docker volume yang direkomendasikan).
-- **Opsional (device discovery):** GUI dapat menampilkan device Linux terdeteksi (mis. `/dev/sdb`, `/dev/sdc`) agar Admin dapat mendaftarkan/mengaitkannya sebagai storage node.
-- GUI menampilkan daftar node lokal beserta kapasitas total dan _free space_.
-- Admin mencentang node mana saja yang ingin diaktifkan dan menetapkan **batas kapasitas node** (_node capacity cap_ — beda dari per-user My Storage quota).
-
-4. **Step 3 — Placement Strategy Configuration:**
-
-- Admin memilih strategi alokasi berkas default:
-- **`FILL_FIRST`:** Mengisi disk pertama sampai penuh sebelum beralih ke disk berikutnya.
-- **`ROUND_ROBIN`:** Membagi alokasi file secara bergiliran ke seluruh disk aktif.
-- **`MOST_FREE_SPACE`:** Selalu memilih disk dengan sisa memori fisik terbesar.
-
-5. **Step 4 — Optional Cloud Integration:**
-
-- Input kredensial API untuk Cloudflare R2 atau AWS S3 (`Endpoint`, `Bucket Name`, `Access Key`, `Secret Key`).
-
-6. **Step 5 — Emergency Recovery Key Export:**
-
-- Browser generates a cryptographically secure random Recovery Key with 30 uppercase alphanumeric characters in six groups of five: `XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX` (35 characters including separators).
-- The key is shown for the user to copy or download. Setup stores the SHA-256 hash of its canonical 30-character value (without separators), not the plaintext key or a bcrypt hash.
-- The Recovery Key can be used once to reset the Super Admin password. Successful reset consumes the key atomically and returns a newly generated key in `new_recovery_key`; the previous key is no longer usable. The user must save the replacement key.
-- After setup, `is_setup_completed` is set to `true` and the system redirects to `/drive/home`.
+- This PRD: product requirements, permissions, quotas, UX outcomes, acceptance conditions.
+- `docs/architecture.md`: system decomposition, storage/runtime implementation, infrastructure and data flows.
+- Frontend `SITEMAP.md`: route tree, per-page states and navigation.
+- Frontend `DESIGN.md`: colors, typography, component shape and interaction visuals.
+- Root/scoped `AGENTS.md`: AI engineering workflow, code conventions and context-loading rules.
 
 ---
 
-### 4.2 Module 2: Virtual Storage Engine & Admin Storage Settings (`/admin/settings`)
+## 7. Open alignment checks (do not silently resolve)
 
-Modul backend yang mengabstraksi lokasi penyimpanan fisik menjadi satu direktori virtual utuh (_Unified Directory_).
+These items existed as differences among dated requirements, UI documentation, and implementation at the audit point. They **do not supersede** the active product contract without approval.
 
-#### Functional Specifications:
+1. **List-only vs List/Grid:** Original PRD §3.2/§4.4 deferred grid; recently revised frontend SITEMAP/DESIGN describe a working toggle. Preserve existing behavior; decide and align documents explicitly.
+2. **JWT lifetime:** Original PRD says 24 hours, earlier backend code audit reported 7 days. Confirm desired security/session lifetime and update implementation + documentation together.
+3. **Scope vs delivered state:** Features and performance numbers listed here are requirements/targets. Do not mark shipping, benchmarks, security hardening, or backup/recovery as verified without real integration tests and measurements.
+4. **Historical release schedule:** The original 1 October 2026 date has passed. It is retained for provenance only and does not serve as an active deadline or release-status statement.
 
-1. **User-Side Abstraction (Transparent Storage):**
-
-- Pengguna _end-user_ **tidak akan melihat dan tidak perlu tahu** lokasi fisik disk mana yang menyimpan file mereka.
-- Badge node (`[R2]`, `[SSD-n]`) **hanya ditampilkan kepada Super Admin**.
-- File pribadi ditampilkan di `/drive/my-storage`; Organization Drive di `/drive/organization`.
-
-2. **System Health & 5% Safety Margin Rule:**
-
-- Backend memantau sisa memori fisik setiap disk lokal secara berkala menggunakan `unix.Statfs`.
-- **Rule Disk Kritis:** Jika sisa kapasitas fisik sebuah disk **< 5%**, disk tersebut otomatis ditandai `READ_ONLY`.
-- **Auto-Failover Upload:** Jika pengguna mengunggah file baru saat disk utama dalam kondisi `READ_ONLY`, sistem secara transparan (tanpa _error_ ke pengguna) mengalihkan proses pengunggahan ke disk lokal/cloud lain yang masih memiliki kapasitas aman.
-- **Admin Warning Notification:** Peringatan _"Storage Node [Nama Node] Hampir Habis (< 5%)"_ dikirimkan secara internal dan hanya ditampilkan kepada Admin melalui In-App Notification Center & Toast.
-- **All Nodes Full:** Jika tidak ada node aman tersisa, upload gagal dengan pesan **"Penyimpanan server penuh"** (bukan pesan user-quota).
-
-3. **Default User Quota Policy:**
-
-- Di `/admin/settings`, Admin mengatur **Default User Quota** (GB) atau toggle **Unlimited for new users**.
-- Perubahan default **hanya berlaku untuk user yang dibuat setelahnya** (bukan retroaktif ke user lama).
-- Override per user dikelola di `/admin/users` (lihat §4.9).
-
-4. **Rescan Disk Feature (Tanpa Entry Setup Wizard):**
-
-- Di halaman `/admin/settings`, terdapat tombol **"Rescan Storage Nodes"**.
-- Ketika diklik, backend Go memindai ulang `/app/data/storage/` (default) dan secara opsional menampilkan device Linux baru yang terdeteksi, tanpa perlu masuk kembali ke Setup Wizard.
-
-5. **Graceful Detach Engine:**
-
-- Admin dapat menekan tombol **"Detach Node"** pada disk tertentu.
-- Sistem mengunci disk menjadi `READ_ONLY` dan memindahkan (_auto-migrate_) seluruh file fisik di dalamnya ke disk lain secara bertahap di latar belakang via SQLite Job Queue.
-
-6. **Audit Log Retention Policy:**
-
-- Di `/admin/settings`, Admin mengatur retensi log audit (`audit_log_retention_days`).
-- **Default:** 90 hari. Opsi UI: **7, 14, 30, 60, 90** hari.
-- Pembersihan otomatis via job `AUDIT_CLEANUP_JOB` (lihat [`docs/architecture.md`](./architecture.md) §6.2).
-
----
-
-### 4.3 Module 3: Drive Home (`/drive/home`)
-
-Landing default untuk pengguna terautentikasi setelah login atau selesai setup.
-
-#### Functional Specifications:
-
-1. **Quick Access Cards:** 5 berkas/folder terakhir dibuka oleh akun aktif (tersimpan per akun lintas perangkat).
-2. **Recent Activities List:** 5 berkas/folder berbeda dengan aksi upload atau ubah terbaru (termasuk rename dan pindah folder) di My Storage dan Organization yang dilakukan oleh akun aktif; deduplikasi satu entri per berkas/folder.
-3. **Storage Summary Widget:** Ringkasan kuota My Storage (used / limit GB, atau `Used: X GB` jika Unlimited).
-4. **Quick Upload Drawer:** Unggah instan ke My Storage (tetap enforce user quota + node capacity).
-
----
-
-### 4.4 Module 4: File Manager & Explorer (`/drive/my-storage`)
-
-Antarmuka file pribadi berbasis **SvelteKit SPA** dengan **Flat Earthy Design System** (Montserrat, `bg-app` / `bg-surface`). **v1.0:** explorer hanya **List View** (tanpa toggle Grid View).
-
-```text
-+-------------------------------------------------------------------------------+
-| Top Bar: [Search Input... ] [Filter: All v]  [ + New / Upload ]                    |
-+-------------------------------------------------------------------------------+
-| Breadcrumb: My Storage > Work Projects > Documents                            |
-+-------------------------------------------------------------------------------+
-| [📁 Personal Folder A]  [📁 Personal Folder B]                                |
-|                                                                               |
-| [📄 Document (1).pdf]     [🖼️ Photo.jpg]           [🎥 Video.mp4]             |
-+-------------------------------------------------------------------------------+
-
-```
-
-#### Functional Specifications:
-
-1. **File Operations:**
-
-- Upload (file picker, drag-and-drop, and folder upload with nested contents), Direct Download, Rename, Move, Duplicate (_Zero-Byte Reference Copy_), Star/Unstar, Delete to Trash.
-- Upload / duplicate / move ke My Storage **dicek user quota** sebelum diterima (lihat §4.10).
-- Operasi folder berlaku rekursif terhadap seluruh isi folder. Penghapusan folder meminta konfirmasi bahwa seluruh isinya ikut dipindahkan ke Trash.
-- Folder upload diproses parsial: item yang berhasil tetap tersimpan jika item lain gagal, dan UI menampilkan item yang gagal.
-
-2. **Same-Path Name Conflicts:**
-
-- Nama hanya konflik jika berada pada direktori (path) yang sama; item dengan nama sama di direktori berbeda diperbolehkan.
-- Upload dan duplicate otomatis memilih nama tersedia berikutnya dengan suffix angka, misalnya `Laporan (1).pdf`, `Laporan (2).pdf`. Saat folder di-upload/duplicate, suffix diterapkan pada folder root yang konflik; isi folder mempertahankan nama asal kecuali ada konflik sibling pada path tujuan.
-- Rename dan move tidak menimpa item. Jika nama bertabrakan di path tujuan, UI menawarkan nama tersedia berikutnya dengan suffix angka atau membatalkan aksi. Memindahkan folder tidak menggabungkan folder dengan nama sama.
-
-3. **Upload Queue & Progress:**
-
-- Saat file/folder diunggah, UI menampilkan notifikasi upload mengambang di kanan atas dengan progress bar. Chevron membuka daftar item yang sedang antre dan diunggah.
-- Notifikasi progres tetap terbuka sampai ditutup pengguna melalui tombol close atau digeser ke kanan. Setelah antrean selesai, UI menampilkan Sonner toast biasa di kanan bawah.
-
-4. **Search & Quick Category Filters:**
-
-- **Global File Search:** Pencarian parsial berdasarkan nama file/folder di My Storage milik pengguna, Organization, dan pohon folder yang dibagikan kepadanya; item di Trash tidak disertakan. Hasil hanya menampilkan lokasi yang boleh diakses, tanpa membocorkan induk privat di atas akar share. Memilih hasil membuka folder pada sumbernya atau pratinjau file di folder induk yang sesuai.
-- **Header search:** Kotak pencarian global tersedia pada seluruh halaman drive terautentikasi, menampilkan pratinjau hasil dan menyediakan halaman hasil penuh `/drive/search?q=...&page=...`. Pencarian tidak mengindeks isi file.
-- **Category Filter Chips:** Filter cepat berdasarkan tipe file:
-- 🖼️ _Gambar_ (PNG, JPG, WebP, GIF, SVG)
-- 🎥 _Video_ (MP4, WebM)
-- 🎵 _Audio_ (MP3, WAV, OGG)
-- 📄 _Dokumen_ (PDF, TXT, MD, CSV, DOCX)
-- 🗜️ _Arsip_ (ZIP, RAR, 7Z)
-
-5. **File Previewer bawaan:**
-
-- _Double-click_ pada file membuka _lightbox modal_ untuk Gambar native, Video MP4/WebM dengan Vidstack, Audio MP3/WAV/OGG dengan perilaku yang sudah ada, Teks/Code/Markdown sebagai teks biasa dengan syntax highlighting PrismJS untuk kode yang didukung, dan PDF dengan PDF.js (`pdfjs-dist`).
-- Pratinjau berlaku di My Storage, Organization, Shared, dan tautan publik/restricted sesuai izin berkas; PDF selalu tersedia tanpa add-on atau toggle Admin.
-- Endpoint unduh yang sama menyediakan pratinjau hanya saat `?preview=1`: respons menggunakan `Content-Disposition: inline` dengan MIME yang diizinkan untuk preview dan mendukung HTTP Range bila tersedia pada storage. Tanpa parameter tersebut, perilaku unduh sebagai attachment tetap berlaku; otorisasi dan proteksi password share link tidak berubah.
-
-6. **Network Resiliency & Resumable Transfer:**
-
-- **Upload (My Storage dan Organization):** Gunakan TUS untuk upload lokal; pertahankan single PUT untuk file di bawah 100 MiB dan gunakan S3/R2 presigned multipart untuk file mulai 100 MiB. Multipart memakai ukuran part default 16 MiB dan maksimal 3 part bersamaan. Backend menjadi sumber kebenaran untuk offset TUS dan rekonsiliasi multipart melalui `ListParts`; URL part bersifat sementara dan diperbarui saat diperlukan.
-- **Pemulihan sesi:** Simpan metadata sesi dan antrean di IndexedDB, bukan bytes file atau kredensial. Sesi backend bertahan 24 jam dan dibersihkan dengan aman setelah kedaluwarsa. Setelah refresh, browser ditutup, atau backend restart, sesi dapat dipulihkan dengan memilih ulang file yang sama dan memverifikasi SHA-256 seluruh file secara bertahap dengan memori terbatas. Sesi kedaluwarsa, tidak dapat dipulihkan, atau file yang tidak cocok harus menampilkan error yang jelas dan memerlukan tindakan eksplisit untuk memulai dari nol; jangan diam-diam mengulang atau membuat file duplikat.
-- **Antrean transfer:** Tampilkan status Uploading, Retrying, Paused, Waiting for File, Verifying, Committing, Completed, Failed, dan Expired. Sediakan Pause, Resume, dan Cancel serta lanjut otomatis ketika jaringan pulih. Cegah transfer yang sama berjalan bersamaan di beberapa tab; pertahankan pemeriksaan izin, user quota My Storage, dan kapasitas node.
-- **Download:** Unduhan file lokal reguler di My Storage dan Organization mendukung HTTP Range/HEAD (`200`, `206`, `416`, `Content-Range`, `Content-Length`, `Accept-Ranges`, `ETag`, dan `If-Range`) tanpa mengganti unduhan native browser. S3/R2 tetap menggunakan presigned GET langsung; ZIP tetap streaming dan tidak mendukung resume ZIP.
-
-7. **Global Header Upload:**
-
-- Tombol Upload pada header tersedia di seluruh halaman drive terautentikasi dan secara default mengunggah ke akar My Storage, tanpa mengikuti folder yang sedang dibuka pada halaman lain.
-- Saat pengguna membuka folder di `/drive/shared`, upload hanya menuju folder tersebut jika izin efektifnya `Editor`, termasuk izin turunan pada folder bersarang. Daftar Shared With Me atau izin `Viewer` menampilkan penolakan yang jelas dan tidak mengalihkan upload ke My Storage.
-- Upload My Storage memakai antrean transfer yang sudah ada, pemulihan/resume yang didukung transport, dan pemeriksaan kuota serta kapasitas node. Upload shared memakai API share dengan penanganan error yang sesuai transport; izin dan kepemilikan tetap diverifikasi backend.
-
----
-
-### 4.5 Module 5: Trash Bin & Lifecycle Engine (`/drive/trash`)
-
-Tempat penampungan sementara berkas yang dihapus pengguna.
-
-#### Functional Specifications:
-
-1. **Soft Delete Action:**
-
-- Menghapus file/folder memindahkan status rekaman ke Trash Bin (`is_trashed = true`). File fisik di disk belum dihapus.
-- Ukuran file di Trash **tetap dihitung** ke user quota sampai purge permanen.
-
-2. **Automated 30-Day Purge Worker:**
-
-- _Worker process_ di latar belakang Go memeriksa `trashed_at_timestamp` setiap hari pukul 00:00.
-- File yang berada di Trash Bin **> 30 hari** akan dihapus secara permanen dari database dan disk fisik secara otomatis (usage quota berkurang).
-
-3. **Restore Logic with Missing Parent Folder Handling:**
-
-- Pengguna dapat menekan tombol **"Restore"** pada file di Trash Bin.
-- **Handling Folder Induk Terhapus:** Jika folder asli tempat file tersebut berasal sudah dihapus secara permanen, sistem akan menampilkan **Modal Konfirmasi**:
-
-  > _"Folder induk asli file ini telah dihapus. File akan dikembalikan ke lokasi utama (Root / My Storage). Lanjutkan?"_
-
-- Jika disetujui, file di-restore dengan `parent_id = ROOT`.
-
----
-
-### 4.6 Module 6: Starred Items (`/drive/starred`)
-
-Shortcut berkas/folder yang ditandai bintang dari My Storage, Organization, atau Shared.
-
-#### Functional Specifications:
-
-1. **Star / Unstar:** Aksi tersedia di explorer; status disimpan per user.
-2. **Starred Table:** Daftar agregat dari semua sumber; CTA cepat **"Hapus Bintang"**.
-3. **Preview & Share:** Mendukung `?preview=file_id` dan Share Link Drawer sesuai izin asli berkas.
-
----
-
-### 4.7 Module 7: Storage Stats (`/drive/storage-stats`)
-
-Halaman statistik penyimpanan untuk pengguna terautentikasi.
-
-#### Functional Specifications:
-
-1. **Quota Widget:** `Used / Limit GB` (atau hanya `Used: X GB` jika Unlimited) — sinkron dengan widget sidebar.
-2. **Usage Chart:** Breakdown per kategori (Video, Gambar, Dokumen, Arsip, Trash).
-3. **Largest Files List:** 10 berkas terbesar milik user (My Storage + Trash; exclude Organization).
-4. **Cleanup Advisor Modal:** Saran file besar jarang dibuka untuk dipindah ke Trash.
-5. **Shortcut:** `Kelola Sampah` → `/drive/trash`.
-
----
-
-### 4.8 Module 8: Access Control, Sharing, & Organization Drive
-
-Modul untuk mengelola hak akses antar-pengguna internal serta direktori bersama organisasi.
-
-#### Functional Specifications:
-
-1. **User-to-User Internal Sharing (`/drive/shared`):**
-
-- Pengguna dapat membagikan file/folder ke pengguna terdaftar lain dengan menetapkan tingkat hak akses:
-- **`Viewer`:** Hanya memiliki izin melihat dan mengunduh (_Read Only_).
-- **`Editor`:** Memiliki izin melihat, mengunduh, menambahkan file baru, mengedit, dan menghapus file di dalam folder tersebut (_Read, Write, Delete_).
-- **Quota:** Owner pays — pemakaian tetap dihitung ke owner asli.
-
-2. **Organization Drive (`/drive/organization`):**
-
-- **Fixed shared tree v1.0:** Organization Drive adalah pohon virtual **tetap** yang diakses semua user terdaftar lewat sidebar **Organization** (`/drive/organization`) dengan badge 🏢. **Tidak ada** UI v1.0 untuk Super Admin "menandai" folder My Storage sebagai Organization Folder.
-- **Universal Full Access:** Read, Write, Download, Rename, **Delete** tanpa pengaturan per-user.
-- **Quota:** File Organization **tidak** dihitung ke user quota mana pun; tetap memakai kapasitas fisik pool (node 5% / failover tetap berlaku).
-- Pindah file Organization → My Storage: cek user quota sebelum move; jika tidak muat → tolak.
-
----
-
-### 4.9 Module 9: User Management & Quota Overrides (`/admin/users`)
-
-Halaman Super Admin untuk mengelola akun dan override kuota My Storage.
-
-#### Functional Specifications:
-
-1. **User Table:** Username, email, role, quota efektif (Default / Override GB / Unlimited), used GB, status.
-2. **Create User:** Membuat Regular User baru; kuota awal mengikuti **Default User Quota** di settings (kecuali di-_override_ saat create).
-3. **Edit Quota Modal:** Set angka GB atau toggle **Unlimited**; opsi **Reset to Default**.
-4. **Super Admin rows:** Selalu menampilkan Unlimited (tidak dapat dipaksa limit user-quota).
-
----
-
-### 4.10 Module 10: User Storage Quota Engine
-
-Enforcement kuota logis per user untuk My Storage (lapisan terpisah dari node capacity).
-
-#### Functional Specifications:
-
-1. **What Counts Toward Usage:**
-
-- Semua file dengan `owner_id = user` yang **bukan** bagian Organization tree (termasuk file di Trash sampai purge).
-- **Zero-byte copy:** owner sama → usage tidak bertambah; copy ke owner berbeda → usage bertambah pada **owner baru** sebesar ukuran logical file.
-
-2. **Effective Limit Resolution:**
-
-```text
-if user.role == SuperAdmin → Unlimited
-else if user.storage_quota_override is set → override (GB | Unlimited)
-else → system.default_user_quota (GB | Unlimited)
-```
-
-3. **Enforcement on My Storage Writes:**
-
-- Upload / import / move-into-personal / copy-to-other-owner:
-  - Jika usage ≥ 80% limit → Toast warning (masih boleh lanjut selama di bawah 100%).
-  - Jika usage + ukuran baru melebihi limit → **reject** dengan kode `USER_QUOTA_EXCEEDED` dan pesan _"Kuota My Storage penuh. Hubungi admin."_
-- Organization writes: **skip** user-quota check (tetap cek node capacity).
-
-4. **Physical Pool Fallback (Existing):**
-
-- Node di bawah 5% → `READ_ONLY` + auto-failover; semua node penuh → `"Penyimpanan server penuh"`.
-- Pesan error **wajib berbeda** dari `USER_QUOTA_EXCEEDED`.
-
----
-
-### 4.11 Module 11: Share Link Engine (`/s/:token`)
-
-Modul untuk membagikan file/folder melalui tautan, dengan mode **Public** atau **Restricted**.
-
-#### Functional Specifications:
-
-1. **Share Link Generation:**
-
-- Menerbitkan URL unik dengan token acak (contoh: `https://cubycloud.domain/s/aB1xY9z`).
-
-2. **Security Controls:**
-
-- **Password Protection (Opsional):** Kunci link dengan kata sandi (di-hash menggunakan bcrypt). Pengunjung di-redirect ke halaman _Password Challenge_ sebelum dapat melihat isi file.
-- **Expiration Date (Opsional):** Menetapkan tanggal kedaluwarsa tautan. Tautan otomatis hangus (404 / Expired) setelah melewati tanggal tersebut.
-- **Access Level Setting:**
-- _Restricted:_ Hanya bisa dibuka jika pengunjung sudah login ke akun CubyCloud.
-- _Public:_ Dapat dibuka langsung oleh siapapun di internet.
-
-3. **Unlimited Downloads:**
-
-- Tidak ada batasan jumlah unduhan untuk tautan berbagi.
-
----
-
-### 4.12 Module 12: Core Archive & Worker Queue
-
-Fitur pengarsipan dan kompresi (termasuk Download as ZIP) merupakan kapabilitas inti (_core file manager_) yang selalu aktif dan terpasang secara bawaan. Route `/admin/addons` (Add-on Manager) ditiadakan.
-
-#### Functional Specifications:
-
-1. **Core Archive & Download as ZIP:**
-
-- 📥 **Download as ZIP:** Mengunduh beberapa file/folder sekaligus yang di-stream secara langsung sebagai berkas `.zip` (fitur core bawaan).
-- 🗜️ **Compress to ZIP:** Membuat arsip `.zip` dari beberapa file/folder terpilih di dalam storage.
-
-2. **Configurable Worker Concurrency Limit:**
-
-- Di halaman `/admin/settings`, Admin dapat mengatur jumlah maksimal proses konversi/kompresi berat yang boleh berjalan bersamaan (_Concurrent Worker Limit_).
-- **Default Value:** **2 Proses** (disesuaikan untuk spesifikasi server Celeron 2GB RAM).
-- Jika antrean melebihi limit, proses baru akan berstatus `PENDING` di dalam SQLite Transactional Job Queue dan berjalan otomatis begitu antrean sebelumnya selesai.
-
-3. **Error Handling & Fault Tolerance:**
-
-- Jika proses konversi/kompresi gagal (misal karena disk penuh atau file corrupt):
-- Worker membatalkan tugas secara aman (_rollback_).
-- Peringatan dikirimkan via **Toast Error Popup** ("_Gagal mengompresi file: Storage penuh_").
-- Pesan error dicatat di **In-App Notification Center** pengguna dan **Internal System Audit Log** milik Admin.
-
----
-### 4.13 Module 13: Account Profile & Session Security (`/drive/profile/:userId`)
-
-Pengguna mengelola profil akunnya sendiri; identitas akun, izin, dan penggunaan kuota tetap berasal dari backend.
-
-#### Functional Specifications:
-
-1. **Profile Display and Access:**
-
-- Halaman profil menampilkan nama tampilan, email, username, role, kuota efektif, dan penggunaan aktual.
-- Pengguna dapat membaca profil sendiri. Super Admin dapat membaca profil pengguna lain dalam mode read-only; pengguna reguler tidak dapat membaca atau mengubah profil pengguna lain.
-- Username, role, dan data kuota bersifat read-only pada halaman profil.
-
-2. **Profile Updates:**
-
-- Pengguna dapat mengubah nama tampilan dan email. Perubahan email mewajibkan kata sandi saat ini dan email unik tanpa membedakan kapitalisasi; input tidak valid atau konflik email ditolak tanpa mengubah data.
-- Pembaruan bersamaan tidak boleh menimpa data yang berubah setelah pembacaan; konflik harus meminta pengguna memuat ulang dan mencoba kembali.
-
-3. **Password Changes and Sessions:**
-
-- Pengguna dapat mengubah kata sandi dengan memverifikasi kata sandi saat ini, validasi panjang minimum, dan konfirmasi kecocokan.
-- Perubahan kata sandi menaikkan versi token akun dan membatalkan seluruh sesi yang telah diterbitkan; pengguna harus masuk kembali.
-
----
-
-
-
-### Summary of Data Entity & Access Rules Matrix
-
-| Fitur / Modul                            | Role Pengguna                     | Hak Akses Utama                                        |
-| ---------------------------------------- | --------------------------------- | ------------------------------------------------------ |
-| **Setup Wizard (`/setup`)**              | Unauthenticated (First-Boot Only) | Membuat Admin, Pindai Disk, Ekspor Recovery Key        |
-| **Auth (`/login`, `/recovery`)**         | Unauthenticated                   | Login JWT; reset Super Admin via Recovery Key          |
-| **Beranda (`/drive/home`)**              | Regular User & Super Admin        | Quick access, activity, quota summary                  |
-| **Account Profile (`/drive/profile/:userId`)** | Authenticated | Self-update; Super Admin reads others read-only; password change revokes sessions |
-| **Global Search (`/drive/search`)** | Authenticated | Search accessible names across My Storage, Organization, and granted Shared folders |
-| **My Storage (`/drive/my-storage`)**     | Regular User & Super Admin        | CRUD pribadi; node badge **hidden** untuk Regular User |
-| **Organization (`/drive/organization`)** | All Registered Users              | Full Access; **no user quota**                         |
-| **Starred / Shared / Trash / Stats**     | Authenticated                     | Sesuai izin sumber; stats = own usage                  |
-| **User-to-User Share**                   | Target User                       | `Viewer` atau `Editor` (owner pays quota)              |
-| **Share Link (`/s/:token`)**             | Public / Restricted Guest         | Viewer + Password & Expiration                         |
-| **Admin Settings (`/admin/settings`)**   | Super Admin Only                  | Nodes, workers, **default user quota**, DB backup      |
-| **Admin Users (`/admin/users`)**         | Super Admin Only                  | Create users, **per-user quota override**              |
-
----
-
-## 5. Non-Functional Requirements (NFRs)
-
-### 5.1 Performance & Resource Efficiency
-
-Modul backend Go dan frontend SvelteKit SPA dirancang dengan efisiensi tinggi agar dapat berjalan secara optimal pada _hardware_ berspesifikasi terbatas (_legacy hardware_).
-
-| Parameter / Kriteria          | Target Threshold / Constraint | Keterangan & Lingkungan Pengujian                                                    |
-| ----------------------------- | ----------------------------- | ------------------------------------------------------------------------------------ |
-| **API Latency (LAN)**         | **< 50 ms**                   | Waktu respon API Go Backend untuk fetching metadata/list berkas di jaringan lokal    |
-| **Page Navigation (LAN)**     | **< 1.0 Detik**               | Respon perpindahan antar halaman utama (`/drive/my-storage`, `/drive/shared`, dll.)  |
-| **CPU Idle Usage**            | **< 10% Utilization**         | Penggunaan CPU server saat tidak ada aktivitas transaksi data (Intel Celeron 2-Core) |
-| **Memory Footprint (Idle)**   | **< 200 MB RAM**              | Konsumsi RAM total kontainer Docker saat sistem berstatus idle                       |
-| **Memory Footprint (Active)** | **< 600 MB RAM**              | Batas konsumsi RAM puncak saat proses transfer berkas atau kompresi ZIP              |
-| **Direct Transfer Overhead**  | **~0% CPU & Bandwidth**       | Transfer ke cloud storage (S3/R2) via Presigned URL tanpa melewati Go Server         |
-
----
-
-### 5.2 Security & Session Management
-
-Keamanan difokuskan pada perlindungan data kredensial, kontrol akses API, dan pencegahan serangan siber tanpa membebani performa I/O server.
-
-1. **JWT-Based Session Management:**
-
-- Autentikasi berbasis **JSON Web Token (JWT)** yang ditandatangani secara kriptografis menggunakan algoritma `HS256`.
-- Token disimpan pada **HTTP-Only Cookie** dengan konfigurasi `SameSite=Lax` dan atribut `Secure` (saat berjalan di HTTPS).
-- _Token Expiration:_ Akses token berlaku selama **24 jam**; pengguna login ulang setelah kedaluwarsa. **Tidak ada refresh token terpisah** di v1.0 (menjaga implementasi ringan).
-
-2. **Password Security:**
-
-- Seluruh kata sandi pengguna (Super Admin & Regular Users) serta kata sandi proteksi tautan berbagi wajib di-hash menggunakan **bcrypt** (dengan _work factor_ / cost = 10).
-
-3. **Storage Security (No Application-Level Encryption at Rest):**
-
-- Berkas fisik yang tersimpan di disk lokal (SSD/HDD) **tidak dienkripsi di tingkat aplikasi** (_Plain-FileSystem Storage_) untuk menghindari pengikatan beban CPU (_CPU throttling_) akibat proses enkripsi/dekripsi _real-time_ pada prosesor Intel Celeron.
-- Keamanan data berkas fisik sepenuhnya mengandalkan batas hak akses sistem operasi (_POSIX File Permissions_) dan isolasi volume kontainer Docker.
-
-4. **Emergency Access Recovery:**
-
-- The current emergency recovery credential is the 30-character uppercase alphanumeric key generated in six groups of five during setup. Its canonical separator-free value is stored as a SHA-256 hash. Reset is single-use and rotates the key; see §4.1.6.
-- Migration-only compatibility: the backend accepts a legacy 64-character hexadecimal key only for accounts that still have a bcrypt recovery hash. Successful legacy recovery rotates the account to the current 6×5 format with SHA-256 storage. The legacy format is not generated or accepted by the UI.
-
----
-
-### 5.3 Data Integrity & Fault Tolerance
-
-Menjamin konsistensi database dan file fisik bahkan ketika terjadi kegagalan sistem atau penghentian daya secara mendadak (_unclean shutdown_ / mati listrik).
-
-1. **SQLite Write-Ahead Logging (WAL) Mode:**
-
-- Database SQLite dikonfigurasi dalam mode **WAL Mode (`PRAGMA journal_mode=WAL;`)** dengan `synchronous=NORMAL` untuk menjamin ketahanan transaksi data (_ACID Compliance_) serta mencegah korupsi database saat listrik padam mendadak.
-
-2. **Orphan File Sweeper (Startup Garbage Collection):**
-
-- Setiap kali aplikasi _booting_ (kontainer dinyalakan), _background process_ **Orphan File Sweeper** akan melakukan audit pencocokan antara berkas fisik di disk dan rekaman di tabel `physical_blobs`.
-- Berkas parsial/sampah sisa pengunggahan yang terputus di tengah jalan akibat mati listrik akan otomatis dibersihkan dari disk untuk menghemat kapasitas penyimpanan.
-
-3. **Transactional Job Queue Recovery:**
-
-- Antrean pekerjaan (_Job Queue_) untuk kompresi ZIP dan konversi gambar yang terputus di tengah jalan akan ditandai `FAILED` saat _booting_, dan sistem mengizinkan pengguna melakukan _retry_ pekerjaan secara aman.
-
----
-
-### 5.4 Maintainability, Portability, & Backup
-
-Kemudahan pemeliharaan sistem, portabilitas kontainer, serta backup data bagi Admin _homelab_.
-
-1. **Docker Container Footprint:**
-
-- **Target Docker Image Size:** **< 150 MB** secara keseluruhan.
-- Dipublikasikan menggunakan teknik _Multi-Stage Docker Build_ berbasis image minimalist (**Alpine Linux** / **Scratch**) yang berisi biner Go terkompilasi statis beserta asset SvelteKit SPA bawaan.
-
-2. **One-Click Database Backup:**
-
-- Pada halaman `/admin/settings`, tersedia tombol **"Download DB Backup"**.
-- Admin dapat mendownload berkas snapshot SQLite (`cubycloud.db`) secara langsung dari Web GUI untuk keperluan _backup & disaster recovery_ berkala tanpa perlu akses terminal.
-
-3. **Zero External Runtime Dependencies:**
-
-- Sistem tidak memerlukan instalasi dependensi runtime eksternal seperti Node.js, Python, PHP, Redis, MinIO, atau PostgreSQL. Seluruh fungsi inti berjalan murni di dalam 1 kontainer Go + SQLite.
-
----
-
-### 5.5 Browser & Platform Compatibility Matrix
-
-Antarmuka **SvelteKit SPA** dirancang dengan standar web modern agar dapat diakses dengan lancar dan responsif dari berbagai _device_ dan sistem operasi.
-
-```text
-                               ┌─────────────────────────────────────────┐
-                               │     CUBYCLOUD CROSS-PLATFORM SUPPORT    │
-                               └────────────────────┬────────────────────┘
-                                                    │
-         ┌──────────────────────────────────────────┼──────────────────────────────────────────┐
-         ▼                                          ▼                                          ▼
-┌─────────────────────────┐              ┌─────────────────────────┐              ┌─────────────────────────┐
-│     Desktop Browsers    │              │      Apple Ecosystem    │              │     Mobile & Tablets    │
-│ (Chrome, Firefox, Edge) │              │  (macOS, iOS, iPadOS)   │              │   (Android Web Browsers)│
-└─────────────────────────┘              └─────────────────────────┘              └─────────────────────────┘
-
-```
-
-#### Support Matrix (2 Tahun Terakhir):
-
-| OS / Platform               | Browser Target                                                   | Status Kompatibilitas               |
-| --------------------------- | ---------------------------------------------------------------- | ----------------------------------- |
-| **Windows / Linux / macOS** | Google Chrome, Mozilla Firefox, Microsoft Edge (Versi 2024–2026) | **Full Support** (Optimal Layout)   |
-| **Apple macOS**             | Apple Safari (macOS 14+ / Safari 17+)                            | **Full Support**                    |
-| **Apple iOS & iPadOS**      | Safari Mobile, Chrome iOS (WebKit Engine 2024–2026)              | **Full Support** (Touch Responsive) |
-| **Android**                 | Chrome Mobile, Firefox Mobile (2024–2026)                        | **Full Support** (Touch Responsive) |
-
-- **Web Standards Compliance:** Menggunakan HTML5 standar, ES2022+ JavaScript, CSS Grid/Flexbox, serta Fetch API standar tanpa _vendor-specific polyfill_ yang memberatkan bundle size.
-
----
-
-## 6. System Dependencies & Technical Stack
-
-Dokumen ini mengunci seluruh _technology stack_, dependensi pustaka (_libraries_), dan _tooling_ pengembangan untuk CubyCloud v1.0. Pemilihan _stack_ didasarkan pada prinsip utama: **Performa tinggi, jejak memori ultra-ringan (Idle RAM < 200 MB), serta nol dependensi eksternal (_Zero External Dependencies_)**.
-
----
-
-### 6.1 Backend Stack (Go Core Engine)
-
-Backend dikembangkan menggunakan **Go (Golang)** dengan gaya arsitektur _Clean Architecture / Domain-Driven Design (DDD)_ yang dikompilasi menjadi _Single Binary Executable_.
-
-| Komponen / Layer           | Teknologi / Pustaka                    | Versi Target | Alasan Pemilihan & Fungsi                                                                                                                                                                  |
-| -------------------------- | -------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Programming Language**   | **Go (Golang)**                        | `v1.22+`     | Performa _native_, konkurensi Goroutine matang, alokasi RAM sangat kecil, dan kemampuan `go:embed`.                                                                                        |
-| **Web Framework**          | **Echo** (`labstack/echo/v4`)          | `v4.12+`     | Minimalis, alokasi memori sangat hemat, kompatibel dengan standard `net/http`, dan memiliki native `StaticFS` untuk `go:embed`.                                                            |
-| **Database Engine**        | **SQLite** (WAL Mode)                  | `v3.45+`     | Embedded RDBMS tanpa _overhead_ service terpisah. Mode WAL (_Write-Ahead Logging_) menjamin performa I/O tinggi & ACID _compliance_.                                                       |
-| **ORM & Data Access**      | **Bun ORM** (`github.com/uptrace/bun`) | `v1.2+`      | SQL-first di atas `database/sql` (bukan codegen). Struct Go + tag `bun`; skema kanonik tetap file SQL di `migrations/`. **Bukan** Bun runtime JavaScript (`bun.sh`) yang dipakai frontend. |
-| **SQLite Driver**          | **`glebarez/go-sqlite`**               | `v1.2+`      | Driver SQLite _Pure Go_ (CGO-Free). Memungkinkan _cross-compilation_ tanpa GCC dan menjaga ukuran Docker Image tetap kecil.                                                                |
-| **Object Storage SDK**     | **AWS SDK for Go v2**                  | `v1.30+`     | Penerbitan _Presigned Upload/Download URLs_ untuk Cloudflare R2 dan AWS S3 secara aman & hemat memori.                                                                                     |
-| **Authentication & Token** | **`golang-jwt/jwt/v5`**                | `v5.2+`      | Penanganan token JWT (_JSON Web Token_) untuk _stateless session management_.                                                                                                              |
-| **Password Hashing**       | **`golang.org/x/crypto`**              | `latest`     | Pengolahan kata sandi menggunakan **bcrypt** (_cost factor_ = 10).                                                                                                                         |
-
----
-
-### 6.2 Frontend Stack (SvelteKit User Interface)
-
-Frontend dikembangkan sebagai **Single Page Application (SPA)** yang di-build menjadi aset statis (HTML/JS/CSS) dan di-_embed_ langsung ke dalam biner Go.
-
-| Komponen / Layer       | Teknologi / Pustaka                 | Versi Target | Alasan Pemilihan & Fungsi                                                                                                                 |
-| ---------------------- | ----------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| **Frontend Framework** | **SvelteKit**                       | `v2.0+`      | Framework reaktif, _bundle size_ JS sangat kecil; state lokal via **Svelte 5 Runes** (`$state`, `$derived`, `$effect`).                   |
-| **Build Adapter**      | **`@sveltejs/adapter-static`**      | `v3.0+`      | Mengompilasi aplikasi SvelteKit menjadi SPA statis murni tanpa membutuhkan Node.js runtime di server produksi.                            |
-| **Styling Engine**     | **Tailwind CSS**                    | `v4.x`       | Utility-first CSS v4 dengan token `@theme inline` di `layout.css`; tema **Flat Earthy** sesuai [`DESIGN.md`](../apps/frontend/DESIGN.md). |
-| **Typography**         | **Montserrat** (Google Fonts)       | —            | Satu-satunya _font family_ UI; skala hierarki didefinisikan di DESIGN.md §3.                                                              |
-| **UI Components**      | **shadcn-svelte**                   | `latest`     | Komponen _headless & accessible_ berbasis `bits-ui`; di-_theme_ dengan token CubyCloud (primary moss, danger rose).                       |
-| **Icons Library**      | **Lucide Svelte** (`lucide-svelte`) | `v0.400+`    | Set ikon SVG geometris yang ringan dan konsisten.                                                                                         |
-| **Resumable Upload**   | **TUS Client / Fetch Chunking**     | `latest`     | Menangani _chunked upload_ untuk menjamin unggahan file besar dapat di-_resume_ saat koneksi jaringan terputus.                           |
-| **Package Manager**    | **Bun** (`bun.sh`)                  | `1.x`        | Runtime/PM JavaScript untuk frontend (`bun install`, `bun run build`). Bukan Bun ORM Go.                                                  |
-
----
-
-### 6.3 Database, Queue, & Background Processing Architecture
-
-Untuk menjaga konsumsi sumber daya tetap hemat, CubyCloud **tidak menggunakan Redis, RabbitMQ, atau Celery**.
-
-```text
-┌────────────────────────────────────────────────────────────────────────┐
-│                        CUBYCLOUD BACKEND PROCESS                       │
-│                                                                        │
-│  ┌───────────────────┐    SQL Insert    ┌───────────────────────────┐  │
-│  │ Echo Web Handlers │ ───────────────► │ SQLite Transactional Job  │  │
-│  └───────────────────┘                  │ Queue Table (`jobs`)      │  │
-│                                         └─────────────┬─────────────┘  │
-│                                                       │ Poll / Claim   │
-│                                                       ▼                │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │ Go Worker Pool (Goroutines Limit: Configurable Default 2 Worker) │  │
-│  │                                                                  │  │
-│  │  [ Worker 1: Compress ZIP ]     [ Worker 2: Convert Image ]      │  │
-│  └──────────────────────────────────────────────────────────────────┘  │
-└────────────────────────────────────────────────────────────────────────┘
-
-```
-
-1. **SQLite Transactional Queue:**
-
-- Pekerjaan latar belakang (_ZIP compression_, _Image format conversion_, _Orphan file sweeping_) dicatat ke dalam tabel SQLite `jobs`.
-- _Job Status Lifecycle:_ `PENDING` ──► `PROCESSING` ──► `COMPLETED` / `FAILED`.
-
-2. **Goroutine Worker Pool:**
-
-- Backend Go menjalankan _Worker Pool_ internal yang memantau tabel `jobs` secara asinkron.
-- _Concurrency Constraint:_ Jumlah worker aktif dibatasi oleh konfigurasi Admin (Default: **2 Worker**) untuk mencegah _CPU Throttling_ pada prosesor Intel Celeron.
-
----
-
-### 6.4 Build Automation & Development Tooling
-
-Tooling yang digunakan untuk mempermudah proses alur kerja pengembangan (_developer experience_) dan otomatisasi _release build_.
-
-| Tool                         | Penggunaan & Fungsi                                                                                                                           |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`Makefile`**               | Alat otomatisasi _build pipeline_: kompilasi frontend SvelteKit, penyalinan asset statis, kompilasi biner Go, hingga pengemasan Docker Image. |
-| **`Air`** (`cosmtrek/air`)   | Tool _live-reload_ untuk Go Backend selama fase pengembangan lokal. Otomatis mengompilasi ulang biner Go saat ada perubahan kode `.go`.       |
-| **Docker Multi-Stage Build** | Pengemasan kontainer produksi:                                                                                                                |
-
-- _Stage 1 (Bun Build):_ Compile SvelteKit SPA (`bun run build` di `apps/frontend/`).
-- _Stage 2 (Go Build):_ Compile biner Go + Embed static assets.
-- _Stage 3 (Final Image):_ Base image **Alpine Linux** (`alpine:latest`) menghasilkan final image **< 150 MB**. |
-
----
-
-### 6.5 System Dependencies & Runtime Summary Matrix
-
-```text
-+-----------------------------------------------------------------------+
-|                       CUBYCLOUD RUNTIME STACK                         |
-+-----------------------------------------------------------------------+
-|  [Frontend SPA]   SvelteKit + Tailwind CSS v4 + Montserrat + shadcn-svelte + Bits UI  |
-|         │                                                             |
-|         ▼ (Embedded via go:embed at compile time)                     |
-|  [Backend App]    Go v1.22+ Engine + Echo Router + Bun ORM (uptrace/bun) |
-|         │                                                             |
-|         ├──────────────► Local File System (/app/data/storage/nodes)  |
-|         ├──────────────► Embedded SQLite WAL (glebarez/go-sqlite)     |
-|         └──────────────► AWS SDK v2 (Cloudflare R2 / AWS S3 Presigned)|
-+-----------------------------------------------------------------------+
-|  [Deployment]     1 Single Docker Container (Target Size < 150 MB)    |
-+-----------------------------------------------------------------------+
-
-```
+When a mismatch is material to an assigned task, identify it, preserve unrelated behavior, and seek a decision before altering the affected product contract. Avoid blocking unrelated safe work.
