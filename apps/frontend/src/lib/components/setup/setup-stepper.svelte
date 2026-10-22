@@ -7,21 +7,12 @@
 	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 	const stepText = (id: number, description = false) => {
 		const labels: Record<number, [string, string, string, string]> = {
-			1: [
-				'Akun Admin',
-				'Administrator Account',
-				'Buat akun administrator pertama.',
-				'Create the first administrator account.'
-			],
-			2: ['Penyimpanan', 'Storage', 'Pilih node penyimpanan lokal.', 'Choose local storage nodes.'],
-			3: ['Cloud', 'Cloud', 'Hubungkan penyimpanan cloud.', 'Connect cloud storage.'],
-			4: [
-				'Strategi',
-				'Strategy',
-				'Pilih strategi penempatan berkas.',
-				'Choose a file placement strategy.'
-			],
-			5: ['Recovery Key', 'Recovery Key', 'Simpan kunci pemulihan Anda.', 'Save your recovery key.']
+			1: ['Akun Admin', 'Administrator Account', 'Buat akun administrator pertama.', 'Create the first administrator account.'],
+			2: ['Google (Opsional)', 'Google (Optional)', 'Konfigurasikan Google Sign-In.', 'Configure Google Sign-In.'],
+			3: ['Penyimpanan', 'Storage', 'Pilih node penyimpanan lokal.', 'Choose local storage nodes.'],
+			4: ['Cloud', 'Cloud', 'Hubungkan penyimpanan cloud.', 'Connect cloud storage.'],
+			5: ['Strategi', 'Strategy', 'Pilih strategi penempatan berkas.', 'Choose a file placement strategy.'],
+			6: ['Recovery Key', 'Recovery Key', 'Simpan kunci pemulihan Anda.', 'Save your recovery key.']
 		};
 		const row = labels[id];
 		return row ? tx(row[description ? 2 : 0], row[description ? 3 : 1]) : '';

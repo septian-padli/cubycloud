@@ -3,6 +3,7 @@ package admin
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"math"
@@ -42,6 +43,16 @@ func NewService(db *bun.DB, storage storage.StorageDriver, dataDirPath string) *
 		storage:     storage,
 		dataDirPath: dataDirPath,
 	}
+}
+
+func (s *Service) googleAuthSettings(ctx context.Context) (GoogleAuthSettings, error) {
+	enabled, err := s.repo.GetSetting(ctx, "google_oauth_enabled")
+	if err != nil && !errors.Is(err, sql.ErrNoRows) { return GoogleAuthSettings{}, err }
+	clientID, err := s.repo.GetSetting(ctx, "google_oauth_client_id")
+	if err != nil && !errors.Is(err, sql.ErrNoRows) { return GoogleAuthSettings{}, err }
+	secret, err := s.repo.GetSetting(ctx, "google_oauth_client_secret_encrypted")
+	if err != nil && !errors.Is(err, sql.ErrNoRows) { return GoogleAuthSettings{}, err }
+	return GoogleAuthSettings{Enabled: enabled == "true", ClientID: clientID, Configured: secret != "", RedirectURI: "/api/v1/auth/google/callback"}, nil
 }
 
 // GetSystemSettings retrieves all system settings
@@ -89,7 +100,8 @@ func (s *Service) GetSystemSettings(ctx context.Context) (*SystemSettingsRespons
 		DefaultQuota:       quota,
 		AuditRetentionDays: retentionValue,
 		WorkerConcurrency:  concurrencyValue,
-		PlacementStrategy:  strategy,
+		PlacementStrategy: strategy,
+		GoogleAuth: func() GoogleAuthSettings { value, _ := s.googleAuthSettings(ctx); return value }(),
 	}, nil
 }
 
@@ -145,6 +157,20 @@ func (s *Service) UpdateSystemSettings(ctx context.Context, req *UpdateSettingsR
 		}
 		if err := s.repo.SetSetting(ctx, SettingPlacementStrategy, strategy); err != nil {
 			return fmt.Errorf("set placement strategy: %w", err)
+		}
+	}
+
+	if req.GoogleAuth != nil {
+		if req.GoogleAuth.Enabled != nil {
+			if err := s.repo.SetSetting(ctx, "google_oauth_enabled", strconv.FormatBool(*req.GoogleAuth.Enabled)); err != nil { return fmt.Errorf("set Google OAuth enabled: %w", err) }
+		}
+		if req.GoogleAuth.ClientID != nil {
+			if err := s.repo.SetSetting(ctx, "google_oauth_client_id", strings.TrimSpace(*req.GoogleAuth.ClientID)); err != nil { return fmt.Errorf("set Google OAuth client ID: %w", err) }
+		}
+		if req.GoogleAuth.ClientSecret != nil && *req.GoogleAuth.ClientSecret != "" {
+			secret, err := storage.EncryptCredential([]byte(*req.GoogleAuth.ClientSecret), []byte(s.dataDirPath))
+			if err != nil { return fmt.Errorf("encrypt Google OAuth client secret: %w", err) }
+			if err := s.repo.SetSetting(ctx, "google_oauth_client_secret_encrypted", base64.StdEncoding.EncodeToString(secret)); err != nil { return fmt.Errorf("set Google OAuth client secret: %w", err) }
 		}
 	}
 

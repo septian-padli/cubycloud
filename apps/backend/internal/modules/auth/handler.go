@@ -267,8 +267,8 @@ func (h *Handler) GetProfile(c echo.Context) error {
 }
 
 // RegisterRoutes registers all auth routes
-func RegisterRoutes(e *echo.Echo, db *bun.DB, jwtSecret string, jwtAuth echo.MiddlewareFunc) {
-	service := NewService(db)
+func RegisterRoutes(e *echo.Echo, db *bun.DB, jwtSecret string, jwtAuth echo.MiddlewareFunc, dataDirPath ...string) {
+	service := NewService(db, dataDirPath...)
 	handler := NewHandler(service, jwtSecret)
 
 	authGroup := e.Group("/api/v1/auth")
@@ -279,4 +279,9 @@ func RegisterRoutes(e *echo.Echo, db *bun.DB, jwtSecret string, jwtAuth echo.Mid
 	authGroup.PATCH("/profile", handler.UpdateProfile, jwtAuth)
 	authGroup.POST("/change-password", handler.ChangePassword, jwtAuth)
 	authGroup.GET("/profile/:userId", handler.GetProfile, jwtAuth)
+	authGroup.GET("/providers", handler.GoogleProviders)
+	authGroup.GET("/google/start", handler.GoogleStart)
+	authGroup.GET("/google/callback", handler.GoogleCallback)
+	authGroup.GET("/google/status", handler.GoogleStatus, jwtAuth)
+	authGroup.POST("/google/unlink", handler.GoogleUnlink, jwtAuth)
 }

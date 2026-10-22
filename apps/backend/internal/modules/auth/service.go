@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+	"os"
 
 	"github.com/cubycloud/backend/internal/database"
 	"github.com/labstack/echo/v4"
@@ -23,15 +24,15 @@ import (
 const bcryptCost = 10
 
 type Service struct {
-	db   *bun.DB
+	db *bun.DB
 	repo *Repository
+	dataDirPath string
 }
 
-func NewService(db *bun.DB) *Service {
-	return &Service{
-		db:   db,
-		repo: NewRepository(db),
-	}
+func NewService(db *bun.DB, dataDirPath ...string) *Service {
+	path := os.Getenv("DATA_DIR_PATH")
+	if len(dataDirPath) > 0 { path = dataDirPath[0] }
+	return &Service{db: db, repo: NewRepository(db), dataDirPath: path}
 }
 
 // Login authenticates user with identifier (username or email) and password

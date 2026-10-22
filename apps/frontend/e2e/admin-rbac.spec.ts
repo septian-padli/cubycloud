@@ -39,7 +39,7 @@ async function loginUser(page: Page, username: string, password: string) {
 	await page.goto('/login');
 	await page.getByLabel('Username atau Email').fill(username);
 	await page.getByRole('textbox', { name: 'Password' }).fill(password);
-	await page.getByRole('button', { name: 'Masuk' }).click();
+	await page.getByRole('button', { name: /Masuk|Sign in/ }).click();
 	await page.waitForURL('**/drive/home');
 }
 

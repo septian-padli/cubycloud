@@ -29,48 +29,50 @@
 			)}
 		</Card.Description>
 	</Card.Header>
-	<RadioGroup.Root bind:value={strategy} class="gap-3">
-		{#each STRATEGY_OPTIONS as option (option.value)}
-			{@const selected = strategy === option.value}
-			<label
-				class={cn(
-					'flex cursor-pointer items-start gap-3 rounded-xl border border-subtle bg-app px-4 py-4 transition-colors',
-					selected && 'border-primary bg-primary/5'
-				)}
-			>
-				<RadioGroup.Item value={option.value} id="strategy-{option.value}" class="mt-0.5" />
-				<div class="min-w-0">
-					<Label for="strategy-{option.value}" class="cursor-pointer text-sm font-medium text-main">
-						{locale.language === 'id'
-							? option.label
-							: option.value === 'FILL_FIRST'
-								? 'Fill First'
-								: option.value === 'ROUND_ROBIN'
-									? 'Round Robin'
-									: 'Most Free Space'}
-					</Label>
-					<p class="mt-1 text-xs leading-normal text-muted">
-						{locale.language === 'id'
-							? option.description
-							: option.value === 'FILL_FIRST'
-								? 'Fill one node before using the next.'
-								: option.value === 'ROUND_ROBIN'
-									? 'Distribute files evenly across nodes.'
-									: 'Choose the node with the most free space.'}
-					</p>
-				</div>
-			</label>
-		{/each}
-	</RadioGroup.Root>
+	<Card.Content class="space-y-4">
+		<RadioGroup.Root bind:value={strategy} class="gap-3">
+			{#each STRATEGY_OPTIONS as option (option.value)}
+				{@const selected = strategy === option.value}
+				<label
+					class={cn(
+						'flex cursor-pointer items-start gap-3 rounded-xl border border-subtle bg-app px-4 py-4 transition-colors',
+						selected && 'border-primary bg-primary/5'
+					)}
+				>
+					<RadioGroup.Item value={option.value} id="strategy-{option.value}" class="mt-0.5" />
+					<div class="min-w-0">
+						<Label for="strategy-{option.value}" class="cursor-pointer text-sm font-medium text-main">
+							{locale.language === 'id'
+								? option.label
+								: option.value === 'FILL_FIRST'
+									? 'Fill First'
+									: option.value === 'ROUND_ROBIN'
+										? 'Round Robin'
+										: 'Most Free Space'}
+						</Label>
+						<p class="mt-1 text-xs leading-normal text-muted">
+							{locale.language === 'id'
+								? option.description
+								: option.value === 'FILL_FIRST'
+									? 'Fill one node before using the next.'
+									: option.value === 'ROUND_ROBIN'
+										? 'Distribute files evenly across nodes.'
+										: 'Choose the node with the most free space.'}
+						</p>
+					</div>
+				</label>
+			{/each}
+		</RadioGroup.Root>
 
-	<Alert.Root variant="default">
-		<Info class="size-4 stroke-2" />
-		<Alert.Title>{tx('Dapat diubah nanti', 'Can be changed later')}</Alert.Title>
-		<Alert.Description>
-			{tx(
-				'Strategi default bisa diganti kapan saja di Admin Settings tanpa menjalankan ulang wizard.',
-				'The default strategy can be changed at any time in Admin Settings without rerunning the wizard.'
-			)}
-		</Alert.Description>
-	</Alert.Root>
+		<Alert.Root variant="default">
+			<Info class="size-4 stroke-2" />
+			<Alert.Title>{tx('Dapat diubah nanti', 'Can be changed later')}</Alert.Title>
+			<Alert.Description>
+				{tx(
+					'Strategi default bisa diganti kapan saja di Admin Settings tanpa menjalankan ulang wizard.',
+					'The default strategy can be changed at any time in Admin Settings without rerunning the wizard.'
+				)}
+			</Alert.Description>
+		</Alert.Root>
+	</Card.Content>
 </Card.Root>

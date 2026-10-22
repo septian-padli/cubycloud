@@ -60,7 +60,7 @@ func setupTestDB(t *testing.T) (*echo.Echo, string) {
 	}
 
 	e := echo.New()
-	auth.RegisterRoutes(e, db, jwtSecret, jwtAuth)
+	auth.RegisterRoutes(e, db, jwtSecret, jwtAuth, tempDir)
 
 	return e, tempDir
 }

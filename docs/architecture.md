@@ -78,6 +78,11 @@ Batch ZIP downloads use the existing authenticated POST endpoint. The browser su
 - Login and public share-unlock endpoints have an in-memory rate limiter; its counters reset when the server restarts.
 - Storage credentials are encrypted; this does not imply that uploaded file contents are end-to-end encrypted.
 - The server requires an explicit `JWT_SECRET` when started in production mode.
+- Google OAuth client secrets (`google_oauth_client_secret_encrypted`) and cloud storage credentials are encrypted at rest using AES-GCM with server key material derived from `DATA_DIR_PATH` via `storage.EncryptCredential`. Settings endpoints return `configured: true/false` and never expose plaintext secrets.
+- Google Sign-In uses OpenID Connect (OIDC) Authorization Code Flow with PKCE (`S256`), cryptographic state, and nonce validation. OAuth transaction state is held in `oauth_states` with a 10-minute lifetime and consumed atomically within a database transaction to protect against replay.
+- Account-linking CSRF and session-swapping are mitigated via a dedicated HTTP-only `cuby_oauth_binding` cookie that must match the callback state parameter and authenticated user session.
+- ID tokens are verified against Google's public JWKS certificates (`RS256`), enforcing issuer (`accounts.google.com`), audience (`client_id`), clock skew, token expiry, and `email_verified`.
+- Linked accounts are persisted in `oauth_identities` with `UNIQUE(provider, provider_sub)` and `UNIQUE(user_id, provider)` constraints, keying identity by immutable Google `sub` rather than mutable email. Google login requires an existing active linked user account and does not perform automatic registration or Super Admin privilege assignment.
 
 See [SECURITY.md](../SECURITY.md) for disclosure guidance. No CPU, memory, latency, or image-size benchmark is published in this document.
 

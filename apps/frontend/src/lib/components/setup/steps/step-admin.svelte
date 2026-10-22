@@ -33,60 +33,62 @@
 			)}
 		</Card.Description>
 	</Card.Header>
-	<div class="space-y-2">
-		<Label for="setup-username">{tx('Nama pengguna', 'Username')}</Label>
-		<Input
-			id="setup-username"
-			autocomplete="username"
-			bind:value={admin.username}
-			placeholder="admin"
-		/>
-	</div>
-	<div class="space-y-2">
-		<Label for="setup-email">{tx('Email', 'Email')}</Label>
-		<Input
-			id="setup-email"
-			type="email"
-			autocomplete="email"
-			bind:value={admin.email}
-			placeholder={tx('admin@contoh.local', 'admin@example.local')}
-		/>
-	</div>
-	<div class="space-y-2">
-		<Label for="setup-password">{tx('Kata sandi', 'Password')}</Label>
-		<PasswordInput
-			id="setup-password"
-			autocomplete="new-password"
-			bind:value={admin.password}
-			aria-invalid={passwordTooShort}
-		/>
-		{#if passwordTooShort}
-			<p class="text-xs text-danger">
-				{tx('Kata sandi minimal 8 karakter.', 'Password must be at least 8 characters.')}
-			</p>
-		{/if}
-	</div>
-	<div class="space-y-2">
-		<Label for="setup-confirm">{tx('Konfirmasi kata sandi', 'Confirm password')}</Label>
-		<PasswordInput
-			id="setup-confirm"
-			autocomplete="new-password"
-			bind:value={admin.confirmPassword}
-			aria-invalid={passwordMismatch}
-		/>
-		{#if passwordMismatch}
-			<p class="text-xs text-danger">{tx('Kata sandi tidak cocok.', 'Passwords do not match.')}</p>
-		{/if}
-	</div>
+	<Card.Content class="space-y-4">
+		<div class="space-y-2">
+			<Label for="setup-username">{tx('Nama pengguna', 'Username')}</Label>
+			<Input
+				id="setup-username"
+				autocomplete="username"
+				bind:value={admin.username}
+				placeholder="admin"
+			/>
+		</div>
+		<div class="space-y-2">
+			<Label for="setup-email">{tx('Email', 'Email')}</Label>
+			<Input
+				id="setup-email"
+				type="email"
+				autocomplete="email"
+				bind:value={admin.email}
+				placeholder={tx('admin@contoh.local', 'admin@example.local')}
+			/>
+		</div>
+		<div class="space-y-2">
+			<Label for="setup-password">{tx('Kata sandi', 'Password')}</Label>
+			<PasswordInput
+				id="setup-password"
+				autocomplete="new-password"
+				bind:value={admin.password}
+				aria-invalid={passwordTooShort}
+			/>
+			{#if passwordTooShort}
+				<p class="text-xs text-danger">
+					{tx('Kata sandi minimal 8 karakter.', 'Password must be at least 8 characters.')}
+				</p>
+			{/if}
+		</div>
+		<div class="space-y-2">
+			<Label for="setup-confirm">{tx('Konfirmasi kata sandi', 'Confirm password')}</Label>
+			<PasswordInput
+				id="setup-confirm"
+				autocomplete="new-password"
+				bind:value={admin.confirmPassword}
+				aria-invalid={passwordMismatch}
+			/>
+			{#if passwordMismatch}
+				<p class="text-xs text-danger">{tx('Kata sandi tidak cocok.', 'Passwords do not match.')}</p>
+			{/if}
+		</div>
 
-	<Alert.Root variant="default">
-		<ShieldAlert class="size-4 stroke-2" />
-		<Alert.Title>{tx('Akun pertama', 'First account')}</Alert.Title>
-		<Alert.Description>
-			{tx(
-				'Super Admin memiliki akses penuh ke pengaturan penyimpanan dan pengguna.',
-				'The Super Admin has full access to storage and user settings.'
-			)}
-		</Alert.Description>
-	</Alert.Root>
+		<Alert.Root variant="default">
+			<ShieldAlert class="size-4 stroke-2" />
+			<Alert.Title>{tx('Akun pertama', 'First account')}</Alert.Title>
+			<Alert.Description>
+				{tx(
+					'Super Admin memiliki akses penuh ke pengaturan penyimpanan dan pengguna.',
+					'The Super Admin has full access to storage and user settings.'
+				)}
+			</Alert.Description>
+		</Alert.Root>
+	</Card.Content>
 </Card.Root>

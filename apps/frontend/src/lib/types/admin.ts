@@ -36,11 +36,20 @@ export interface DefaultQuotaPolicy {
 	gb: number;
 }
 
+export interface GoogleAuthSettings {
+	enabled: boolean;
+	clientId: string;
+	configured: boolean;
+	redirectUri: string;
+	clientSecret: string;
+}
+
 export interface SystemSettings {
 	defaultQuota: DefaultQuotaPolicy;
 	auditRetentionDays: AuditRetentionDays;
 	workerConcurrency: number;
 	placementStrategy: PlacementStrategy;
+	googleAuth: GoogleAuthSettings;
 }
 
 export const AUDIT_RETENTION_OPTIONS: AuditRetentionDays[] = [7, 14, 30, 60, 90];

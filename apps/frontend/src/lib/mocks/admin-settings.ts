@@ -9,7 +9,8 @@ export const MOCK_SYSTEM_SETTINGS: SystemSettings = {
 	defaultQuota: { mode: 'limited', gb: 50 },
 	auditRetentionDays: 90,
 	workerConcurrency: 2,
-	placementStrategy: 'FILL_FIRST'
+	placementStrategy: 'FILL_FIRST',
+	googleAuth: { enabled: false, clientId: '', configured: false, redirectUri: '', clientSecret: '' }
 };
 
 /**
@@ -34,10 +35,9 @@ export function isNodeCritical(node: StorageNode): boolean {
 
 export function cloneMockSystemSettings(): SystemSettings {
 	return {
+		...MOCK_SYSTEM_SETTINGS,
 		defaultQuota: { ...MOCK_SYSTEM_SETTINGS.defaultQuota },
-		auditRetentionDays: MOCK_SYSTEM_SETTINGS.auditRetentionDays,
-		workerConcurrency: MOCK_SYSTEM_SETTINGS.workerConcurrency,
-		placementStrategy: MOCK_SYSTEM_SETTINGS.placementStrategy
+		googleAuth: { ...MOCK_SYSTEM_SETTINGS.googleAuth }
 	};
 }
 

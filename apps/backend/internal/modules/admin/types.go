@@ -5,18 +5,33 @@ type QuotaPolicy struct {
 	GB   int    `json:"gb"`
 }
 
+type GoogleAuthSettings struct {
+	Enabled bool `json:"enabled"`
+	ClientID string `json:"client_id"`
+	Configured bool `json:"configured"`
+	RedirectURI string `json:"redirect_uri"`
+}
+
+type GoogleAuthUpdate struct {
+	Enabled *bool `json:"enabled"`
+	ClientID *string `json:"client_id"`
+	ClientSecret *string `json:"client_secret"`
+}
+
 type SystemSettingsResponse struct {
-	DefaultQuota       QuotaPolicy `json:"default_quota"`
-	AuditRetentionDays int         `json:"audit_retention_days"`
-	WorkerConcurrency  int         `json:"worker_concurrency"`
-	PlacementStrategy  string      `json:"placement_strategy"`
+	DefaultQuota QuotaPolicy `json:"default_quota"`
+	AuditRetentionDays int `json:"audit_retention_days"`
+	WorkerConcurrency int `json:"worker_concurrency"`
+	PlacementStrategy string `json:"placement_strategy"`
+	GoogleAuth GoogleAuthSettings `json:"google_auth"`
 }
 
 type UpdateSettingsRequest struct {
-	DefaultQuota       *QuotaPolicy `json:"default_quota,omitempty"`
-	AuditRetentionDays *int         `json:"audit_retention_days,omitempty"`
-	WorkerConcurrency  *int         `json:"worker_concurrency,omitempty"`
-	PlacementStrategy  *string      `json:"placement_strategy,omitempty"`
+	DefaultQuota *QuotaPolicy `json:"default_quota,omitempty"`
+	AuditRetentionDays *int `json:"audit_retention_days,omitempty"`
+	WorkerConcurrency *int `json:"worker_concurrency,omitempty"`
+	PlacementStrategy *string `json:"placement_strategy,omitempty"`
+	GoogleAuth *GoogleAuthUpdate `json:"google_auth,omitempty"`
 }
 type StorageNodeResponse struct {
 	ID            string `json:"id"`

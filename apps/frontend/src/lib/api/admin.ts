@@ -8,11 +8,19 @@ export interface QuotaPolicy {
 	gb: number;
 }
 
+export interface GoogleAuthSettings {
+	enabled: boolean;
+	client_id: string;
+	configured: boolean;
+	redirect_uri: string;
+}
+
 export interface SystemSettings {
 	default_quota: QuotaPolicy;
 	audit_retention_days: number;
 	worker_concurrency: number;
 	placement_strategy: string;
+	google_auth: GoogleAuthSettings;
 }
 
 export interface UpdateSettingsRequest {
@@ -20,6 +28,7 @@ export interface UpdateSettingsRequest {
 	audit_retention_days?: number;
 	worker_concurrency?: number;
 	placement_strategy?: string;
+	google_auth?: { enabled?: boolean; client_id?: string; client_secret?: string };
 }
 
 export interface StorageNode {

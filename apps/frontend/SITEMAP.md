@@ -51,14 +51,14 @@ src/routes/
 ### `/setup` — first boot
 
 - **Access:** unauthenticated only while `is_setup_completed === false`; after successful setup continue to `/drive/home`.
-- **Flow:** (1) Super Admin username/email/password (minimum 8 characters); (2) local disk scanner for `/app/data/storage/*`, optional Linux device, node capacity cap; (3) strategy `FILL_FIRST` / `ROUND_ROBIN` / `MOST_FREE_SPACE`; (4) optional Cloudflare R2, AWS S3, or S3-compatible endpoint/credentials; (5) generate/export Emergency Recovery Key.
-- **Modal:** Recovery Key displayed as **30 uppercase alphanumeric characters in six groups of five** (`XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`), Copy/Download and mandatory acknowledgment. Show Device Scan Error Modal on scan/mount failure.
+- **Flow:** (1) Super Admin username/email/password (minimum 8 characters); (2) optional Google Authentication (enable/disable toggle, Client ID, Client Secret, Authorized Redirect URI with copy button); (3) local disk scanner for `/app/data/storage/*`, optional Linux device, node capacity cap; (4) optional Cloudflare R2, AWS S3, or S3-compatible endpoint/credentials; (5) strategy `FILL_FIRST` / `ROUND_ROBIN` / `MOST_FREE_SPACE`; (6) generate/export Emergency Recovery Key.
+- **Dialogs:** Step-by-step guidance dialog for obtaining Google Cloud OAuth credentials (consent screen, Web application client ID, registered redirect URI, test users). Recovery Key displayed as **30 uppercase alphanumeric characters in six groups of five** (`XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`), Copy/Download and mandatory acknowledgment. Show Device Scan Error Modal on scan/mount failure.
 - **CTA:** `Selesaikan Setup & Masuk ke CubyCloud`.
 
 ### `/login` — sign in
 
 - **Access:** unauthenticated; valid JWT session redirects to `/drive/home`.
-- **UI:** username/email and password; `Masuk`; JWT is set via HTTP-only cookie. Recovery link `Pulihkan Akses Admin` → `/recovery`; forgot-password feedback explains that v1.0 uses an Emergency Recovery Key, not SMTP.
+- **UI:** username/email and password; `Masuk`; JWT is set via HTTP-only cookie. `Sign in with Google` button (displayed only when Google OAuth is enabled and configured). Rejection alert on `?error=google_not_linked` directing user to sign in with password and connect Google from Profile. Recovery link `Pulihkan Akses Admin` → `/recovery`; forgot-password feedback explains that v1.0 uses an Emergency Recovery Key, not SMTP.
 
 ### `/recovery` — Super Admin password reset
 
@@ -126,6 +126,7 @@ src/routes/
 - **Read:** display name, email, username, role, effective quota, actual usage. Username, role, and quota are not editable here.
 - **Edit:** display name/email; changing email requires current password, valid format, and case-insensitive uniqueness.
 - **Password:** require current password, minimum-length validation, and confirmation. Success revokes **all sessions**, then login again.
+- **Google Account (own profile only):** connect unlinked Google account via standard OIDC flow (`/api/v1/auth/google/start?action=link`), view connected status and linked email, disconnect Google with confirmation dialog. Hidden/read-only when viewing other users' profiles.
 
 ## 5. Super Admin pages
 
@@ -140,7 +141,7 @@ src/routes/
 
 - **Access:** Super Admin only.
 - **Nodes:** capacity, physical usage, free space, critical **5%** badge; node names required and case-insensitively unique; Detach Node and Rescan Nodes modals.
-- **Settings:** default user quota in GB or Unlimited; audit log retention **7/14/30/60/90 days**, default **90**; worker concurrency default **2**.
+- **Settings:** default user quota in GB or Unlimited; Google Sign-In configuration card (enable/disable switch, Client ID, masked Client Secret, Authorized Redirect URI with copy action); audit log retention **7/14/30/60/90 days**, default **90**; worker concurrency default **2**.
 - **Backup CTA:** `Download DB Backup (.db)` (database backup, not necessarily complete file/content backup).
 
 ### `/admin/users` — people and quotas

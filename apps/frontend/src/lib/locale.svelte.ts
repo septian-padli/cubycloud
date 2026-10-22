@@ -4,7 +4,7 @@ import { messages } from './locale-messages.js';
 export type Language = 'en' | 'id';
 let language = $state<Language>('en');
 let accountId: string | null = null;
-let pendingLanguage: Language | null = null;
+let pendingLanguage = $state<Language | null>(null);
 let initialized = false;
 let accountRevision = 0;
 const keyFor = (id: string) => `cubycloud-language:${id}`;

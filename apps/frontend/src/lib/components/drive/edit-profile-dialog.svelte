@@ -114,7 +114,7 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="bg-surface text-main sm:max-w-md">
 		<Dialog.Header>
-			<Dialog.Title>{tx('Pengaturan Akun', 'Account settings')}</Dialog.Title>
+			<Dialog.Title aria-label="Pengaturan Akun">{tx('Pengaturan Akun', 'Account settings')}</Dialog.Title>
 			<Dialog.Description
 				>{tx(
 					'Kelola profil akun dan keamanan Anda.',
@@ -125,8 +125,8 @@
 
 		<Tabs.Root bind:value={activeTab} class="w-full">
 			<Tabs.List variant="line" class="grid w-full grid-cols-2">
-				<Tabs.Trigger value="profile">{tx('Profil', 'Profile')}</Tabs.Trigger>
-				<Tabs.Trigger value="password">{tx('Kata Sandi', 'Password')}</Tabs.Trigger>
+				<Tabs.Trigger value="profile" aria-label="Profil">{tx('Profil', 'Profile')}</Tabs.Trigger>
+				<Tabs.Trigger value="password" aria-label="Kata Sandi">{tx('Kata Sandi', 'Password')}</Tabs.Trigger>
 			</Tabs.List>
 
 			<Tabs.Content value="profile" class="mt-4">
@@ -146,6 +146,7 @@
 						<Label for="profile-display-name">{tx('Nama tampilan', 'Display name')}</Label>
 						<Input
 							id="profile-display-name"
+							aria-label="Nama tampilan"
 							bind:value={nameDraft}
 							autocomplete="name"
 							maxlength={100}
@@ -170,6 +171,7 @@
 							>
 							<Input
 								id="profile-current-password"
+								aria-label="Kata sandi saat ini (diperlukan)"
 								type="password"
 								bind:value={currentPasswordDraft}
 								placeholder={tx('Masukkan kata sandi saat ini', 'Enter your current password')}
@@ -188,7 +190,7 @@
 						<Button type="button" variant="secondary" onclick={() => (open = false)}
 							>{tx('Batal', 'Cancel')}</Button
 						>
-						<Button type="submit" disabled={!canSubmitProfile}>
+						<Button type="submit" aria-label="Simpan" disabled={!canSubmitProfile}>
 							{isSavingProfile ? tx('Menyimpan...', 'Saving...') : tx('Simpan', 'Save')}
 						</Button>
 					</Dialog.Footer>
@@ -207,6 +209,7 @@
 						<Label for="change-current-pass">{tx('Kata sandi saat ini', 'Current password')}</Label>
 						<Input
 							id="change-current-pass"
+							aria-label="Kata sandi saat ini"
 							type="password"
 							bind:value={currentPass}
 							placeholder={tx('Masukkan kata sandi saat ini', 'Enter your current password')}
@@ -218,6 +221,7 @@
 						<Label for="change-new-pass">{tx('Kata sandi baru', 'New password')}</Label>
 						<Input
 							id="change-new-pass"
+							aria-label="Kata sandi baru"
 							type="password"
 							bind:value={newPass}
 							placeholder={tx('Minimal 8 karakter', 'At least 8 characters')}
@@ -231,6 +235,7 @@
 						>
 						<Input
 							id="change-confirm-pass"
+							aria-label="Konfirmasi kata sandi baru"
 							type="password"
 							bind:value={confirmPass}
 							placeholder={tx('Ulangi kata sandi baru', 'Re-enter your new password')}
@@ -247,7 +252,7 @@
 						<Button type="button" variant="secondary" onclick={() => (open = false)}
 							>{tx('Batal', 'Cancel')}</Button
 						>
-						<Button type="submit" disabled={!canSubmitPassword}>
+						<Button type="submit" aria-label="Ubah Kata Sandi" disabled={!canSubmitPassword}>
 							{isChangingPassword
 								? tx('Mengubah...', 'Changing...')
 								: tx('Ubah Kata Sandi', 'Change password')}

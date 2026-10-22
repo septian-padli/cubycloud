@@ -1,6 +1,9 @@
 import { locale } from '$lib/locale.svelte.js';
 export const API_BASE = '/api/v1';
 const AUTH_ERROR_MESSAGES: Record<string, [string, string]> = {
+	'google_not_linked': ['Akun Google belum terhubung. Masuk dengan kata sandi lalu hubungkan Google di Profil.', 'This Google account is not linked. Sign in with your password, then connect Google in Profile.'],
+	'google_oauth_failed': ['Autentikasi Google gagal. Silakan coba lagi.', 'Google authentication failed. Please try again.'],
+	'google_auth_failed': ['Autentikasi Google gagal. Silakan coba lagi.', 'Google authentication failed. Please try again.'],
 	'invalid request body': ['Permintaan tidak valid.', 'Invalid request.'],
 	'username/email and password are required': [
 		'Username/email dan password wajib diisi.',
@@ -206,6 +209,17 @@ class AuthAPI {
 
 	async getMe(): Promise<{ data?: UserResponse; error?: string }> {
 		return this.request<UserResponse>('/auth/me');
+	}
+	async getProviders(): Promise<{ data?: { google: { enabled: boolean; client_id: string } }; error?: string }> {
+		return this.request('/auth/providers');
+	}
+
+	async getGoogleAuthStatus(): Promise<{ data?: { linked: boolean; email: string }; error?: string }> {
+		return this.request('/auth/google/status');
+	}
+
+	async unlinkGoogle(): Promise<{ data?: { message: string }; error?: string }> {
+		return this.request('/auth/google/unlink', { method: 'POST' });
 	}
 
 	async resetPassword(

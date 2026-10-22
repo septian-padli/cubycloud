@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
-
 	"github.com/cubycloud/backend/internal/config"
 	"github.com/cubycloud/backend/internal/database"
 	"github.com/cubycloud/backend/internal/middleware"
@@ -63,6 +63,17 @@ func main() {
 	e.HidePort = true
 
 	// 7. Middleware
+	// Redact sensitive OAuth parameters (code, state) from request logs
+	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if strings.HasPrefix(c.Request().URL.Path, "/api/v1/auth/google/callback") {
+				orig := c.Request().RequestURI
+				c.Request().RequestURI = c.Request().URL.Path + "?[REDACTED]"
+				defer func() { c.Request().RequestURI = orig }()
+			}
+			return next(c)
+		}
+	})
 	e.Use(echomw.Logger())
 	e.Use(echomw.Recover())
 	e.Use(echomw.CORSWithConfig(echomw.CORSConfig{
@@ -86,7 +97,7 @@ func main() {
 	admin.RegisterRoutes(e, db, driver, cfg.DataDirPath, dbPath, jwtAuth, adminGuard)
 
 	// Auth routes (login, logout, me, reset-password)
-	auth.RegisterRoutes(e, db, cfg.JWTSecret, jwtAuth)
+	auth.RegisterRoutes(e, db, cfg.JWTSecret, jwtAuth, cfg.DataDirPath)
 
 	// My Storage VFS endpoints (authenticated per-user file operations & trash).
 	myStorageHandler := mystorage.RegisterRoutes(e, db, driver, jwtAuth)

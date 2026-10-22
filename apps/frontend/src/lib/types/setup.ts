@@ -2,7 +2,7 @@ export type PlacementStrategy = 'FILL_FIRST' | 'ROUND_ROBIN' | 'MOST_FREE_SPACE'
 
 export type CloudProvider = 'R2' | 'S3' | 'S3_COMPATIBLE';
 
-export type SetupStepId = 1 | 2 | 3 | 4 | 5;
+export type SetupStepId = 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface StorageNode {
 	id: string;
@@ -61,10 +61,11 @@ export interface SetupStepMeta {
 
 export const SETUP_STEPS: SetupStepMeta[] = [
 	{ id: 1, title: 'Akun Super Admin', description: 'Buat akun administrator pertama' },
-	{ id: 2, title: 'Penyimpanan Lokal', description: 'Pilih node penyimpanan' },
-	{ id: 3, title: 'Cloud', description: 'Hubungkan R2, S3, atau S3 Compatible' },
-	{ id: 4, title: 'Strategi Penempatan', description: 'Atur alokasi berkas' },
-	{ id: 5, title: 'Konfirmasi', description: 'Tinjau konfigurasi dan selesaikan setup' }
+	{ id: 2, title: 'Google Authentication (Optional)', description: 'Konfigurasikan Google Sign-In (opsional)' },
+	{ id: 3, title: 'Penyimpanan Lokal', description: 'Pilih node penyimpanan' },
+	{ id: 4, title: 'Cloud', description: 'Hubungkan R2, S3, atau S3 Compatible' },
+	{ id: 5, title: 'Strategi Penempatan', description: 'Atur alokasi berkas' },
+	{ id: 6, title: 'Konfirmasi', description: 'Tinjau konfigurasi dan selesaikan setup' }
 ];
 
 export const STRATEGY_OPTIONS: {

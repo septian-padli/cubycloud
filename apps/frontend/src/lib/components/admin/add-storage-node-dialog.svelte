@@ -180,7 +180,7 @@
 <Dialog bind:open onOpenChange={handleOpenChange}>
 	<DialogContent class="max-w-lg">
 		<DialogHeader>
-			<DialogTitle
+			<DialogTitle aria-label="Tambah Node Penyimpanan"
 				>{locale.language === 'id' ? 'Tambah Node Penyimpanan' : 'Add storage node'}</DialogTitle
 			>
 			<DialogDescription
@@ -192,7 +192,7 @@
 
 		<Tabs bind:value={activeTab} class="w-full">
 			<TabsList variant="line" class="grid w-full grid-cols-2">
-				<TabsTrigger value="local" class="gap-1.5">
+				<TabsTrigger value="local" class="gap-1.5" aria-label="Disk Lokal">
 					<HardDrive class="size-3.5" />
 					{locale.language === 'id' ? 'Disk Lokal' : 'Local disk'}
 				</TabsTrigger>
@@ -233,6 +233,7 @@
 					>
 					<Input
 						id="local-path"
+						aria-label="Path Direktori"
 						bind:value={localPath}
 						placeholder="/app/data/storage/disk2"
 						disabled={adding}
@@ -392,7 +393,7 @@
 				>{locale.language === 'id' ? 'Batal' : 'Cancel'}</Button
 			>
 			{#if activeTab === 'local'}
-				<Button onclick={handleAddLocal} disabled={!canAddLocal || adding}>
+				<Button onclick={handleAddLocal} aria-label="Tambah Node Lokal" disabled={!canAddLocal || adding}>
 					{adding
 						? locale.language === 'id'
 							? 'Menambahkan...'
@@ -402,7 +403,7 @@
 							: 'Add local node'}
 				</Button>
 			{:else}
-				<Button onclick={handleAddCloud} disabled={!canAddCloud || adding}>
+				<Button onclick={handleAddCloud} aria-label="Tambah Node Cloud" disabled={!canAddCloud || adding}>
 					{adding
 						? locale.language === 'id'
 							? 'Menambahkan...'

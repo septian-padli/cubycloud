@@ -23,11 +23,18 @@ type CloudConfig struct {
 	SecretKey string `json:"secret_key"`
 }
 
+type GoogleAuth struct {
+	Enabled bool `json:"enabled"`
+	ClientID string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
+}
+
 type CompleteSetupRequest struct {
-	Admin             AdminUser          `json:"admin"`
-	StorageNodes      []StorageNodeInput `json:"storage_nodes"`
-	PlacementStrategy string             `json:"placement_strategy"`
-	Cloud             CloudConfig        `json:"cloud"`
+	Admin AdminUser `json:"admin"`
+	StorageNodes []StorageNodeInput `json:"storage_nodes"`
+	PlacementStrategy string `json:"placement_strategy"`
+	Cloud CloudConfig `json:"cloud"`
+	GoogleAuth *GoogleAuth `json:"google_auth,omitempty"`
 }
 
 type CompleteSetupResponse struct {

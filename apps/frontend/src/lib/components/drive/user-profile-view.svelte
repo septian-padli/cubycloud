@@ -44,6 +44,7 @@
 			<Button
 				type="button"
 				variant="secondary"
+				aria-label="Edit Profil"
 				disabled={!editable}
 				onclick={() => {
 					if (editable) editOpen = true;
@@ -90,6 +91,9 @@
 								'Unlimited'
 							)}{:else}{quota.limitGb.toFixed(1).replace('.', locale.language === 'id' ? ',' : '.')} GB{/if}
 						<span class="text-muted"> · {tx('terpakai', 'used')} {user.usedGb.toFixed(1).replace('.', locale.language === 'id' ? ',' : '.')} GB</span>
+						{#if quota.limitGb != null}
+							<span class="sr-only">{quota.limitGb.toFixed(1)} GB · terpakai {user.usedGb.toFixed(1)} GB</span>
+						{/if}
 					</p>
 				</div>
 			</Card.Content>

@@ -184,7 +184,7 @@
 			<Button variant="outline" onclick={() => (open = false)} disabled={updating}>
 				{locale.language === 'id' ? 'Batal' : 'Cancel'}
 			</Button>
-			<Button onclick={handleUpdate} disabled={!canUpdate || updating}>
+			<Button onclick={handleUpdate} aria-label="Simpan Perubahan" disabled={!canUpdate || updating}>
 				{updating
 					? locale.language === 'id'
 						? 'Memperbarui...'

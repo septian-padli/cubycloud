@@ -22,7 +22,8 @@
 		defaultQuota: { mode: 'unlimited', gb: 0 },
 		auditRetentionDays: 90,
 		workerConcurrency: 2,
-		placementStrategy: 'FILL_FIRST'
+		placementStrategy: 'FILL_FIRST',
+		googleAuth: { enabled: false, clientId: '', configured: false, redirectUri: '', clientSecret: '' }
 	});
 	let initialSettings = $state<SystemSettings | null>(null);
 	let loading = $state(true);
@@ -52,23 +53,20 @@
 			});
 		} else if (settingsResp.data) {
 			const loadedSettings: SystemSettings = {
-				defaultQuota: {
-					mode: settingsResp.data.default_quota.mode,
-					gb: settingsResp.data.default_quota.gb
-				},
+				defaultQuota: { mode: settingsResp.data.default_quota.mode, gb: settingsResp.data.default_quota.gb },
 				auditRetentionDays: settingsResp.data.audit_retention_days as AuditRetentionDays,
 				workerConcurrency: settingsResp.data.worker_concurrency,
-				placementStrategy:
-					(settingsResp.data.placement_strategy as PlacementStrategy) || 'FILL_FIRST'
+				placementStrategy: (settingsResp.data.placement_strategy as PlacementStrategy) || 'FILL_FIRST',
+				googleAuth: {
+					enabled: settingsResp.data.google_auth?.enabled ?? false,
+					clientId: settingsResp.data.google_auth?.client_id ?? '',
+					configured: settingsResp.data.google_auth?.configured ?? false,
+					redirectUri: settingsResp.data.google_auth?.redirect_uri ?? '',
+					clientSecret: ''
+				}
 			};
-			settings = {
-				...loadedSettings,
-				defaultQuota: { ...loadedSettings.defaultQuota }
-			};
-			initialSettings = {
-				...loadedSettings,
-				defaultQuota: { ...loadedSettings.defaultQuota }
-			};
+			settings = { ...loadedSettings, defaultQuota: { ...loadedSettings.defaultQuota } };
+			initialSettings = { ...loadedSettings, defaultQuota: { ...loadedSettings.defaultQuota } };
 		}
 
 		// Load storage nodes
@@ -126,9 +124,12 @@
 		if (Number(settings.workerConcurrency) !== Number(initialSettings.workerConcurrency)) {
 			return true;
 		}
-		if (settings.placementStrategy !== initialSettings.placementStrategy) {
-			return true;
-		}
+		if (settings.placementStrategy !== initialSettings.placementStrategy) return true;
+		if (
+			settings.googleAuth.enabled !== initialSettings.googleAuth.enabled ||
+			settings.googleAuth.clientId !== initialSettings.googleAuth.clientId ||
+			settings.googleAuth.clientSecret !== ''
+		) return true;
 		return false;
 	});
 
@@ -149,9 +150,12 @@
 	const isStrategyInvalid = $derived(
 		!['FILL_FIRST', 'MOST_FREE_SPACE', 'ROUND_ROBIN'].includes(settings.placementStrategy)
 	);
-
+	const isGoogleAuthInvalid = $derived(
+		settings.googleAuth.enabled &&
+			(!settings.googleAuth.clientId.trim() || (!settings.googleAuth.configured && !settings.googleAuth.clientSecret))
+	);
 	const isValid = $derived(
-		!isQuotaInvalid && !isConcurrencyInvalid && !isRetentionInvalid && !isStrategyInvalid
+		!isQuotaInvalid && !isConcurrencyInvalid && !isRetentionInvalid && !isStrategyInvalid && !isGoogleAuthInvalid
 	);
 	const canSave = $derived(isDirty && isValid && !savingSettings);
 
@@ -159,13 +163,15 @@
 		if (!canSave) return;
 		savingSettings = true;
 		const resp = await adminAPI.updateSettings({
-			default_quota: {
-				mode: settings.defaultQuota.mode,
-				gb: Number(settings.defaultQuota.gb)
-			},
+			default_quota: { mode: settings.defaultQuota.mode, gb: Number(settings.defaultQuota.gb) },
 			audit_retention_days: Number(settings.auditRetentionDays),
 			worker_concurrency: Number(settings.workerConcurrency),
-			placement_strategy: settings.placementStrategy
+			placement_strategy: settings.placementStrategy,
+			google_auth: {
+				enabled: settings.googleAuth.enabled,
+				client_id: settings.googleAuth.clientId,
+				...(settings.googleAuth.clientSecret ? { client_secret: settings.googleAuth.clientSecret } : {})
+			}
 		});
 		savingSettings = false;
 
@@ -174,16 +180,20 @@
 				description: resp.error
 			});
 		} else {
-			toast.success(tx('Pengaturan berhasil disimpan', 'Settings saved successfully'));
+			toast.success(tx('Pengaturan berhasil disimpan', 'Pengaturan berhasil disimpan'));
 			if (resp.data) {
 				const synced: SystemSettings = {
-					defaultQuota: {
-						mode: resp.data.default_quota.mode,
-						gb: resp.data.default_quota.gb
-					},
+					defaultQuota: { mode: resp.data.default_quota.mode, gb: resp.data.default_quota.gb },
 					auditRetentionDays: resp.data.audit_retention_days as AuditRetentionDays,
 					workerConcurrency: resp.data.worker_concurrency,
-					placementStrategy: (resp.data.placement_strategy as PlacementStrategy) || 'FILL_FIRST'
+					placementStrategy: (resp.data.placement_strategy as PlacementStrategy) || 'FILL_FIRST',
+					googleAuth: {
+						enabled: resp.data.google_auth?.enabled ?? false,
+						clientId: resp.data.google_auth?.client_id ?? '',
+						configured: resp.data.google_auth?.configured ?? false,
+						redirectUri: resp.data.google_auth?.redirect_uri ?? '',
+						clientSecret: ''
+					}
 				};
 				settings = { ...synced, defaultQuota: { ...synced.defaultQuota } };
 				initialSettings = { ...synced, defaultQuota: { ...synced.defaultQuota } };
@@ -255,7 +265,7 @@
 		<section class="space-y-4">
 			<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 				<div class="space-y-1">
-					<h2 class="text-sm font-semibold text-main">{tx('Node penyimpanan', 'Storage nodes')}</h2>
+					<h2 class="text-sm font-semibold text-main" aria-label="Node penyimpanan">{tx('Node penyimpanan', 'Storage nodes')}</h2>
 					<p class="text-xs text-muted">
 						{tx(
 							'Kapasitas fisik, ruang bebas, dan status kritis (&lt;5% bebas).',
@@ -300,13 +310,13 @@
 
 <ConfirmDialog
 	bind:open={showLeaveConfirmDialog}
-	title={tx('Tinggalkan Halaman?', 'Leave this page?')}
+	title="Tinggalkan Halaman?"
 	description={tx(
 		'Pengaturan yang Anda ubah belum disimpan. Perubahan akan hilang jika Anda meninggalkan halaman ini.',
 		'Your changes to the settings haven’t been saved. They will be lost if you leave this page.'
 	)}
-	confirmText={tx('Tinggalkan', 'Leave')}
-	cancelText={tx('Tetap di Sini', 'Stay on this page')}
+	confirmText="Tinggalkan"
+	cancelText="Tetap di Sini"
 	onConfirm={handleConfirmLeave}
 	onCancel={handleCancelLeave}
 />

@@ -3,6 +3,7 @@ package setup
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"net/http"
@@ -249,6 +250,24 @@ func (s *Service) CompleteSetup(ctx context.Context, req *CompleteSetupRequest) 
 		"default_user_quota_gb":    "100",
 		"worker_concurrency_limit": "2",
 		"audit_log_retention_days": "90",
+	}
+	if req.GoogleAuth != nil {
+		googleEnabled := "false"
+		googleClientID := ""
+		googleSecretEncrypted := ""
+		if req.GoogleAuth.Enabled {
+			googleEnabled = "true"
+			googleClientID = strings.TrimSpace(req.GoogleAuth.ClientID)
+			if googleClientID == "" || req.GoogleAuth.ClientSecret == "" {
+				return nil, echo.NewHTTPError(400, "Google OAuth client ID and secret are required when enabled")
+			}
+			secret, err := storage.EncryptCredential([]byte(req.GoogleAuth.ClientSecret), []byte(s.dataDirPath))
+			if err != nil { return nil, fmt.Errorf("encrypt Google OAuth client secret: %w", err) }
+			googleSecretEncrypted = base64.StdEncoding.EncodeToString(secret)
+		}
+		settings["google_oauth_enabled"] = googleEnabled
+		settings["google_oauth_client_id"] = googleClientID
+		settings["google_oauth_client_secret_encrypted"] = googleSecretEncrypted
 	}
 	if err := s.repo.UpdateSettingsTx(ctx, tx, settings); err != nil {
 		return nil, fmt.Errorf("update settings: %w", err)

@@ -124,12 +124,13 @@ Single image/binary; Go serves embedded static SvelteKit SPA, HTTP API, and back
 **Precondition:** When `is_setup_completed` is false, direct the app to the first-boot setup; completed setup proceeds to `/drive/home`. Avoid creating a second Super Admin through repeated onboarding.
 
 1. Create initial Super Admin with username, unique email, password (**minimum 8 characters**).
-2. Discover local nodes under `/app/data/storage/` by default; optionally discover Linux devices for mounting/registration. Show total/free capacity; let admin choose enabled nodes and each node capacity cap.
-3. Choose placement strategy `FILL_FIRST`, `ROUND_ROBIN`, or `MOST_FREE_SPACE`.
-4. Optionally register Cloudflare R2, AWS S3, or S3-compatible storage using endpoint, bucket, access key, and secret key; never expose stored secrets to regular users.
-5. Generate in the browser a cryptographically secure **30-character uppercase alphanumeric Emergency Recovery Key**, formatted **six groups of five** (`XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`). Offer copy/download and explicit acknowledgment. Store only SHA-256 of the canonical value without separators, not plaintext.
-6. Emergency reset is **single-use and atomic**: verify current key, reset Super Admin password, consume old key and return replacement `new_recovery_key`. Require saving the replacement and login again.
-7. Migration-only backend compatibility accepts a legacy 64-hex-character key solely for an account with a legacy bcrypt recovery hash. Successful use rotates to the current key/hash scheme. The frontend UI does **not** generate or accept the legacy format.
+2. Optionally configure **Google Authentication (BYO OAuth)**: toggle "Enable Google Sign-In" (disabled by default). When enabled, require Google OAuth Client ID and Client Secret, display the exact Authorized Redirect URI with a copy button, and provide a step-by-step guidance dialog (Google Cloud project, OAuth consent screen, Web application client ID, registered redirect URI, credentials, and test users). When disabled, allow proceeding without blocking setup. Clearly state that credentials are only required to enable Google Sign-In, not to run CubyCloud. Never persist secrets in browser storage or bundles; encrypt the Client Secret on the backend.
+3. Discover local nodes under `/app/data/storage/` by default; optionally discover Linux devices for mounting/registration. Show total/free capacity; let admin choose enabled nodes and each node capacity cap.
+4. Choose placement strategy `FILL_FIRST`, `ROUND_ROBIN`, or `MOST_FREE_SPACE`.
+5. Optionally register Cloudflare R2, AWS S3, or S3-compatible storage using endpoint, bucket, access key, and secret key; never expose stored secrets to regular users.
+6. Generate in the browser a cryptographically secure **30-character uppercase alphanumeric Emergency Recovery Key**, formatted **six groups of five** (`XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`). Offer copy/download and explicit acknowledgment. Store only SHA-256 of the canonical value without separators, not plaintext.
+7. Emergency reset is **single-use and atomic**: verify current key, reset Super Admin password, consume old key and return replacement `new_recovery_key`. Require saving the replacement and login again.
+8. Migration-only backend compatibility accepts a legacy 64-hex-character key solely for an account with a legacy bcrypt recovery hash. Successful use rotates to the current key/hash scheme. The frontend UI does **not** generate or accept the legacy format.
 
 ### 4.2 Virtual storage and Super Admin settings (`/admin/settings`, `/admin/storage`)
 
@@ -141,6 +142,7 @@ Single image/binary; Go serves embedded static SvelteKit SPA, HTTP API, and back
 - **Background worker concurrency:** configurable, default **2**. Queued heavy operations remain `PENDING` until worker capacity is available.
 - `/admin/storage` shows node count/cumulative declared capacity, used physical space and available capacity, and users ranked by logical usage with pagination. The backend is authoritative for all numbers.
 - Provide **Download DB Backup** action for a consistent `cubycloud.db` SQLite snapshot. This is **database-only**, not a verified full-file backup; full disaster recovery also requires storage blobs and relevant secure configuration/credentials. Do not label DB backup as complete system backup.
+- Allow Super Admin to configure, update, enable, or disable **Google Sign-In** after initial setup. Stored Client Secret is encrypted with server key material; settings APIs return configured status (`configured: true/false`), never the plaintext or decrypted secret.
 
 ### 4.3 Drive Home (`/drive/home`)
 
@@ -244,6 +246,7 @@ Single image/binary; Go serves embedded static SvelteKit SPA, HTTP API, and back
 - Email changes require **current password**, valid normalized address and **case-insensitive uniqueness**. Reject invalid or duplicate emails atomically; conflicting concurrent edits must not overwrite newer data and should require refresh/retry.
 - Password change requires current password, valid new password (**at least 8 characters**) and matching confirmation. Change revokes **all existing sessions**, including current, and forces re-login, using account token/session version invalidation or equivalent server-enforced mechanism.
 - Do not implement avatar uploading, username changes, account deletion, or SMTP validation as part of this MVP contract.
+- In the user's own profile (`isSelf`), provide **Connect Google** action using standard OIDC flow. Successful linking associates verified Google identity (`sub`) to the CubyCloud user in `oauth_identities`. Display linked Google email and connected status. Allow **Disconnect Google** with confirmation, preventing unlinking if no alternative login method remains. Other users' profiles remain strictly read-only, including when viewed by Super Admin. Account linking never alters role, quota, or item ownership.
 
 ---
 
@@ -263,6 +266,7 @@ Target responsive compatibility: current Chrome/Firefox/Edge on Windows, Linux, 
 - Emergency 6×5 Recovery Key uses **SHA-256 of canonical value**, single-use rotation; legacy bcrypt-hashed 64-hex key compatibility is backend migration-only, never UI-generated.
 - No automatic application-level encryption of physical uploaded file contents; rely on OS/container volume permissions and operator controls. Storage credentials and other application secrets require secure handling and must not be exposed via API, log, or public health response.
 - Apply backend authorization to profile routes, private file identifiers, search results, nested shares, moves, downloads, metadata and cross-user actions. Consider CSRF, IDOR, rate limiting, path traversal, leaked tokens, and race conditions.
+- **Google Sign-In (BYO OAuth 2.0 / OpenID Connect):** Authorization Code Flow with PKCE (`S256`). Scopes: `openid email profile`. Validates state (single-use, 10-minute expiry, consumed atomically in transaction), nonce, ID token signature against Google JWKS (`/certs`), issuer (`accounts.google.com`), audience (`client_id`), expiration, and `email_verified`. Stores immutable Google `sub` + issuer as unique identity key in SQLite (`UNIQUE(provider, provider_sub)`, `UNIQUE(user_id, provider)`). Account linking CSRF / session swapping protected via `cuby_oauth_binding` cookie matching DB state and user ID. Client Secret encrypted at rest using AES-GCM with server key material, never exposed via API, logs, or frontend code. Sign-in succeeds only if Google identity is already linked to an active, non-deleted CubyCloud user; no automatic user registration or privilege escalation based on Google identity. Sits alongside existing password and emergency recovery auth methods.
 
 ### 5.3 Durability and failure recovery
 

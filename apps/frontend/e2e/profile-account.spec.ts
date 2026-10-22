@@ -35,7 +35,7 @@ async function ensureAdminLoggedIn(page: Page) {
 	await page.goto('/login');
 	await page.getByLabel('Username atau Email').fill(adminUsername);
 	await page.getByRole('textbox', { name: 'Password' }).fill(adminPassword);
-	await page.getByRole('button', { name: 'Masuk' }).click();
+	await page.getByRole('button', { name: /Masuk|Sign in/ }).click();
 	await page.waitForURL('**/drive/home');
 }
 
@@ -111,7 +111,7 @@ test('Account profile edits persist, other-user profiles are read-only, and pass
 		await page.goto('/login');
 		await page.getByLabel('Username atau Email').fill(username);
 		await page.getByRole('textbox', { name: 'Password' }).fill(originalPassword);
-		await page.getByRole('button', { name: 'Masuk' }).click();
+		await page.getByRole('button', { name: /Masuk|Sign in/ }).click();
 		await page.waitForURL('**/drive/home');
 		await page.goto(`/drive/profile/${created.id}`);
 		await expect(page.getByRole('button', { name: 'Edit Profil' })).toBeEnabled();

@@ -103,6 +103,7 @@
 						variant="outline"
 						size="sm"
 						class="w-full gap-1.5"
+						aria-label="Edit"
 						onclick={() => onEdit(node)}
 					>
 						<Settings class="size-3.5" />

@@ -37,6 +37,7 @@ export interface CompleteSetupRequest {
 		access_key: string;
 		secret_key: string;
 	};
+	google_auth: { enabled: boolean; client_id: string; client_secret: string };
 }
 
 export interface CompleteSetupResponse {

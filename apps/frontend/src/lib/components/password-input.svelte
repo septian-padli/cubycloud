@@ -35,6 +35,8 @@
 	<Input
 		{id}
 		{name}
+		role="textbox"
+		aria-label="Password"
 		type={visible ? 'text' : 'password'}
 		class={cn('pe-10', className)}
 		bind:value

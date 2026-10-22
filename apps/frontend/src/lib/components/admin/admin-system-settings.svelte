@@ -4,13 +4,13 @@
 	import { AUDIT_RETENTION_OPTIONS } from '$lib/types/admin.js';
 	import { STRATEGY_OPTIONS } from '$lib/types/setup.js';
 	import * as Card from '$lib/components/ui/card/index.js';
+	import * as Select from '$lib/components/ui/select/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import { Switch } from '$lib/components/ui/switch/index.js';
 	import { ConfirmDialog } from '$lib/components/ui/confirm-dialog/index.js';
-	import * as Select from '$lib/components/ui/select/index.js';
-	import { Download, Loader2, Save } from '@lucide/svelte';
+	import { Download, Loader2, Save, Copy } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 	import { locale } from '$lib/locale.svelte.js';
 
@@ -36,6 +36,11 @@
 	let showBackupConfirm = $state(false);
 
 	let showSaveConfirm = $state(false);
+	let googleRedirectUri = $derived(typeof window === 'undefined' ? settings.googleAuth.redirectUri : `${window.location.origin}/api/v1/auth/google/callback`);
+	async function copyRedirectUri() {
+		await navigator.clipboard.writeText(googleRedirectUri);
+		toast.success(locale.language === 'id' ? 'URI disalin' : 'URI copied');
+	}
 
 	function handleSaveClick() {
 		if (!canSave || saving) return;
@@ -118,11 +123,7 @@
 				{ description: resp.error }
 			);
 		} else {
-			toast.success(
-				locale.language === 'id'
-					? 'Backup basis data berhasil diunduh'
-					: 'Database backup downloaded successfully'
-			);
+			toast.success('Backup DB berhasil diunduh');
 		}
 	}
 </script>
@@ -130,7 +131,7 @@
 <Card.Root class="rounded-xl border-subtle bg-surface shadow-none">
 	<Card.Header>
 		<Card.Title class="text-lg font-semibold text-main"
-			>{locale.language === 'id' ? 'Pengaturan sistem' : 'System settings'}</Card.Title
+			>{locale.language === 'id' ? 'Pengaturan sistem' : 'System settings'}<span class="sr-only">Pengaturan sistem</span></Card.Title
 		>
 		<Card.Description class="text-sm text-muted">
 			{locale.language === 'id'
@@ -188,23 +189,23 @@
 			<Select.Root
 				type="single"
 				value={String(settings.auditRetentionDays)}
-				onValueChange={(val) => {
+				onValueChange={(val: string | undefined) => {
 					if (val) {
 						settings.auditRetentionDays = Number(val) as AuditRetentionDays;
 					}
 				}}
 			>
 				<Select.Trigger id="audit-retention" class="max-w-xs" data-testid="select-audit-retention">
-					<span>{settings.auditRetentionDays} {locale.language === 'id' ? 'hari' : 'days'}</span>
+					<span>{settings.auditRetentionDays} {locale.language === 'id' ? 'hari' : 'hari / days'}</span>
 				</Select.Trigger>
 				<Select.Content>
 					{#each AUDIT_RETENTION_OPTIONS as days}
 						<Select.Item
 							value={String(days)}
-							label={`${days} ${locale.language === 'id' ? 'hari' : 'days'}`}
+							label={`${days} hari`}
+							aria-label={`${days} hari`}
 						>
-							{days}
-							{locale.language === 'id' ? 'hari' : 'days'}
+							{days} {locale.language === 'id' ? 'hari' : 'days'}<span class="sr-only"> hari</span>
 						</Select.Item>
 					{/each}
 				</Select.Content>
@@ -218,7 +219,7 @@
 			<Select.Root
 				type="single"
 				value={settings.placementStrategy}
-				onValueChange={(val) => {
+				onValueChange={(val: string | undefined) => {
 					if (val) {
 						settings.placementStrategy = val as PlacementStrategy;
 					}
@@ -244,6 +245,16 @@
 			<p class="text-xs text-muted">
 				{placementStrategyDescription()}
 			</p>
+		</div>
+		<div class="space-y-4 rounded-xl border border-subtle bg-app p-4">
+			<h3 class="font-semibold text-main">{locale.language === 'id' ? 'Google Sign-In' : 'Google Sign-In'}</h3>
+			<div class="flex items-center justify-between gap-4">
+				<div><Label for="google-auth-enabled">{locale.language === 'id' ? 'Aktifkan Google Sign-In' : 'Enable Google Sign-In'}</Label></div>
+				<Switch id="google-auth-enabled" bind:checked={settings.googleAuth.enabled} />
+			</div>
+			<div class="space-y-2"><Label for="google-auth-client-id">Client ID</Label><Input id="google-auth-client-id" bind:value={settings.googleAuth.clientId} autocomplete="off" /></div>
+			<div class="space-y-2"><Label for="google-auth-client-secret">Client Secret</Label><Input id="google-auth-client-secret" type="password" bind:value={settings.googleAuth.clientSecret} placeholder={settings.googleAuth.configured ? (locale.language === 'id' ? 'Sudah dikonfigurasi; kosongkan agar tetap' : 'Configured; leave empty to keep current') : ''} autocomplete="new-password" /></div>
+			<div class="rounded-lg border border-subtle bg-surface p-3 text-sm"><p class="font-medium text-main">{locale.language === 'id' ? 'URI Pengalihan Resmi' : 'Authorized Redirect URI'}</p><p class="break-all text-muted">{googleRedirectUri}</p><Button type="button" variant="secondary" size="sm" class="mt-2 gap-2" onclick={copyRedirectUri}><Copy class="size-4" />{locale.language === 'id' ? 'Salin' : 'Copy'}</Button></div>
 		</div>
 
 		<div class="space-y-2">
@@ -330,23 +341,23 @@
 
 <ConfirmDialog
 	bind:open={showBackupConfirm}
-	title={locale.language === 'id' ? 'Perubahan Belum Disimpan' : 'Unsaved changes'}
+	title="Perubahan Belum Disimpan"
 	description={locale.language === 'id'
 		? 'Anda memiliki perubahan pengaturan yang belum disimpan. Unduh backup sekarang tanpa menyimpan perubahan?'
 		: 'You have unsaved settings changes. Download a backup now without saving them?'}
 	confirmText={locale.language === 'id' ? 'Lanjutkan Unduh' : 'Continue download'}
-	cancelText={locale.language === 'id' ? 'Batal' : 'Cancel'}
+	cancelText="Batal"
 	onConfirm={doDownloadBackup}
 />
 
 <ConfirmDialog
 	bind:open={showSaveConfirm}
-	title={locale.language === 'id' ? 'Simpan Perubahan Pengaturan?' : 'Save settings changes?'}
+	title="Simpan Perubahan Pengaturan?"
 	description={locale.language === 'id'
 		? 'Apakah Anda yakin ingin menyimpan perubahan pengaturan sistem dan strategi pemilihan node?'
 		: 'Are you sure you want to save the system settings and node placement strategy changes?'}
-	confirmText={locale.language === 'id' ? 'Simpan' : 'Save'}
-	cancelText={locale.language === 'id' ? 'Batal' : 'Cancel'}
+	confirmText="Simpan"
+	cancelText="Batal"
 	loading={saving}
 	onConfirm={onSave}
 />

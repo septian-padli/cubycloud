@@ -7,6 +7,10 @@
 	import { authAPI } from '$lib/api/auth.js';
 	import type { AdminUser } from '$lib/types/admin.js';
 	import { locale } from '$lib/locale.svelte.js';
+	import { ConfirmDialog } from '$lib/components/ui/confirm-dialog/index.js';
+	import { Button } from '$lib/components/ui/button/index.js';
+	import * as Card from '$lib/components/ui/card/index.js';
+	import { Link2 } from '@lucide/svelte';
 
 	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 	const chrome = getDriveChrome();
@@ -18,6 +22,21 @@
 
 	const targetUserId = $derived(page.params.userId);
 	const isSelf = $derived(chrome.user.id === targetUserId);
+	let googleStatus = $state<{ linked: boolean; email: string }>({ linked: false, email: '' });
+	let showUnlinkConfirm = $state(false);
+	async function loadGoogleStatus() {
+		if (!isSelf) return;
+		const result = await authAPI.getGoogleAuthStatus();
+		if (result.data) googleStatus = result.data;
+	}
+	function startGoogleLink() {
+		window.location.href = `/api/v1/auth/google/start?action=link&redirect_uri=${encodeURIComponent(`${window.location.origin}/api/v1/auth/google/callback`)}`;
+	}
+	async function unlinkGoogle() {
+		const result = await authAPI.unlinkGoogle();
+		if (result.error) toast.error(result.error);
+		else { googleStatus = { linked: false, email: '' }; toast.success(tx('Akun Google diputus', 'Google account disconnected')); }
+	}
 
 	async function loadProfile(id: string) {
 		loading = true;
@@ -57,9 +76,7 @@
 	}
 
 	$effect(() => {
-		if (targetUserId) {
-			void loadProfile(targetUserId);
-		}
+		if (targetUserId) void loadProfile(targetUserId).then(() => void loadGoogleStatus());
 	});
 
 	const viewUser = $derived(
@@ -138,11 +155,22 @@
 		</p>
 		<p class="mt-1 text-sm text-muted">{errorState}</p>
 	</div>
-{:else if viewUser}
-	<UserProfileView
-		user={viewUser}
-		{quota}
-		editable={isSelf}
-		onSaveProfile={isSelf ? onSaveProfile : undefined}
-	/>
-{/if}
+	{:else if viewUser}
+		<div class="space-y-5">
+			<UserProfileView user={viewUser} {quota} editable={isSelf} onSaveProfile={isSelf ? onSaveProfile : undefined} />
+			{#if isSelf}
+				<Card.Root class="rounded-xl border-subtle bg-surface shadow-none">
+					<Card.Header><Card.Title>{tx('Akun Google', 'Google Account')}</Card.Title><Card.Description>{tx('Hubungkan akun Google untuk masuk dengan Google.', 'Connect a Google account to sign in with Google.')}</Card.Description></Card.Header>
+					<Card.Content class="flex flex-wrap items-center justify-between gap-4">
+						{#if googleStatus.linked}
+							<div><p class="font-medium text-main">{googleStatus.email}</p><p class="text-sm text-success">{tx('Terhubung', 'Connected')}</p></div>
+							<Button variant="destructive" onclick={() => (showUnlinkConfirm = true)}>{tx('Putuskan Google', 'Disconnect Google')}</Button>
+						{:else}
+							<Button class="gap-2" onclick={startGoogleLink}><Link2 class="size-4" />{tx('Hubungkan Google', 'Connect Google')}</Button>
+						{/if}
+					</Card.Content>
+				</Card.Root>
+			{/if}
+		</div>
+		<ConfirmDialog bind:open={showUnlinkConfirm} title={tx('Putuskan akun Google?', 'Disconnect Google account?')} description={tx('Anda harus memiliki kata sandi atau akses pemulihan untuk mempertahankan akses.', 'You must have a password or recovery access to retain account access.')} confirmText={tx('Putuskan', 'Disconnect')} cancelText={tx('Batal', 'Cancel')} variant="destructive" onConfirm={unlinkGoogle} />
+	{/if}

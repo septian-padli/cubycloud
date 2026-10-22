@@ -15,6 +15,11 @@
 		type LinuxDevice
 	} from '$lib/types/setup.js';
 	import * as Alert from '$lib/components/ui/alert/index.js';
+	import * as Dialog from '$lib/components/ui/dialog/index.js';
+	import { Button } from '$lib/components/ui/button/index.js';
+	import { Input } from '$lib/components/ui/input/index.js';
+	import { Label } from '$lib/components/ui/label/index.js';
+	import { Switch } from '$lib/components/ui/switch/index.js';
 	import SetupStepper from './setup-stepper.svelte';
 	import SetupStepNav from './setup-step-nav.svelte';
 	import SetupSuccessDialog from './setup-success-dialog.svelte';
@@ -23,7 +28,7 @@
 	import StepStrategy from './steps/step-strategy.svelte';
 	import StepCloud from './steps/step-cloud.svelte';
 	import StepRecovery from './steps/step-recovery.svelte';
-	import { Info } from '@lucide/svelte';
+	import { Copy, Info } from '@lucide/svelte';
 	import { locale } from '$lib/locale.svelte.js';
 	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
@@ -48,6 +53,11 @@
 		accessKey: '',
 		secretKey: ''
 	});
+	let googleEnabled = $state(false);
+	let googleClientId = $state('');
+	let googleClientSecret = $state('');
+	let showGoogleHelp = $state(false);
+	const googleRedirectUri = $derived(browser ? `${window.location.origin}/api/v1/auth/google/callback` : '');
 	let recoveryKey = $state('');
 	let recoveryDownloaded = $state(false);
 
@@ -67,22 +77,24 @@
 				cloud.accessKey.trim() !== '' &&
 				cloud.secretKey.trim() !== '')
 	);
+	const googleValid = $derived(
+		!googleEnabled || (googleClientId.trim().length > 0 && googleClientSecret.trim().length > 0)
+	);
 
 	const canNext = $derived.by(() => {
 		switch (currentStep) {
 			case 1:
 				return adminValid;
 			case 2:
-				// Local storage is optional; "at least one node" is enforced on step 3
-				return true;
+				return googleValid;
 			case 3:
-				// Cloud is optional, but at least one storage node (local or cloud) is required
-				return cloudValid && (cloud.enabled || activeNodeCount > 0);
+				return true;
 			case 4:
-				return strategy !== null;
+				return cloudValid && (cloud.enabled || activeNodeCount > 0);
 			case 5:
-				// Final gate re-checks every tab so no validation fires only at submit
-				return recoveryDownloaded && adminValid && cloudValid && strategy !== null;
+				return strategy !== null;
+			case 6:
+				return recoveryDownloaded && adminValid && cloudValid && strategy !== null && googleValid;
 			default:
 				return false;
 		}
@@ -100,35 +112,35 @@
 	async function goNext() {
 		if (!canNext) return;
 
-		// Step 4 → Step 5: Generate recovery key
-		if (currentStep === 4) {
+		if (currentStep === 5) {
 			generateRecoveryKey();
-			currentStep = 5;
+			currentStep = 6;
 			return;
 		}
 
-		if (currentStep < 5) {
+		if (currentStep < 6) {
 			currentStep = (currentStep + 1) as SetupStepId;
 			return;
 		}
 
-		// Step 5: submit with pre-generated recovery key
+		// Step 6: submit with pre-generated recovery key
 		try {
 			const req: CompleteSetupRequest = {
 				admin: {
 					username: admin.username,
 					email: admin.email,
 					password: admin.password,
-					recovery_key: recoveryKey // Send client-generated key
+					recovery_key: recoveryKey
 				},
 				storage_nodes: nodes
 					.filter((n) => n.enabled)
-					.map((n) => ({
-						path: n.path,
-						capacity_bytes: n.capacityCapGb * 1e9,
-						enabled: true
-					})),
-				placement_strategy: strategy
+					.map((n) => ({ path: n.path, capacity_bytes: n.capacityCapGb * 1e9, enabled: true })),
+				placement_strategy: strategy,
+				google_auth: {
+					enabled: googleEnabled,
+					client_id: googleEnabled ? googleClientId.trim() : '',
+					client_secret: googleEnabled ? googleClientSecret : ''
+				}
 			};
 			if (cloud.enabled) {
 				req.cloud = {
@@ -142,18 +154,12 @@
 			}
 			await completeSetup(req);
 			clearLocalStorage();
-			// Redirect directly to home (no success dialog needed, key already downloaded)
 			goto('/drive/home');
 		} catch (err: any) {
-			if (err.status === 409) {
-				toast.error(tx('Setup sudah selesai', 'Setup already completed'));
-			} else if (err.status === 400) {
-				toast.error(err.message || tx('Kesalahan validasi', 'Validation error'));
-			} else if (err.status === 500) {
-				toast.error(tx('Kesalahan server. Silakan coba lagi.', 'Server error. Please try again.'));
-			} else {
-				toast.error(tx('Tidak dapat terhubung ke server', 'Cannot connect to server'));
-			}
+			if (err.status === 409) toast.error(tx('Setup sudah selesai', 'Setup already completed'));
+			else if (err.status === 400) toast.error(err.message || tx('Kesalahan validasi', 'Validation error'));
+			else if (err.status === 500) toast.error(tx('Kesalahan server. Silakan coba lagi.', 'Server error. Please try again.'));
+			else toast.error(tx('Tidak dapat terhubung ke server', 'Cannot connect to server'));
 		}
 	}
 
@@ -176,7 +182,7 @@
 			accessKey: '',
 			secretKey: ''
 		};
-		currentStep = 4;
+		currentStep = 5;
 	}
 
 	function onContinueHome() {
@@ -193,21 +199,12 @@
 		try {
 			const draft = {
 				currentStep,
-				admin: {
-					username: admin.username,
-					email: admin.email,
-					// NEVER save password to localStorage
-					password: '',
-					confirmPassword: ''
-				},
+				admin: { username: admin.username, email: admin.email, password: '', confirmPassword: '' },
 				nodes,
 				strategy,
-				cloud: {
-					...cloud,
-					// NEVER save credentials to localStorage
-					accessKey: '',
-					secretKey: ''
-				},
+				googleEnabled,
+				googleClientId,
+				cloud: { ...cloud, accessKey: '', secretKey: '' },
 				timestamp: Date.now()
 			};
 			localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
@@ -240,6 +237,8 @@
 			}
 			if (draft.nodes) nodes = draft.nodes;
 			if (draft.strategy) strategy = draft.strategy;
+			googleEnabled = draft.googleEnabled || false;
+			googleClientId = draft.googleClientId || '';
 			if (draft.cloud) {
 				cloud.enabled = draft.cloud.enabled || false;
 				cloud.provider = draft.cloud.provider || 'R2';
@@ -274,6 +273,8 @@
 		void admin.email;
 		void nodes;
 		void strategy;
+		void googleEnabled;
+		void googleClientId;
 		void cloud.enabled;
 		void cloud.provider;
 		void cloud.endpoint;
@@ -337,6 +338,7 @@
 					? SETUP_STEPS[currentStep - 1]?.description
 					: [
 							'Create the first administrator account.',
+							'Configure optional Google Sign-In.',
 							'Choose local storage nodes.',
 							'Connect cloud storage.',
 							'Choose a file placement strategy.',
@@ -348,45 +350,64 @@
 		{#if currentStep === 1}
 			<StepAdmin bind:admin />
 		{:else if currentStep === 2}
-			<StepStorage bind:nodes bind:devices loading={loadingNodes} />
+			<div class="space-y-5 rounded-xl border border-subtle bg-surface p-5">
+				<div class="flex items-center justify-between gap-4">
+					<div>
+						<h2 class="font-semibold text-main">{tx('Google Authentication (Opsional)', 'Google Authentication (Optional)')}</h2>
+						<p class="text-sm text-muted">{tx('Aktifkan Google Sign-In untuk akun yang telah terhubung. Kredensial ini hanya diperlukan untuk mengaktifkan fitur Sign-In dengan Google, bukan untuk menggunakan CubyCloud.', 'Enable Google Sign-In for accounts that have been linked. These credentials are only required to enable Sign in with Google, not to use CubyCloud.')}</p>
+					</div>
+					<Switch bind:checked={googleEnabled} aria-label={tx('Aktifkan Google Sign-In', 'Enable Google Sign-In')} />
+				</div>
+				{#if googleEnabled}
+					<div class="space-y-2">
+						<Label for="google-client-id">Client ID</Label>
+						<Input id="google-client-id" bind:value={googleClientId} autocomplete="off" />
+						{#if !googleClientId.trim()}<p class="text-xs text-destructive">{tx('Client ID wajib diisi.', 'Client ID is required.')}</p>{/if}
+					</div>
+					<div class="space-y-2">
+						<Label for="google-client-secret">Client Secret</Label>
+						<Input id="google-client-secret" type="password" bind:value={googleClientSecret} autocomplete="new-password" />
+						{#if !googleClientSecret}<p class="text-xs text-destructive">{tx('Client Secret wajib diisi.', 'Client Secret is required.')}</p>{/if}
+					</div>
+					<div class="rounded-lg border border-subtle bg-app p-3 text-sm">
+						<p class="font-medium text-main">{tx('URI Pengalihan Resmi', 'Authorized Redirect URI')}</p>
+						<p class="break-all text-muted">{googleRedirectUri}</p>
+						<Button variant="secondary" size="sm" class="mt-2 gap-2" onclick={() => void navigator.clipboard.writeText(googleRedirectUri)}><Copy class="size-4" />{tx('Salin', 'Copy')}</Button>
+					</div>
+					<Button variant="secondary" onclick={() => (showGoogleHelp = true)}><Info class="mr-2 size-4" />{tx('Cara mendapatkan kredensial Google OAuth', 'How to get Google OAuth credentials')}</Button>
+				{/if}
+			</div>
 		{:else if currentStep === 3}
-			<StepCloud bind:cloud noLocalNodes={nodes.filter((n) => n.enabled).length === 0} />
+			<StepStorage bind:nodes bind:devices loading={loadingNodes} />
 		{:else if currentStep === 4}
+			<StepCloud bind:cloud noLocalNodes={nodes.filter((n) => n.enabled).length === 0} />
+		{:else if currentStep === 5}
 			<StepStrategy bind:strategy />
 		{:else}
 			<StepRecovery bind:recoveryKey bind:downloaded={recoveryDownloaded} />
-			{#if !adminValid || !cloudValid}
-				<Alert.Root>
-					<Alert.Title>{tx('Data belum lengkap', 'Incomplete information')}</Alert.Title>
-					<Alert.Description>
-						{!adminValid
-							? tx(
-									'Lengkapi dulu data akun (nama pengguna, email, kata sandi) di Langkah 1.',
-									'Complete the account details (username, email, password) in Step 1 first.'
-								)
-							: tx(
-									'Lengkapi dulu kredensial cloud di Langkah 3.',
-									'Complete the cloud credentials in Step 3 first.'
-								)}
-					</Alert.Description>
-				</Alert.Root>
-			{/if}
 		{/if}
 
 		<div class="rounded-xl border border-subtle bg-surface px-4 py-4 md:px-5">
-			<SetupStepNav
-				canBack={currentStep > 1}
-				{canNext}
-				isLast={currentStep === 5}
-				showSkip={currentStep === 3}
-				nextLabel={tx('Selesaikan Setup & Masuk ke CubyCloud', 'Complete Setup & Enter CubyCloud')}
-				onBack={goBack}
-				onNext={goNext}
-				onSkip={skipCloud}
-			/>
+			<SetupStepNav canBack={currentStep > 1} {canNext} isLast={currentStep === 6} showSkip={currentStep === 4} nextLabel={tx('Selesaikan Setup & Masuk ke CubyCloud', 'Complete Setup & Enter CubyCloud')} onBack={goBack} onNext={goNext} onSkip={skipCloud} />
 		</div>
 	</div>
 </div>
+
+	<Dialog.Root bind:open={showGoogleHelp}>
+		<Dialog.Content>
+			<Dialog.Header><Dialog.Title>{tx('Cara mendapatkan kredensial Google OAuth', 'How to get Google OAuth credentials')}</Dialog.Title></Dialog.Header>
+		<Dialog.Description>
+			<ol class="list-decimal space-y-2 pl-5">
+				<li>{tx('Buka Google Cloud Console dan pilih atau buat project.', 'Open Google Cloud Console and select or create a project.')}</li>
+				<li>{tx('Buka menu "APIs & Services" > "OAuth consent screen" (atau "Google Auth Platform"). Konfigurasikan consent screen dengan nama aplikasi dan domain Anda.', 'Go to "APIs & Services" > "OAuth consent screen" (or "Google Auth Platform"). Configure the consent screen with your application name and domain.')}</li>
+				<li>{tx('Buat OAuth Client ID tipe "Web application" di halaman Credentials.', 'Create an OAuth Client ID of type "Web application" on the Credentials page.')}</li>
+				<li>{tx('Tambahkan Authorized Redirect URI yang ditampilkan di atas ke konfigurasi client.', 'Add the Authorized Redirect URI shown above to the client configuration.')}</li>
+				<li>{tx('Salin Client ID dan Client Secret yang dihasilkan.', 'Copy the generated Client ID and Client Secret.')}</li>
+				<li>{tx('Jika aplikasi masih dalam mode "Testing", tambahkan alamat email pengguna yang akan mencoba Google Sign-In ke daftar Test Users di consent screen.', 'If your app is still in "Testing" mode, add the email addresses of users who will try Google Sign-In to the Test Users list on the consent screen.')}</li>
+			</ol>
+		</Dialog.Description>
+		</Dialog.Content>
+	</Dialog.Root>
 
 <SetupSuccessDialog
 	bind:open={successOpen}

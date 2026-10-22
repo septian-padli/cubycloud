@@ -12,6 +12,7 @@
 	{@render children()}
 {:else}
 	<div class="flex-1 overflow-y-auto" data-testid="admin-forbidden-page">
+		<span class="sr-only">403 Akses ditolak</span>
 		<ErrorPage status={403} showHeader={false} homeHref="/drive/my-storage" />
 	</div>
 {/if}
