@@ -88,7 +88,7 @@ type AdminUsersListResponse struct {
 type CreateUserRequest struct {
 	Username  string   `json:"username"`
 	Email     string   `json:"email"`
-	Password  string   `json:"password"`
+	Password  string   `json:"password,omitempty"`
 	QuotaMode string   `json:"quota_mode"`
 	QuotaGB   *float64 `json:"quota_gb,omitempty"`
 }

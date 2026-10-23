@@ -4,18 +4,22 @@
 	import { effectiveQuotaLabel } from '$lib/mocks/admin-users.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { MoreVertical, Eye, Pencil, Trash2 } from '@lucide/svelte';
+	import { MoreVertical, Eye, Pencil, Trash2, KeyRound } from '@lucide/svelte';
 	import { locale } from '$lib/locale.svelte.js';
 
 	let {
 		users,
 		defaultQuota,
+		currentUserId,
 		onEditQuota,
+		onResetPassword,
 		onDelete
 	}: {
 		users: AdminUser[];
 		defaultQuota: DefaultQuotaPolicy;
+		currentUserId?: string;
 		onEditQuota: (user: AdminUser) => void;
+		onResetPassword?: (user: AdminUser) => void;
 		onDelete?: (user: AdminUser) => void;
 	} = $props();
 
@@ -44,6 +48,7 @@
 			{#each users as user (user.id)}
 				{@const isSuperAdmin = String(user.role).toLowerCase() === 'super_admin'}
 				{@const quotaLabel = effectiveQuotaLabel(user, defaultQuota)}
+				{@const isSelf = currentUserId != null && user.id === currentUserId}
 				<tr class="border-b border-subtle last:border-b-0">
 					<td class="px-4 py-3 font-medium text-main">{user.username}</td>
 					<td class="px-4 py-3 text-muted">{user.email}</td>
@@ -81,7 +86,7 @@
 										</Button>
 									{/snippet}
 								</DropdownMenu.Trigger>
-								<DropdownMenu.Content align="end" class="min-w-40">
+								<DropdownMenu.Content align="end" class="min-w-48">
 									<DropdownMenu.Item
 										class="gap-2"
 										onclick={() => goto(`/drive/profile/${user.id}`)}
@@ -97,6 +102,15 @@
 										<Pencil class="size-4 stroke-2" />
 										{locale.language === 'id' ? 'Edit Kuota' : 'Edit quota'}
 									</DropdownMenu.Item>
+									{#if onResetPassword && !isSelf}
+										<DropdownMenu.Item
+											class="gap-2"
+											onclick={() => onResetPassword(user)}
+										>
+											<KeyRound class="size-4 stroke-2" />
+											{locale.language === 'id' ? 'Reset Kata Sandi' : 'Reset password'}
+										</DropdownMenu.Item>
+									{/if}
 									{#if onDelete && !isSuperAdmin}
 										<DropdownMenu.Item
 											variant="destructive"

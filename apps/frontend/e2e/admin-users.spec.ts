@@ -26,9 +26,9 @@ async function ensureAdminLoggedIn(page: Page) {
 
 	await page.context().clearCookies();
 	await page.goto('/login');
-	await page.getByLabel('Username atau Email').fill(adminUsername);
-	await page.getByRole('textbox', { name: 'Password' }).fill(adminPassword);
-	await page.getByRole('button', { name: 'Masuk' }).click();
+	await page.getByLabel(/Username (atau|or) (Email|email)/).fill(adminUsername);
+	await page.getByRole('textbox', { name: /Password|Kata sandi/ }).fill(adminPassword);
+	await page.getByRole('button', { name: /Masuk|Sign in/ }).click();
 	await page.waitForURL('**/drive/home');
 }
 
@@ -39,28 +39,27 @@ test('Admin Users manages user creation, quota modes (fractional, default, unlim
 	});
 	// 1. Navigate to /admin/users
 	await page.goto('/admin/users');
-	await expect(page.getByRole('heading', { name: 'Users & Quotas' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: /Users & Quotas|Pengguna & Kuota/ })).toBeVisible();
 
 	// 2. Open Buat Pengguna dialog
-	await page.getByRole('button', { name: 'Buat Pengguna' }).click();
-	await expect(page.getByRole('heading', { name: 'Buat Pengguna' })).toBeVisible();
+	await page.getByRole('button', { name: /Buat Pengguna|Create User/ }).click();
+	await expect(page.getByRole('heading', { name: /Buat Pengguna|Create user/ })).toBeVisible();
 
 	// 3. Fill form and choose fractional quota (1.5 GB)
 	const newUsername = 'tester_quota';
-	await page.getByLabel('Nama pengguna').fill(newUsername);
+	await page.getByLabel(/Nama pengguna|Username/).fill(newUsername);
 	await page.getByLabel('Email').fill('tester_quota@example.test');
-	await page.getByLabel('Kata sandi').fill('SecretPass123!');
 
 	// Select Atur GB and verify suffix GB and full width
-	await page.getByText('Atur GB').click();
-	const quotaInput = page.getByLabel('Kuota dalam GB');
+	await page.getByText(/Atur GB|Set GB/).click();
+	const quotaInput = page.getByLabel(/Kuota dalam GB|Quota in GB/);
 	await expect(quotaInput).toBeVisible();
 	await expect(quotaInput).toHaveClass(/w-full/);
 	await expect(page.getByRole('dialog').getByText('GB', { exact: true })).toBeVisible();
 	await quotaInput.fill('1.5');
 	// Submit creation
-	await page.getByRole('button', { name: 'Buat Pengguna' }).last().click();
-	await expect(page.getByRole('heading', { name: 'Buat Pengguna' })).not.toBeVisible();
+	await page.getByRole('button', { name: /Buat Pengguna|Create user/ }).last().click();
+	await expect(page.getByRole('heading', { name: /Buat Pengguna|Create user/ })).not.toBeVisible();
 
 	// 4. Verify user appears in table with 1.5 GB
 	const userRow = page.locator('tr').filter({ hasText: newUsername });
@@ -68,26 +67,26 @@ test('Admin Users manages user creation, quota modes (fractional, default, unlim
 	await expect(userRow.getByText('1.5 GB')).toBeVisible();
 
 	// 5. Edit Kuota -> Reset ke Default
-	await userRow.getByRole('button', { name: `Aksi ${newUsername}` }).click();
-	await page.getByRole('menuitem', { name: 'Edit Kuota' }).click();
-	await expect(page.getByRole('heading', { name: 'Edit Kuota' })).toBeVisible();
+	await userRow.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${newUsername}`) }).click();
+	await page.getByRole('menuitem', { name: /Edit Kuota|Edit quota/ }).click();
+	await expect(page.getByRole('heading', { name: /Edit Kuota|Edit quota/ })).toBeVisible();
 
 	// Select Default
-	await page.getByText(/Reset ke Default/).click();
-	await page.getByRole('button', { name: 'Simpan' }).click();
-	await expect(page.getByRole('heading', { name: 'Edit Kuota' })).not.toBeVisible();
+	await page.getByText(/Reset ke Default|Reset to [Dd]efault/i).click();
+	await page.getByRole('button', { name: /Simpan|Save/ }).click();
+	await expect(page.getByRole('heading', { name: /Edit Kuota|Edit quota/ })).not.toBeVisible();
 
 	// Verify quota is updated (100 GB default from setup)
 	await expect(userRow.getByText('100 GB')).toBeVisible();
 
 	// 6. Edit Kuota -> Unlimited
-	await userRow.getByRole('button', { name: `Aksi ${newUsername}` }).click();
-	await page.getByRole('menuitem', { name: 'Edit Kuota' }).click();
-	await expect(page.getByRole('heading', { name: 'Edit Kuota' })).toBeVisible();
+	await userRow.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${newUsername}`) }).click();
+	await page.getByRole('menuitem', { name: /Edit Kuota|Edit quota/ }).click();
+	await expect(page.getByRole('heading', { name: /Edit Kuota|Edit quota/ })).toBeVisible();
 
-	await page.getByRole('dialog').getByText('Unlimited').click();
-	await page.getByRole('button', { name: 'Simpan' }).click();
-	await expect(page.getByRole('heading', { name: 'Edit Kuota' })).not.toBeVisible();
+	await page.getByRole('dialog').getByText(/Unlimited|Tanpa batas/).click();
+	await page.getByRole('button', { name: /Simpan|Save/ }).click();
+	await expect(page.getByRole('heading', { name: /Edit Kuota|Edit quota/ })).not.toBeVisible();
 
 	// Verify quota is updated to Unlimited
 	await expect(userRow.getByText('Unlimited')).toBeVisible();
@@ -96,7 +95,7 @@ test('Admin Users manages user creation, quota modes (fractional, default, unlim
 	const baseURL = new URL(page.url()).origin;
 	const userApi = await request.newContext({ baseURL });
 	const userLogin = await userApi.post('/api/v1/auth/login', {
-		data: { identifier: newUsername, password: 'SecretPass123!' }
+		data: { identifier: newUsername, password: '12345678' }
 	});
 	expect(userLogin.ok()).toBeTruthy();
 	const uploadRes = await userApi.post('/api/v1/drive/my-storage/upload?filename=dummy.bin', {
@@ -114,48 +113,54 @@ test('Admin Users manages user creation, quota modes (fractional, default, unlim
 	await expect(userRow).toBeVisible();
 
 	// 8. Lower quota below usage (set to 0 GB) -> triggers confirmation dialog
-	await userRow.getByRole('button', { name: `Aksi ${newUsername}` }).click();
-	await page.getByRole('menuitem', { name: 'Edit Kuota' }).click();
-	await expect(page.getByRole('heading', { name: 'Edit Kuota' })).toBeVisible();
+	await userRow.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${newUsername}`) }).click();
+	await page.getByRole('menuitem', { name: /Edit Kuota|Edit quota/ }).click();
+	await expect(page.getByRole('heading', { name: /Edit Kuota|Edit quota/ })).toBeVisible();
 
-	await page.getByText('Atur GB').click();
-	const editQuotaInput = page.getByRole('dialog').getByLabel('Kuota dalam GB');
+	await page.getByText(/Atur GB|Set GB/).click();
+	const editQuotaInput = page.getByRole('dialog').getByLabel(/Kuota dalam GB|Quota in GB/);
 	await expect(editQuotaInput).toHaveClass(/w-full/);
 	await expect(page.getByRole('dialog').getByText('GB', { exact: true })).toBeVisible();
 	await editQuotaInput.fill('0');
-	await page.getByRole('button', { name: 'Simpan' }).click();
+	await page.getByRole('button', { name: /Simpan|Save/ }).click();
 
 	// Confirm dialog must appear
-	await expect(page.getByRole('heading', { name: 'Konfirmasi Penurunan Kuota' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: /Konfirmasi Penurunan Kuota|Confirm quota reduction/i })).toBeVisible();
 
 	// Click Batal on confirmation dialog
-	await page.getByRole('dialog', { name: 'Konfirmasi Penurunan Kuota' }).getByRole('button', { name: 'Batal' }).click();
-	await expect(page.getByRole('heading', { name: 'Konfirmasi Penurunan Kuota' })).not.toBeVisible();
+	await page.getByRole('dialog', { name: /Konfirmasi Penurunan Kuota|Confirm quota reduction/i }).getByRole('button', { name: /Batal|Cancel/i }).click();
+	await expect(page.getByRole('heading', { name: /Konfirmasi Penurunan Kuota|Confirm quota reduction/i })).not.toBeVisible();
 
 	// Click Simpan again, this time confirm with "Ya, Simpan"
-	await page.getByRole('button', { name: 'Simpan' }).click();
-	await expect(page.getByRole('heading', { name: 'Konfirmasi Penurunan Kuota' })).toBeVisible();
-	await page.getByRole('button', { name: 'Ya, Simpan' }).click();
-	await expect(page.getByRole('heading', { name: 'Konfirmasi Penurunan Kuota' })).not.toBeVisible();
-	await expect(page.getByRole('heading', { name: 'Edit Kuota' })).not.toBeVisible();
+	await page.getByRole('button', { name: /Simpan|Save/i }).click();
+	await expect(page.getByRole('heading', { name: /Konfirmasi Penurunan Kuota|Confirm quota reduction/i })).toBeVisible();
+	await page.getByRole('button', { name: /Ya, Simpan|Yes, save/i }).click();
+	await expect(page.getByRole('heading', { name: /Konfirmasi Penurunan Kuota|Confirm quota reduction/i })).not.toBeVisible();
+	await expect(page.getByRole('heading', { name: /Edit Kuota|Edit quota/ })).not.toBeVisible();
 
 	// Verify quota is updated to 0 GB
 	await expect(userRow.getByRole('cell', { name: '0 GB', exact: true })).toBeVisible();
 
 	// Verify Super Admin row does NOT have 'Hapus' action item (hidden for super admin)
 	const adminRow = page.locator('tr').filter({ hasText: adminUsername });
-	await adminRow.getByRole('button', { name: `Aksi ${adminUsername}` }).click();
-	await expect(page.getByRole('menuitem', { name: 'Hapus' })).not.toBeVisible();
+	await adminRow.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${adminUsername}`) }).click();
+	await expect(page.getByRole('menuitem', { name: /Hapus|Delete/ })).not.toBeVisible();
+	await expect(page.getByRole('menuitem', { name: /Reset Kata Sandi|Reset password/ })).not.toBeVisible();
+	await page.keyboard.press('Escape');
+
+	// Verify regular user row has 'Reset Kata Sandi' action item
+	await userRow.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${newUsername}`) }).click();
+	await expect(page.getByRole('menuitem', { name: /Reset Kata Sandi|Reset password/ })).toBeVisible();
 	await page.keyboard.press('Escape');
 
 	// 9. Delete regular user with confirmation dialog requiring exact email
-	await userRow.getByRole('button', { name: `Aksi ${newUsername}` }).click();
-	await page.getByRole('menuitem', { name: 'Hapus' }).click();
+	await userRow.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${newUsername}`) }).click();
+	await page.getByRole('menuitem', { name: /Hapus|Delete/ }).click();
 
-	const deleteDialog = page.getByRole('dialog', { name: 'Hapus Pengguna' });
+	const deleteDialog = page.getByRole('dialog', { name: /Hapus Pengguna|Delete user/ });
 	await expect(deleteDialog).toBeVisible();
 
-	const deleteSubmitBtn = deleteDialog.getByRole('button', { name: 'Hapus Pengguna' });
+	const deleteSubmitBtn = deleteDialog.getByRole('button', { name: /Hapus Pengguna|Delete user/ });
 	await expect(deleteSubmitBtn).toBeDisabled();
 
 	// Type mismatched email -> still disabled
@@ -176,7 +181,7 @@ test('Admin Users manages user creation, quota modes (fractional, default, unlim
 	// Verify deleted user cannot log in
 	const deletedLoginContext = await request.newContext({ baseURL });
 	const deletedLoginRes = await deletedLoginContext.post('/api/v1/auth/login', {
-		data: { identifier: newUsername, password: 'SecretPass123!' }
+		data: { identifier: newUsername, password: '12345678' }
 	});
 	expect(deletedLoginRes.status()).toBe(401);
 	await deletedLoginContext.dispose();
@@ -184,11 +189,11 @@ test('Admin Users manages user creation, quota modes (fractional, default, unlim
 	const sidebar = page.locator('aside').first();
 	await expect(sidebar.getByText(adminUsername)).toBeVisible();
 	await expect(sidebar.getByText(/@example\.test/)).toBeVisible();
-	await expect(sidebar.getByText('terpakai')).toBeVisible();
+	await expect(sidebar.getByText(/terpakai|used/)).toBeVisible();
 
 	// Open three-dot account menu popover in sidebar
-	await sidebar.getByRole('button', { name: 'Menu akun' }).click();
-	const logoutItem = page.getByRole('menuitem', { name: 'Logout' });
+	await sidebar.getByRole('button', { name: /Menu akun|Account menu/ }).click();
+	const logoutItem = page.getByRole('menuitem', { name: /Logout|Log out|Keluar/ });
 	await expect(logoutItem).toBeVisible();
 	await logoutItem.click();
 
@@ -202,12 +207,11 @@ test('Delete User enforces exact email typing, blocks paste, purges personal sto
 
 	// 1. Create user alice_del via Admin UI
 	await page.goto('/admin/users');
-	await page.getByRole('button', { name: 'Buat Pengguna' }).click();
-	await page.getByLabel('Nama pengguna').fill('alice_del');
+	await page.getByRole('button', { name: /Buat Pengguna|Create User/ }).click();
+	await page.getByLabel(/Nama pengguna|Username/).fill('alice_del');
 	await page.getByLabel('Email').fill('alice_del@example.test');
-	await page.getByLabel('Kata sandi').fill('Secret12345!');
-	await page.getByRole('button', { name: 'Buat Pengguna' }).last().click();
-	await expect(page.getByRole('heading', { name: 'Buat Pengguna' })).not.toBeVisible();
+	await page.getByRole('button', { name: /Buat Pengguna|Create user/ }).last().click();
+	await expect(page.getByRole('heading', { name: /Buat Pengguna|Create user/ })).not.toBeVisible();
 
 	const aliceRow = page.locator('tr').filter({ hasText: 'alice_del' });
 	await expect(aliceRow).toBeVisible();
@@ -218,7 +222,7 @@ test('Delete User enforces exact email typing, blocks paste, purges personal sto
 	// - 1 organization shared file
 	const aliceApi = await request.newContext({ baseURL });
 	const aliceLogin = await aliceApi.post('/api/v1/auth/login', {
-		data: { identifier: 'alice_del', password: 'Secret12345!' }
+		data: { identifier: 'alice_del', password: '12345678' }
 	});
 	expect(aliceLogin.ok()).toBeTruthy();
 
@@ -263,12 +267,12 @@ test('Delete User enforces exact email typing, blocks paste, purges personal sto
 	await aliceApi.dispose();
 
 	// 3. Admin opens delete dialog for alice_del
-	await aliceRow.getByRole('button', { name: 'Aksi alice_del' }).click();
-	await page.getByRole('menuitem', { name: 'Hapus' }).click();
+	await aliceRow.getByRole('button', { name: /(Aksi|Actions for) alice_del/ }).click();
+	await page.getByRole('menuitem', { name: /Hapus|Delete/ }).click();
 
-	const deleteDialog = page.getByRole('dialog', { name: 'Hapus Pengguna' });
+	const deleteDialog = page.getByRole('dialog', { name: /Hapus Pengguna|Delete user/ });
 	await expect(deleteDialog).toBeVisible();
-	const deleteSubmitBtn = deleteDialog.getByRole('button', { name: 'Hapus Pengguna' });
+	const deleteSubmitBtn = deleteDialog.getByRole('button', { name: /Hapus Pengguna|Delete user/ });
 	await expect(deleteSubmitBtn).toBeDisabled();
 
 	// 4. Test paste prevention: dispatch a paste event
@@ -303,7 +307,7 @@ test('Delete User enforces exact email typing, blocks paste, purges personal sto
 	// 8. Verify deleted user cannot log in
 	const verifyContext = await request.newContext({ baseURL });
 	const reLogin = await verifyContext.post('/api/v1/auth/login', {
-		data: { identifier: 'alice_del', password: 'Secret12345!' }
+		data: { identifier: 'alice_del', password: '12345678' }
 	});
 	expect(reLogin.status()).toBe(401);
 
@@ -320,4 +324,72 @@ test('Delete User enforces exact email typing, blocks paste, purges personal sto
 	expect(foundDoc?.created_by).toBe('deleted user');
 
 	await verifyContext.dispose();
+});
+
+test('Superadmin can reset another user password with confirmation dialog to default 12345678', async ({ page }) => {
+	await ensureAdminLoggedIn(page);
+	const baseURL = new URL(page.url()).origin;
+
+	// 1. Create a user via Admin UI without entering password
+	await page.goto('/admin/users');
+	await page.getByRole('button', { name: /Buat Pengguna|Create User/ }).click();
+	const targetUsername = 'bob_reset';
+	await page.getByLabel(/Nama pengguna|Username/).fill(targetUsername);
+	await page.getByLabel('Email').fill('bob_reset@example.test');
+	await expect(page.getByText('12345678', { exact: true })).toBeVisible();
+	await page.getByRole('button', { name: /Buat Pengguna|Create user/ }).last().click();
+	await expect(page.getByRole('heading', { name: /Buat Pengguna|Create user/ })).not.toBeVisible();
+
+	const bobRow = page.locator('tr').filter({ hasText: targetUsername });
+	await expect(bobRow).toBeVisible();
+
+	// 2. User bob logs in with default password 12345678
+	const bobContext = await request.newContext({ baseURL });
+	const bobLogin1 = await bobContext.post('/api/v1/auth/login', {
+		data: { identifier: targetUsername, password: '12345678' }
+	});
+	expect(bobLogin1.ok()).toBeTruthy();
+
+	// 3. User bob changes password to a new password
+	const changeRes = await bobContext.post('/api/v1/auth/change-password', {
+		data: {
+			current_password: '12345678',
+			new_password: 'NewSecretPass999!',
+			confirm_password: 'NewSecretPass999!'
+		}
+	});
+	expect(changeRes.ok()).toBeTruthy();
+
+	// 4. Admin opens Reset Kata Sandi dialog for bob
+	await bobRow.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${targetUsername}`) }).click();
+	const resetItem = page.getByRole('menuitem', { name: /Reset Kata Sandi|Reset password/ });
+	await expect(resetItem).toBeVisible();
+	await resetItem.click();
+
+	const resetDialog = page.getByRole('dialog', { name: /Reset Kata Sandi|Reset Password/ });
+	await expect(resetDialog).toBeVisible();
+	await expect(resetDialog.getByText('12345678', { exact: true })).toBeVisible();
+
+	// Cancel test
+	await resetDialog.getByRole('button', { name: /Batal|Cancel/ }).click();
+	await expect(resetDialog).not.toBeVisible();
+
+	// Open dialog again and confirm reset
+	await bobRow.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${targetUsername}`) }).click();
+	await page.getByRole('menuitem', { name: /Reset Kata Sandi|Reset password/ }).click();
+	await expect(resetDialog).toBeVisible();
+	await resetDialog.getByRole('button', { name: /Reset Kata Sandi|Reset Password/ }).click();
+	await expect(resetDialog).not.toBeVisible();
+	// 5. Verify bob cannot log in with changed password anymore
+	const oldPassLogin = await bobContext.post('/api/v1/auth/login', {
+		data: { identifier: targetUsername, password: 'NewSecretPass999!' }
+	});
+	expect(oldPassLogin.status()).toBe(401);
+
+	// 6. Verify bob can log in with default password 12345678
+	const newPassLogin = await bobContext.post('/api/v1/auth/login', {
+		data: { identifier: targetUsername, password: '12345678' }
+	});
+	expect(newPassLogin.ok()).toBeTruthy();
+	await bobContext.dispose();
 });

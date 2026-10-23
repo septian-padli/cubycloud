@@ -206,7 +206,7 @@ class AdminAPI {
 	async createUser(data: {
 		username: string;
 		email: string;
-		password: string;
+		password?: string;
 		quota_mode: string;
 		quota_gb?: number;
 	}): Promise<{ data?: BackendAdminUser; error?: string }> {
@@ -236,6 +236,14 @@ class AdminAPI {
 		return this.request(`/admin/users/${userId}`, {
 			method: 'DELETE',
 			body: data ? JSON.stringify(data) : undefined
+		});
+	}
+
+	async resetUserPassword(
+		userId: string
+	): Promise<{ data?: { message: string }; error?: string }> {
+		return this.request<{ message: string }>(`/admin/users/${userId}/reset-password`, {
+			method: 'POST'
 		});
 	}
 

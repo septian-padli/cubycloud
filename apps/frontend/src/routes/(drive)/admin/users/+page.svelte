@@ -4,11 +4,13 @@
 	import type { AdminUser, DefaultQuotaPolicy } from '$lib/types/admin.js';
 	import { MOCK_DEFAULT_QUOTA } from '$lib/mocks/admin-users.js';
 	import { adminAPI } from '$lib/api/admin.js';
+	import { authAPI } from '$lib/api/auth.js';
 	import DrivePageHeader from '$lib/components/drive/drive-page-header.svelte';
 	import AdminUsersTable from '$lib/components/admin/admin-users-table.svelte';
 	import CreateUserDialog from '$lib/components/admin/create-user-dialog.svelte';
 	import EditQuotaDialog from '$lib/components/admin/edit-quota-dialog.svelte';
 	import DeleteUserDialog from '$lib/components/admin/delete-user-dialog.svelte';
+	import ResetPasswordDialog from '$lib/components/admin/reset-password-dialog.svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { UserPlus } from '@lucide/svelte';
 	import { locale } from '$lib/locale.svelte.js';
@@ -23,14 +25,22 @@
 	let editUser = $state<AdminUser | null>(null);
 	let deleteOpen = $state(false);
 	let deleteUserTarget = $state<AdminUser | null>(null);
+	let currentUserId = $state<string | undefined>(undefined);
+	let resetOpen = $state(false);
+	let resetUserTarget = $state<AdminUser | null>(null);
 
 	async function loadData() {
 		loading = true;
 		try {
-			const [settingsRes, usersRes] = await Promise.all([
+			const [settingsRes, usersRes, meRes] = await Promise.all([
 				adminAPI.getSettings(),
-				adminAPI.getUsers()
+				adminAPI.getUsers(),
+				authAPI.getMe()
 			]);
+
+			if (meRes.data?.id) {
+				currentUserId = meRes.data.id;
+			}
 
 			if (settingsRes.data?.default_quota) {
 				defaultQuota = {
@@ -77,7 +87,7 @@
 	});
 
 	async function onCreate(
-		payload: Omit<AdminUser, 'id' | 'usedGb' | 'role'> & { password: string }
+		payload: Omit<AdminUser, 'id' | 'usedGb' | 'role'> & { password?: string }
 	) {
 		let mode = 'DEFAULT';
 		if (payload.quotaMode === 'unlimited') {
@@ -176,6 +186,31 @@
 		deleteUserTarget = null;
 		await loadData();
 	}
+
+	function onRequestResetPassword(user: AdminUser) {
+		if (currentUserId && user.id === currentUserId) {
+			toast.info(tx('Anda tidak dapat mereset akun sendiri.', 'You cannot reset your own account.'));
+			return;
+		}
+		resetUserTarget = user;
+		resetOpen = true;
+	}
+
+	async function onConfirmResetPassword(user: AdminUser) {
+		const res = await adminAPI.resetUserPassword(user.id);
+		if (res.error) {
+			toast.error(`${tx('Gagal mereset kata sandi', 'Failed to reset password')}: ${res.error}`);
+			throw new Error(res.error);
+		}
+
+		toast.success(
+			tx(
+				`Kata sandi “${user.username}” berhasil direset ke 12345678.`,
+				`Password for “${user.username}” was reset to 12345678 successfully.`
+			)
+		);
+		resetUserTarget = null;
+	}
 </script>
 
 <svelte:head>
@@ -202,9 +237,17 @@
 		{/snippet}
 	</DrivePageHeader>
 
-	<AdminUsersTable {users} {defaultQuota} {onEditQuota} onDelete={onRequestDelete} />
+	<AdminUsersTable
+		{users}
+		{defaultQuota}
+		{currentUserId}
+		{onEditQuota}
+		onResetPassword={onRequestResetPassword}
+		onDelete={onRequestDelete}
+	/>
 </div>
 
 <CreateUserDialog bind:open={createOpen} {defaultQuota} {onCreate} />
 <EditQuotaDialog bind:open={editOpen} user={editUser} {defaultQuota} onSave={onSaveQuota} />
 <DeleteUserDialog bind:open={deleteOpen} user={deleteUserTarget} onConfirm={onConfirmDelete} />
+<ResetPasswordDialog bind:open={resetOpen} user={resetUserTarget} onConfirm={onConfirmResetPassword} />

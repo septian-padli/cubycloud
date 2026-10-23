@@ -146,7 +146,7 @@ src/routes/
 ### `/admin/users` — people and quotas
 
 - **Access:** Super Admin only. Users table: name, email, role, effective quota, used GB, actions.
-- **Actions:** Create Regular User (default quota inheritance); Edit Quota (GB, Unlimited, Reset to Default). Super Admin always Unlimited and cannot be limited.
+- **Actions:** Create Regular User (no password field, default password notice `12345678`, default quota inheritance); Edit Quota (GB, Unlimited, Reset to Default); Reset Password to default `12345678` with modal confirmation dialog (hidden for own account, rejected by API for self-reset); Delete User (confirmation dialog). Super Admin always Unlimited and cannot be limited.
 - **Note:** `/admin/addons` was removed. ZIP downloads and file archive functionality are core, permanently enabled.
 
 ## 6. Public sharing

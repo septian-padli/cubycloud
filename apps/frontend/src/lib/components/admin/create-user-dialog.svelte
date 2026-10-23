@@ -5,7 +5,6 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
-	import PasswordInput from '$lib/components/password-input.svelte';
 	import { cn } from '$lib/utils.js';
 	import { locale } from '$lib/locale.svelte.js';
 	type CreateQuotaChoice = 'default' | 'override_gb' | 'unlimited';
@@ -17,12 +16,11 @@
 	}: {
 		open?: boolean;
 		defaultQuota: DefaultQuotaPolicy;
-		onCreate: (user: Omit<AdminUser, 'id' | 'usedGb' | 'role'> & { password: string }) => void;
+		onCreate: (user: Omit<AdminUser, 'id' | 'usedGb' | 'role'> & { password?: string }) => void;
 	} = $props();
 
 	let username = $state('');
 	let email = $state('');
-	let password = $state('');
 	let quotaChoice = $state<CreateQuotaChoice>('default');
 	let quotaGb = $state('50');
 
@@ -37,7 +35,6 @@
 	const canSubmit = $derived(
 		username.trim().length > 0 &&
 			email.trim().length > 0 &&
-			password.length >= 8 &&
 			(quotaChoice !== 'override_gb' ||
 				(String(quotaGb).trim() !== '' && !isNaN(Number(quotaGb)) && Number(quotaGb) >= 0))
 	);
@@ -46,7 +43,6 @@
 		if (open) {
 			username = '';
 			email = '';
-			password = '';
 			quotaChoice = 'default';
 			quotaGb = String(defaultQuota.gb);
 		}
@@ -59,7 +55,6 @@
 			username: username.trim(),
 			displayName: username.trim(),
 			email: email.trim(),
-			password,
 			quotaMode: mode,
 			quotaGb: mode === 'override_gb' ? Number(quotaGb) : undefined
 		});
@@ -109,16 +104,16 @@
 				/>
 			</div>
 
-			<div class="grid gap-2">
-				<Label for="create-user-password"
-					>{locale.language === 'id' ? 'Kata sandi' : 'Password'}</Label
-				>
-				<PasswordInput
-					id="create-user-password"
-					bind:value={password}
-					placeholder="••••••••"
-					autocomplete="new-password"
-				/>
+			<div class="rounded-xl border border-subtle bg-app p-3 text-xs leading-relaxed text-muted">
+				<p class="font-medium text-main">
+					{locale.language === 'id' ? 'Kata sandi bawaan:' : 'Default password:'}
+					<span class="font-mono font-semibold text-primary">12345678</span>
+				</p>
+				<p class="mt-1">
+					{locale.language === 'id'
+						? 'Pengguna baru dapat langsung login menggunakan kata sandi 12345678.'
+						: 'New users can sign in immediately using password 12345678.'}
+				</p>
 			</div>
 
 			<div class="grid gap-2">

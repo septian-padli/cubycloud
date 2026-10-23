@@ -41,6 +41,7 @@ services:
 
         mc mb --ignore-existing "local/$$MINIO_BUCKET"
         mc anonymous set none "local/$$MINIO_BUCKET"
+        mc quota set "local/$$MINIO_BUCKET" --size 5GiB
         cat > /tmp/cubycloud-app-policy.json <<EOF
         {
           "Version": "2012-10-17",
@@ -77,3 +78,8 @@ services:
 volumes:
   data:
     name: cubycloud-minio-dev-data
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "size=5g,uid=65532,gid=65532"

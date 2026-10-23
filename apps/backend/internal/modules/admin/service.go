@@ -21,6 +21,7 @@ import (
 )
 
 const (
+	DefaultUserPassword       = "12345678"
 	SettingDefaultQuotaGB     = "default_user_quota_gb"
 	SettingAuditRetentionDays = "audit_log_retention_days"
 	SettingWorkerConcurrency  = "worker_concurrency_limit"
@@ -620,7 +621,11 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*Admi
 	if !strings.Contains(email, "@") || !strings.Contains(email, ".") {
 		return nil, fmt.Errorf("invalid email format")
 	}
-	if len(req.Password) < 8 {
+	password := req.Password
+	if password == "" {
+		password = DefaultUserPassword
+	}
+	if len(password) < 8 {
 		return nil, fmt.Errorf("password must be at least 8 characters")
 	}
 
@@ -663,7 +668,7 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*Admi
 		return nil, fmt.Errorf("invalid quota mode: %s", req.QuotaMode)
 	}
 
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 10)
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), 10)
 	if err != nil {
 		return nil, fmt.Errorf("hash password: %w", err)
 	}
@@ -878,6 +883,47 @@ func (s *Service) DeleteUser(ctx context.Context, actorID, targetID string, req 
 				_ = storage.DeleteBlob(ctx, s.db, s.storage, bc.nodeID, bc.nodePath, bc.diskKey)
 			}
 		}
+	}
+
+	return nil
+}
+
+// ResetUserPassword resets target user's password to default 12345678.
+// Superadmin cannot reset their own password.
+func (s *Service) ResetUserPassword(ctx context.Context, actorID, targetID string) error {
+	if strings.TrimSpace(targetID) == "" {
+		return fmt.Errorf("user ID required")
+	}
+	if actorID != "" && actorID == targetID {
+		return fmt.Errorf("cannot reset your own password")
+	}
+
+	var role string
+	err := s.db.QueryRowContext(ctx, `SELECT role FROM users WHERE id = ? AND deleted_at IS NULL`, targetID).Scan(&role)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("user not found")
+	}
+	if err != nil {
+		return fmt.Errorf("query user: %w", err)
+	}
+
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(DefaultUserPassword), 10)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+
+	now := time.Now()
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE users
+		SET password_hash = ?, token_version = token_version + 1, updated_at = ?
+		WHERE id = ? AND deleted_at IS NULL
+	`, string(passwordHash), now, targetID)
+	if err != nil {
+		return fmt.Errorf("update user password: %w", err)
+	}
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("user not found")
 	}
 
 	return nil

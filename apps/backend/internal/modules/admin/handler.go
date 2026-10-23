@@ -311,6 +311,29 @@ func (h *Handler) DeleteUser(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"message": "user deleted successfully"})
 }
 
+// ResetUserPassword resets a user's password to default 12345678
+func (h *Handler) ResetUserPassword(c echo.Context) error {
+	targetID := c.Param("id")
+	if targetID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": "user ID required"})
+	}
+
+	actorID, _ := c.Get("user_id").(string)
+	if err := h.service.ResetUserPassword(c.Request().Context(), actorID, targetID); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return echo.NewHTTPError(http.StatusNotFound, map[string]string{"error": "user not found"})
+		}
+		if strings.Contains(err.Error(), "cannot reset") || strings.Contains(err.Error(), "required") {
+			return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{"error": "failed to reset user password"})
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{
+		"message": "password reset to default successfully",
+	})
+}
+
 // GetStorageStats returns system-wide storage stats for super admin
 func (h *Handler) GetStorageStats(c echo.Context) error {
 	stats, err := h.service.GetAdminStorageStats(c.Request().Context())
@@ -369,6 +392,7 @@ func RegisterRoutes(e *echo.Echo, db *bun.DB, storage storage.StorageDriver, dat
 	// Users management
 	admin.GET("/users", handler.GetUsers)
 	admin.POST("/users", handler.CreateUser)
+	admin.POST("/users/:id/reset-password", handler.ResetUserPassword)
 	admin.PUT("/users/:id/quota", handler.UpdateUserQuota)
 	admin.DELETE("/users/:id", handler.DeleteUser)
 
