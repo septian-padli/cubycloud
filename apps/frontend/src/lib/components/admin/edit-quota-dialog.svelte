@@ -33,7 +33,7 @@
 			? locale.language === 'id'
 				? 'Tanpa batas'
 				: 'Unlimited'
-			: `${defaultQuota.gb} GB`
+			: `${defaultQuota.gb} GiB`
 	);
 
 	const canSubmit = $derived(
@@ -74,7 +74,7 @@
 	function getTargetLabel(): string {
 		if (quotaChoice === 'unlimited') return locale.language === 'id' ? 'Tanpa batas' : 'Unlimited';
 		if (quotaChoice === 'default') return defaultLabel;
-		return `${Number(quotaGb)} GB`;
+		return `${Number(quotaGb)} GiB`;
 	}
 
 	function executeSave() {
@@ -149,7 +149,7 @@
 						<RadioGroup.Item value="override_gb" id="edit-quota-gb" class="mt-0.5" />
 						<div class="min-w-0 flex-1 space-y-2">
 							<Label for="edit-quota-gb" class="cursor-pointer text-sm font-medium text-main">
-								{locale.language === 'id' ? 'Atur GB' : 'Set GB'}
+								{locale.language === 'id' ? 'Atur GiB' : 'Set GiB'}
 							</Label>
 							{#if quotaChoice === 'override_gb'}
 								<div class="relative flex w-full items-center">
@@ -160,10 +160,10 @@
 										step="any"
 										bind:value={quotaGb}
 										class="w-full pe-9"
-										aria-label={locale.language === 'id' ? 'Kuota dalam GB' : 'Quota in GB'}
+									aria-label={locale.language === 'id' ? 'Kuota dalam GiB' : 'Quota in GiB'}
 									/>
 									<span class="pointer-events-none absolute end-3 text-xs font-semibold text-muted">
-										GB
+									GiB
 									</span>
 								</div>
 							{/if}
@@ -229,8 +229,8 @@
 	bind:open={confirmOpen}
 	title={locale.language === 'id' ? 'Konfirmasi Penurunan Kuota' : 'Confirm quota reduction'}
 	description={locale.language === 'id'
-		? `Kuota baru (${getTargetLabel()}) lebih kecil dari pemakaian saat ini (${user?.usedGb.toFixed(1)} GB). Pengguna tidak akan dapat mengunggah berkas baru sampai pemakaian berada di bawah kuota. Apakah Anda yakin ingin melanjutkan?`
-		: `The new quota (${getTargetLabel()}) is lower than current usage (${user?.usedGb.toFixed(1)} GB). The user will not be able to upload new files until usage is below the quota. Are you sure you want to continue?`}
+		? `Kuota baru (${getTargetLabel()}) lebih kecil dari pemakaian saat ini (${user?.usedGb.toFixed(1)} GiB). Pengguna tidak akan dapat mengunggah berkas baru sampai pemakaian berada di bawah kuota. Apakah Anda yakin ingin melanjutkan?`
+		: `The new quota (${getTargetLabel()}) is lower than current usage (${user?.usedGb.toFixed(1)} GiB). The user will not be able to upload new files until usage is below the quota. Are you sure you want to continue?`}
 	confirmText={locale.language === 'id' ? 'Ya, Simpan' : 'Yes, save'}
 	cancelText={locale.language === 'id' ? 'Batal' : 'Cancel'}
 	variant="destructive"

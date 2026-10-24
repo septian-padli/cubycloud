@@ -252,13 +252,18 @@ export function createTusTransfer(options: TusTransferOptions): TusTransferSessi
 			credentials: 'include'
 		});
 		if (!response.ok) {
-			const error = new Error(
+			let message =
 				locale.language === 'id'
 					? `Gagal membuat sesi upload (HTTP ${response.status})`
-					: `Failed to create upload session (HTTP ${response.status})`
-			);
-			update({ error: error.message, state: 'failed' });
-			throw error;
+					: `Failed to create upload session (HTTP ${response.status})`;
+			try {
+				const body = (await response.clone().json()) as { error?: unknown };
+				if (typeof body.error === 'string' && body.error) message = body.error;
+			} catch {
+				// Keep the HTTP status message when the response has no JSON error code.
+			}
+			update({ error: message, state: 'failed' });
+			throw new Error(message);
 		}
 		const location = response.headers.get('Location');
 		if (!location) {

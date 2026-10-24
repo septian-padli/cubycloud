@@ -54,7 +54,7 @@
 	}
 </script>
 
-<Dialog.Root bind:open={() => open, (v) => setOpen(v)}>
+<Dialog.Root bind:open onOpenChange={setOpen}>
 	<Dialog.Content
 		class="max-h-screen max-w-4xl overflow-y-auto border-subtle bg-surface text-main shadow-none sm:max-w-4xl"
 	>

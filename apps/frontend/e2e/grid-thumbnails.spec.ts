@@ -52,9 +52,9 @@ async function setup(page: Page) {
 
 	await page.context().clearCookies();
 	await page.goto('/login');
-	await page.getByLabel('Username atau Email').fill(admin.username);
-	await page.getByRole('textbox', { name: 'Password' }).fill(admin.password);
-	await page.getByRole('button', { name: 'Masuk' }).click();
+	await page.locator('#login-identifier').fill(admin.username);
+	await page.locator('#login-password').fill(admin.password);
+	await page.getByRole('button', { name: /Masuk|Sign in/i }).click();
 	await page.waitForURL('**/drive/home');
 }
 
@@ -82,9 +82,9 @@ test('Grid mode renders client-side thumbnail preview for image, video, and PDF,
 	await page.goto(`/drive/my-storage?folder=${folder.id}`);
 	await expect(page.getByText('Thumbnails Test')).toBeVisible();
 	await expect(page.getByText('thumb-image.png', { exact: true })).toBeVisible();
-	// Switch to Grid View if not already in grid view
-	const gridToggleBtn = page.getByRole('button', { name: 'Tampilan Grid' });
-	if (await gridToggleBtn.isVisible()) {
+	// Ensure grid mode; clicking an already-active toggle would switch back to list view.
+	const gridToggleBtn = page.getByRole('button', { name: 'Tampilan Kisi' });
+	if ((await gridToggleBtn.getAttribute('aria-pressed')) !== 'true') {
 		await gridToggleBtn.click();
 	}
 
@@ -121,7 +121,7 @@ test('Grid mode renders client-side thumbnail preview for image, video, and PDF,
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByText('thumb-video.webm')).toBeVisible();
 	await expect(dialog.getByTestId('video-preview')).toBeVisible();
-	await dialog.getByRole('button', { name: 'Tutup' }).click();
+	await dialog.getByRole('button', { name: 'Tutup' }).first().click();
 	await expect(dialog).not.toBeVisible();
 
 	// 6. Test double click image card opens preview modal
@@ -129,7 +129,7 @@ test('Grid mode renders client-side thumbnail preview for image, video, and PDF,
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByText('thumb-image.png')).toBeVisible();
 	await expect(dialog.getByTestId('image-preview')).toBeVisible();
-	await dialog.getByRole('button', { name: 'Tutup' }).click();
+	await dialog.getByRole('button', { name: 'Tutup' }).first().click();
 	await expect(dialog).not.toBeVisible();
 
 	// 7. Test double click PDF card opens preview modal
@@ -137,6 +137,6 @@ test('Grid mode renders client-side thumbnail preview for image, video, and PDF,
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByText('thumb-doc.pdf')).toBeVisible();
 	await expect(dialog.locator('canvas')).toBeVisible();
-	await dialog.getByRole('button', { name: 'Tutup' }).click();
+	await dialog.getByRole('button', { name: 'Tutup' }).first().click();
 	await expect(dialog).not.toBeVisible();
 });

@@ -60,6 +60,13 @@ func TestAdminStorage_GetStorageStats(t *testing.T) {
 	if err != nil {
 		t.Fatalf("insert storage items: %v", err)
 	}
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO organization_items (id, created_by, name, kind, size_bytes, disk_key, modified_at, deleted_at)
+		VALUES ('org-item-1', 'user-1', 'org-file.bin', 'file', ?, 'org-disk-key', CURRENT_TIMESTAMP, NULL)
+	`, 3*gb)
+	if err != nil {
+		t.Fatalf("insert organization storage item: %v", err)
+	}
 
 	// 3. Test service GetAdminStorageStats
 	stats, err := handler.service.GetAdminStorageStats(ctx)
@@ -68,8 +75,8 @@ func TestAdminStorage_GetStorageStats(t *testing.T) {
 	}
 
 	expectedCap := 300 * gb
-	expectedUsed := 55 * gb // 10 GB (dk1) + 40 GB (dk2) + 5 GB (dk6 trash)
-	expectedFree := 245 * gb
+	expectedUsed := 58 * gb // 10 GB (dk1) + 40 GB (dk2) + 5 GB (dk6 trash) + 3 GB organization file
+	expectedFree := 242 * gb
 
 	if stats.TotalCapacityBytes != expectedCap {
 		t.Errorf("TotalCapacityBytes = %d, want %d", stats.TotalCapacityBytes, expectedCap)
@@ -80,14 +87,14 @@ func TestAdminStorage_GetStorageStats(t *testing.T) {
 	if stats.TotalUsedBytes != expectedUsed {
 		t.Errorf("TotalUsedBytes = %d, want %d", stats.TotalUsedBytes, expectedUsed)
 	}
-	if stats.TotalUsedGB != 55.0 {
-		t.Errorf("TotalUsedGB = %v, want 55.0", stats.TotalUsedGB)
+	if stats.TotalUsedGB != 58.0 {
+		t.Errorf("TotalUsedGB = %v, want 58.0", stats.TotalUsedGB)
 	}
 	if stats.FreeBytes != expectedFree {
 		t.Errorf("FreeBytes = %d, want %d", stats.FreeBytes, expectedFree)
 	}
-	if stats.FreeGB != 245.0 {
-		t.Errorf("FreeGB = %v, want 245.0", stats.FreeGB)
+	if stats.FreeGB != 242.0 {
+		t.Errorf("FreeGB = %v, want 242.0", stats.FreeGB)
 	}
 	if stats.NodesCount != 2 {
 		t.Errorf("NodesCount = %d, want 2", stats.NodesCount)

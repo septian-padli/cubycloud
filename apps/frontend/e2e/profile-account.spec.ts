@@ -33,9 +33,9 @@ async function ensureAdminLoggedIn(page: Page) {
 
 	await page.context().clearCookies();
 	await page.goto('/login');
-	await page.getByLabel('Username atau Email').fill(adminUsername);
-	await page.getByRole('textbox', { name: 'Password' }).fill(adminPassword);
-	await page.getByRole('button', { name: 'Masuk' }).click();
+	await page.locator('#login-identifier').fill(adminUsername);
+	await page.locator('#login-password').fill(adminPassword);
+	await page.getByRole('button', { name: /Masuk|Sign in/i }).click();
 	await page.waitForURL('**/drive/home');
 }
 
@@ -103,15 +103,15 @@ test('Account profile edits persist, other-user profiles are read-only, and pass
 
 		await page.goto(`/drive/profile/${created.id}`);
 		await expect(page.getByRole('heading', { name: username, exact: true })).toBeVisible();
-		await expect(page.getByText('2.5 GB · terpakai 0.0 GB')).toBeVisible();
-		await expect(page.getByText('User', { exact: true })).toBeVisible();
+		await expect(page.getByText(/[2][.,]5 GiB · terpakai 0[.,]0 GiB/)).toBeVisible();
+		await expect(page.getByText(/^(User|Pengguna)$/)).toBeVisible();
 		await expect(page.getByRole('button', { name: 'Edit Profil' })).toBeDisabled();
 
 		await page.context().clearCookies();
 		await page.goto('/login');
-		await page.getByLabel('Username atau Email').fill(username);
-		await page.getByRole('textbox', { name: 'Password' }).fill(originalPassword);
-		await page.getByRole('button', { name: 'Masuk' }).click();
+		await page.locator('#login-identifier').fill(username);
+		await page.locator('#login-password').fill(originalPassword);
+		await page.getByRole('button', { name: /Masuk|Sign in/i }).click();
 		await page.waitForURL('**/drive/home');
 		await page.goto(`/drive/profile/${created.id}`);
 		await expect(page.getByRole('button', { name: 'Edit Profil' })).toBeEnabled();

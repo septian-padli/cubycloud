@@ -133,7 +133,7 @@
 
 				<div class="space-y-2">
 					<Label for="edit-capacity"
-						>{locale.language === 'id' ? 'Kapasitas Maksimal (GB)' : 'Maximum capacity (GB)'}</Label
+						>{locale.language === 'id' ? 'Kapasitas Maksimal (GiB)' : 'Maximum capacity (GiB)'}</Label
 					>
 					<Input
 						id="edit-capacity"
@@ -147,8 +147,8 @@
 					/>
 					<p class="text-xs text-muted">
 						{locale.language === 'id'
-							? 'Batas kapasitas yang diizinkan untuk node ini (minimal 1 GB).'
-							: 'Capacity limit allowed for this node (minimum 1 GB).'}
+							? 'Batas kapasitas yang diizinkan untuk node ini (minimal 1 GiB).'
+							: 'Capacity limit allowed for this node (minimum 1 GiB).'}
 					</p>
 					{#if capacityBelowUsage}
 						<p
@@ -158,8 +158,8 @@
 							role="alert"
 						>
 							{locale.language === 'id'
-								? `Kapasitas tidak boleh lebih kecil dari pemakaian node (${usedGb.toFixed(1)} GB).`
-								: `Capacity cannot be lower than the node’s current usage (${usedGb.toFixed(1)} GB).`}
+								? `Kapasitas tidak boleh lebih kecil dari pemakaian node (${usedGb.toFixed(1)} GiB).`
+								: `Capacity cannot be lower than the node’s current usage (${usedGb.toFixed(1)} GiB).`}
 						</p>
 					{/if}
 				</div>

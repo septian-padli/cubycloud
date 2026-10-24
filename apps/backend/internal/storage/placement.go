@@ -36,27 +36,26 @@ func AvailableOnNodeTx(ctx context.Context, q QueryRunner, driver StorageDriver,
 	if err != nil {
 		return 0, err
 	}
-	var free int64
 	if capacity <= 0 {
-		free = 1000*1024*1024*1024 - used
-	} else {
-		free = capacity - capacity/20 - used
-		if capacity%20 != 0 {
-			free--
-		}
+		capacity = 1000 * 1024 * 1024 * 1024
 	}
+	reserve := capacity / 20
+	if capacity%20 != 0 {
+		reserve++
+	}
+	free := capacity - reserve - used
 	if n.Type == "LOCAL" && driver != nil {
 		total, physicalFree, statErr := driver.StatLocal(ctx, n.Path)
 		if statErr != nil {
 			return 0, statErr
 		}
 		if total > 0 {
-			reserve := total / 20
+			physicalReserve := total / 20
 			if total%20 != 0 {
-				reserve++
+				physicalReserve++
 			}
-			if physicalFree-reserve < free {
-				free = physicalFree - reserve
+			if physicalFree <= physicalReserve {
+				return 0, ErrPoolFull
 			}
 		}
 	}

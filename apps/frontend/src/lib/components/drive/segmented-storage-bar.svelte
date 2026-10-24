@@ -67,20 +67,20 @@
 
 	function formatStorage(valGb: number): string {
 		const decimal = locale.language === 'id' ? ',' : '.';
-		if (valGb <= 0) return '0 GB';
+		if (valGb <= 0) return '0 GiB';
 		if (valGb >= 1024) {
 			const tb = valGb / 1024;
 			const formatted = Number.isInteger(tb) ? String(tb) : tb.toFixed(2).replace('.', decimal);
-			return `${formatted} TB`;
+			return `${formatted} TiB`;
 		}
 		if (valGb < 0.1) {
 			const mb = Math.round(valGb * 1024);
-			return `${mb} MB`;
+			return `${mb} MiB`;
 		}
 		const formatted = Number.isInteger(valGb)
 			? String(valGb)
 			: valGb.toFixed(valGb < 10 ? 1 : 2).replace('.', decimal);
-		return `${formatted} GB`;
+		return `${formatted} GiB`;
 	}
 
 	const usedLabel = $derived(formatStorage(effectiveUsedGb));

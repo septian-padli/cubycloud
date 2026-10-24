@@ -29,7 +29,7 @@
 			? locale.language === 'id'
 				? 'Tanpa batas'
 				: 'Unlimited'
-			: `${defaultQuota.gb} GB`
+			: `${defaultQuota.gb} GiB`
 	);
 
 	const canSubmit = $derived(
@@ -147,7 +147,7 @@
 						<RadioGroup.Item value="override_gb" id="quota-gb" class="mt-0.5" />
 						<div class="min-w-0 flex-1 space-y-2">
 							<Label for="quota-gb" class="cursor-pointer text-sm font-medium text-main">
-								{locale.language === 'id' ? 'Atur GB' : 'Set GB'}
+								{locale.language === 'id' ? 'Atur GiB' : 'Set GiB'}
 							</Label>
 							{#if quotaChoice === 'override_gb'}
 								<div class="relative flex w-full items-center">
@@ -158,10 +158,10 @@
 										step="any"
 										bind:value={quotaGb}
 										class="w-full pe-9"
-										aria-label={locale.language === 'id' ? 'Kuota dalam GB' : 'Quota in GB'}
+									aria-label={locale.language === 'id' ? 'Kuota dalam GiB' : 'Quota in GiB'}
 									/>
 									<span class="pointer-events-none absolute end-3 text-xs font-semibold text-muted">
-										GB
+									GiB
 									</span>
 								</div>
 							{/if}

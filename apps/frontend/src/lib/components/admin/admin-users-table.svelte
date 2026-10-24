@@ -66,7 +66,7 @@
 							? 'Tanpa batas'
 							: quotaLabel}</td
 					>
-					<td class="px-4 py-3 text-main">{user.usedGb.toFixed(1)} GB</td>
+					<td class="px-4 py-3 text-main">{user.usedGb.toFixed(1)} GiB</td>
 					<td class="px-4 py-3">
 						<div class="flex items-center justify-end">
 							<DropdownMenu.Root>

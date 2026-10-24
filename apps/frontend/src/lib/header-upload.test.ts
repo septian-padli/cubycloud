@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'bun:test';
+import { beforeEach, describe, expect, it } from 'bun:test';
+import { locale } from './locale.svelte.js';
 import {
 	handleHeaderFilesUpload,
 	isQuotaError,
@@ -6,6 +7,7 @@ import {
 	type HeaderUploadDrivers,
 	type HeaderUploadTarget
 } from './header-upload.js';
+beforeEach(() => locale.set('id'));
 
 describe('resolveHeaderUploadTarget', () => {
 	describe('default destination: My Storage root', () => {

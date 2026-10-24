@@ -114,11 +114,26 @@ func (h *Handler) RescanStorageNodes(c echo.Context) error {
 
 // DownloadBackup streams database backup
 func (h *Handler) DownloadBackup(c echo.Context) error {
-	_ = h.service.Checkpoint(c.Request().Context())
-	dbFile, err := os.Open(h.dbPath)
+	tmpDir, err := os.MkdirTemp(os.TempDir(), "cubycloud-backup-")
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{
-			"error": "failed to open database file",
+			"error": "failed to create temporary backup",
+		})
+	}
+	tmpPath := tmpDir + string(os.PathSeparator) + "cubycloud.db"
+	defer os.Remove(tmpPath)
+	defer os.Remove(tmpDir)
+
+	if err := h.service.BackupTo(c.Request().Context(), tmpPath); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{
+			"error": "failed to create database backup",
+		})
+	}
+
+	dbFile, err := os.Open(tmpPath)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{
+			"error": "failed to open database backup",
 		})
 	}
 	defer dbFile.Close()
@@ -126,7 +141,7 @@ func (h *Handler) DownloadBackup(c echo.Context) error {
 	stat, err := dbFile.Stat()
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{
-			"error": "failed to stat database file",
+			"error": "failed to stat database backup",
 		})
 	}
 
@@ -134,8 +149,7 @@ func (h *Handler) DownloadBackup(c echo.Context) error {
 	c.Response().Header().Set("Content-Type", "application/octet-stream")
 	c.Response().Header().Set("Content-Length", fmt.Sprintf("%d", stat.Size()))
 
-	_, err = io.Copy(c.Response().Writer, dbFile)
-	if err != nil {
+	if _, err := io.Copy(c.Response().Writer, dbFile); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{
 			"error": "failed to stream database",
 		})
@@ -163,7 +177,6 @@ func (h *Handler) CreateLocalNode(c echo.Context) error {
 	}
 	return c.JSON(http.StatusCreated, node)
 }
-
 
 // CreateCloudNode adds a new S3-compatible cloud storage node
 func (h *Handler) CreateCloudNode(c echo.Context) error {
@@ -375,11 +388,11 @@ func RegisterRoutes(e *echo.Echo, db *bun.DB, storage storage.StorageDriver, dat
 
 	// Admin group with JWT auth + Super Admin guard
 	admin := e.Group("/api/v1/admin", jwtAuth, superAdminGuard)
-	
+
 	// Settings
 	admin.GET("/settings", handler.GetSettings)
 	admin.PUT("/settings", handler.UpdateSettings)
-	
+
 	// Storage nodes
 	admin.GET("/storage-nodes", handler.GetStorageNodes)
 	admin.POST("/storage-nodes", handler.CreateLocalNode)
@@ -388,7 +401,7 @@ func RegisterRoutes(e *echo.Echo, db *bun.DB, storage storage.StorageDriver, dat
 	admin.PUT("/storage-nodes/:id/disable", handler.DisableStorageNode)
 	admin.DELETE("/storage-nodes/:id", handler.DeleteNode)
 	admin.POST("/storage-nodes/rescan", handler.RescanStorageNodes)
-	
+
 	// Users management
 	admin.GET("/users", handler.GetUsers)
 	admin.POST("/users", handler.CreateUser)

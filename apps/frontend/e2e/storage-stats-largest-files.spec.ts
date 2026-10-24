@@ -31,9 +31,9 @@ async function finishSetupAndLogin(page: Page) {
 
 	await page.context().clearCookies();
 	await page.goto('/login');
-	await page.getByLabel('Username atau Email').fill(adminUsername);
-	await page.getByRole('textbox', { name: 'Password' }).fill(adminPassword);
-	await page.getByRole('button', { name: 'Masuk' }).click();
+	await page.locator('#login-identifier').fill(adminUsername);
+	await page.locator('#login-password').fill(adminPassword);
+	await page.getByRole('button', { name: /Masuk|Sign in/i }).click();
 	await page.waitForURL('**/drive/home');
 }
 

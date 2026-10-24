@@ -26,8 +26,8 @@ async function ensureAdminLoggedIn(page: Page) {
 
 	await page.context().clearCookies();
 	await page.goto('/login');
-	await page.getByLabel(/Username (atau|or) (Email|email)/).fill(adminUsername);
-	await page.getByRole('textbox', { name: /Password|Kata sandi/ }).fill(adminPassword);
+	await page.locator('#login-identifier').fill(adminUsername);
+	await page.locator('#login-password').fill(adminPassword);
 	await page.getByRole('button', { name: /Masuk|Sign in/ }).click();
 	await page.waitForURL('**/drive/home');
 }
@@ -45,26 +45,26 @@ test('Admin Users manages user creation, quota modes (fractional, default, unlim
 	await page.getByRole('button', { name: /Buat Pengguna|Create User/ }).click();
 	await expect(page.getByRole('heading', { name: /Buat Pengguna|Create user/ })).toBeVisible();
 
-	// 3. Fill form and choose fractional quota (1.5 GB)
+	// 3. Fill form and choose fractional quota (1.5 GiB)
 	const newUsername = 'tester_quota';
 	await page.getByLabel(/Nama pengguna|Username/).fill(newUsername);
 	await page.getByLabel('Email').fill('tester_quota@example.test');
 
-	// Select Atur GB and verify suffix GB and full width
-	await page.getByText(/Atur GB|Set GB/).click();
-	const quotaInput = page.getByLabel(/Kuota dalam GB|Quota in GB/);
+	// Select Atur GiB and verify suffix GiB and full width
+	await page.getByText(/Atur GiB|Set GiB/).click();
+	const quotaInput = page.getByLabel(/Kuota dalam GiB|Quota in GiB/);
 	await expect(quotaInput).toBeVisible();
 	await expect(quotaInput).toHaveClass(/w-full/);
-	await expect(page.getByRole('dialog').getByText('GB', { exact: true })).toBeVisible();
+	await expect(page.getByRole('dialog').getByText('GiB', { exact: true })).toBeVisible();
 	await quotaInput.fill('1.5');
 	// Submit creation
 	await page.getByRole('button', { name: /Buat Pengguna|Create user/ }).last().click();
 	await expect(page.getByRole('heading', { name: /Buat Pengguna|Create user/ })).not.toBeVisible();
 
-	// 4. Verify user appears in table with 1.5 GB
+	// 4. Verify user appears in table with 1.5 GiB
 	const userRow = page.locator('tr').filter({ hasText: newUsername });
 	await expect(userRow).toBeVisible();
-	await expect(userRow.getByText('1.5 GB')).toBeVisible();
+	await expect(userRow.getByText('1.5 GiB')).toBeVisible();
 
 	// 5. Edit Kuota -> Reset ke Default
 	await userRow.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${newUsername}`) }).click();
@@ -76,20 +76,20 @@ test('Admin Users manages user creation, quota modes (fractional, default, unlim
 	await page.getByRole('button', { name: /Simpan|Save/ }).click();
 	await expect(page.getByRole('heading', { name: /Edit Kuota|Edit quota/ })).not.toBeVisible();
 
-	// Verify quota is updated (100 GB default from setup)
-	await expect(userRow.getByText('100 GB')).toBeVisible();
+	// Verify quota is updated (100 GiB default from setup)
+	await expect(userRow.getByText('100 GiB')).toBeVisible();
 
 	// 6. Edit Kuota -> Unlimited
 	await userRow.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${newUsername}`) }).click();
 	await page.getByRole('menuitem', { name: /Edit Kuota|Edit quota/ }).click();
 	await expect(page.getByRole('heading', { name: /Edit Kuota|Edit quota/ })).toBeVisible();
 
-	await page.getByRole('dialog').getByText(/Unlimited|Tanpa batas/).click();
+	await page.getByRole('dialog').getByLabel(/Unlimited|Tanpa batas/).click();
 	await page.getByRole('button', { name: /Simpan|Save/ }).click();
 	await expect(page.getByRole('heading', { name: /Edit Kuota|Edit quota/ })).not.toBeVisible();
 
 	// Verify quota is updated to Unlimited
-	await expect(userRow.getByText('Unlimited')).toBeVisible();
+	await expect(userRow.getByText(/Unlimited|Tanpa batas/i)).toBeVisible();
 
 	// 7. Upload a file as tester_quota in a separate request context so admin cookie is preserved
 	const baseURL = new URL(page.url()).origin;
@@ -112,15 +112,15 @@ test('Admin Users manages user creation, quota modes (fractional, default, unlim
 	await page.goto('/admin/users');
 	await expect(userRow).toBeVisible();
 
-	// 8. Lower quota below usage (set to 0 GB) -> triggers confirmation dialog
+	// 8. Lower quota below usage (set to 0 GiB) -> triggers confirmation dialog
 	await userRow.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${newUsername}`) }).click();
 	await page.getByRole('menuitem', { name: /Edit Kuota|Edit quota/ }).click();
 	await expect(page.getByRole('heading', { name: /Edit Kuota|Edit quota/ })).toBeVisible();
 
-	await page.getByText(/Atur GB|Set GB/).click();
-	const editQuotaInput = page.getByRole('dialog').getByLabel(/Kuota dalam GB|Quota in GB/);
+	await page.getByText(/Atur GiB|Set GiB/).click();
+	const editQuotaInput = page.getByRole('dialog').getByLabel(/Kuota dalam GiB|Quota in GiB/);
 	await expect(editQuotaInput).toHaveClass(/w-full/);
-	await expect(page.getByRole('dialog').getByText('GB', { exact: true })).toBeVisible();
+	await expect(page.getByRole('dialog').getByText('GiB', { exact: true })).toBeVisible();
 	await editQuotaInput.fill('0');
 	await page.getByRole('button', { name: /Simpan|Save/ }).click();
 
@@ -138,8 +138,8 @@ test('Admin Users manages user creation, quota modes (fractional, default, unlim
 	await expect(page.getByRole('heading', { name: /Konfirmasi Penurunan Kuota|Confirm quota reduction/i })).not.toBeVisible();
 	await expect(page.getByRole('heading', { name: /Edit Kuota|Edit quota/ })).not.toBeVisible();
 
-	// Verify quota is updated to 0 GB
-	await expect(userRow.getByRole('cell', { name: '0 GB', exact: true })).toBeVisible();
+	// Verify quota is updated to 0 GiB
+	await expect(userRow.getByRole('cell', { name: '0 GiB', exact: true })).toBeVisible();
 
 	// Verify Super Admin row does NOT have 'Hapus' action item (hidden for super admin)
 	const adminRow = page.locator('tr').filter({ hasText: adminUsername });

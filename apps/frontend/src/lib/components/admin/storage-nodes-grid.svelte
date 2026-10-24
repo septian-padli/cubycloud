@@ -84,8 +84,8 @@
 
 					<div class="space-y-2">
 						<div class="flex justify-between text-xs text-muted">
-							<span>{node.freeGb.toFixed(1)} GB {locale.language === 'id' ? 'bebas' : 'free'}</span>
-							<span>{(node.usedBytes / 1024 ** 3).toFixed(1)} / {node.capacityCapGb} GB</span>
+							<span>{node.freeGb.toFixed(1)} GiB {locale.language === 'id' ? 'bebas' : 'free'}</span>
+							<span>{(node.usedBytes / 1024 ** 3).toFixed(1)} / {node.capacityCapGb} GiB</span>
 						</div>
 						<Progress
 							value={used}
@@ -94,7 +94,7 @@
 						/>
 						<p class="text-xs text-muted">
 							{locale.language === 'id' ? 'Terpakai' : 'Used'}
-							{(node.usedBytes / 1024 ** 3).toFixed(1)} GB ({Math.round(used)}%)
+							{(node.usedBytes / 1024 ** 3).toFixed(1)} GiB ({Math.round(used)}%)
 						</p>
 					</div>
 

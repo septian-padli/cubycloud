@@ -38,9 +38,9 @@ async function finishSetup(page: Page) {
 async function loginUser(page: Page, username: string, password: string) {
 	await page.context().clearCookies();
 	await page.goto('/login');
-	await page.getByLabel('Username atau Email').fill(username);
-	await page.getByRole('textbox', { name: 'Password' }).fill(password);
-	await page.getByRole('button', { name: 'Masuk' }).click();
+	await page.locator('#login-identifier').fill(username);
+	await page.locator('#login-password').fill(password);
+	await page.getByRole('button', { name: /Masuk|Sign in/i }).click();
 	await page.waitForURL('**/drive/home');
 }
 
@@ -195,7 +195,7 @@ test.describe('Storage Stats Category Breakdown & Quota Bar', () => {
 		const videoSegment = track.locator('button[aria-label^="Video:"]');
 		const imageSegment = track.locator('button[aria-label^="Gambar:"]');
 		const docSegment = track.locator('button[aria-label^="Dokumen:"]');
-		const trashSegment = track.locator('button[aria-label^="Trash:"]');
+		const trashSegment = track.getByRole('button', { name: /^(Trash|Sampah):/ });
 
 		await expect(videoSegment).toBeVisible();
 		await expect(imageSegment).toBeVisible();
@@ -217,14 +217,14 @@ test.describe('Storage Stats Category Breakdown & Quota Bar', () => {
 		// Hover on Video segment to verify popover content
 		await videoSegment.hover();
 		await expect(page.locator('text=Video').first()).toBeVisible();
-		await expect(page.locator('text=4 MB').first()).toBeVisible();
+		await expect(page.getByText(/4 M(i)?B/).first()).toBeVisible();
 		await expect(page.locator('text=Proporsi pemakaian').first()).toBeVisible();
 		await expect(page.getByText('40%', { exact: true })).toBeVisible();
 
 		// Hover on Trash segment to verify popover content
 		await trashSegment.hover();
-		await expect(page.locator('text=Trash').first()).toBeVisible();
-		await expect(page.locator('text=3 MB').first()).toBeVisible();
+		await expect(page.getByText(/^(Trash|Sampah)$/).first()).toBeVisible();
+		await expect(page.getByText(/3 M(i)?B/).first()).toBeVisible();
 		await expect(page.locator('text=Proporsi pemakaian').first()).toBeVisible();
 		await expect(page.getByText('30%', { exact: true })).toBeVisible();
 
@@ -260,7 +260,7 @@ test.describe('Storage Stats Category Breakdown & Quota Bar', () => {
 		await page.goto('/drive/storage-stats');
 
 		// 200 MB / 1 GB = 19.53125% of the track.
-		await expect(page.locator('text=dari 1 GB telah digunakan')).toBeVisible();
+		await expect(page.getByText(/dari 1 G(i)?B telah digunakan/)).toBeVisible();
 		const regTrack = page.locator(
 			'div[role="img"][aria-label="Pemakaian kuota penyimpanan My Storage"]'
 		);
@@ -281,7 +281,9 @@ test.describe('Storage Stats Category Breakdown & Quota Bar', () => {
 			{ name: 'Trash', quotaShare: 25 / 1024, barShare: 0.125 }
 		];
 		for (const segment of limitedSegments) {
-			const button = regTrack.locator(`button[aria-label^="${segment.name}:"]`);
+			const button = segment.name === 'Trash'
+				? regTrack.getByRole('button', { name: /^(Trash|Sampah):/ })
+				: regTrack.locator(`button[aria-label^="${segment.name}:"]`);
 			await expect(button).toBeVisible();
 			const box = await button.boundingBox();
 			expect(box).not.toBeNull();
@@ -291,7 +293,7 @@ test.describe('Storage Stats Category Breakdown & Quota Bar', () => {
 			const expectedPct = (Math.round(segment.quotaShare * 1000) / 10).toString().replace('.', ',');
 			const popover = page
 				.locator('[data-slot="popover-content"]')
-				.filter({ hasText: segment.name });
+				.filter({ hasText: segment.name === 'Trash' ? /(Trash|Sampah)/ : segment.name });
 			await expect(popover.getByText(`${expectedPct}%`, { exact: true })).toBeVisible();
 		}
 	});

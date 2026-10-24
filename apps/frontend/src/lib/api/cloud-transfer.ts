@@ -84,8 +84,13 @@ export function downloadBatchZip(base: string, ids: string[], onError?: (message
 		if (frame.contentDocument?.URL === 'about:blank') return;
 		const body = frame.contentDocument?.body?.textContent?.trim();
 		if (!body) return;
-		const message =
-			locale.language === 'id' ? 'Gagal mengunduh berkas ZIP' : 'Failed to download ZIP file';
+		let message = locale.language === 'id' ? 'Gagal mengunduh berkas ZIP' : 'Failed to download ZIP file';
+		try {
+			const payload = JSON.parse(body) as { error?: unknown };
+			if (typeof payload.error === 'string' && payload.error) message = payload.error;
+		} catch {
+			// ZIP responses are not JSON; only JSON errors can be reported here.
+		}
 		onError?.(message);
 	};
 	const form = document.createElement('form');

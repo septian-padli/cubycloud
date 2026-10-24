@@ -34,11 +34,11 @@
 				name: n.path.split('/').pop() || n.path,
 				path: n.path,
 				kind: (n.kind === 'SSD' || n.kind === 'HDD' ? n.kind : 'HDD') as 'SSD' | 'HDD',
-				totalGb: Math.round(n.capacity_bytes / 1e9),
-				freeGb: Math.round(n.free_bytes / 1e9),
+				totalGb: Math.round(n.capacity_bytes / 1024 ** 3),
+				freeGb: Math.round(n.free_bytes / 1024 ** 3),
 				enabled: true,
 				usedBytes: 0,
-				capacityCapGb: Math.round(n.capacity_bytes / 1e9)
+				capacityCapGb: Math.round(n.capacity_bytes / 1024 ** 3)
 			}));
 		} catch {
 			toast.error(tx('Pemindaian gagal', 'Scan failed'));
@@ -112,8 +112,8 @@
 								<p class="text-xs text-muted">{node.path}</p>
 								<div>
 									<div class="mb-1.5 flex justify-between text-xs text-muted">
-										<span>{node.freeGb} GB {tx('bebas', 'free')}</span>
-										<span>{node.totalGb} GB {tx('total', 'total')}</span>
+									<span>{node.freeGb} GiB {tx('bebas', 'free')}</span>
+									<span>{node.totalGb} GiB {tx('total', 'total')}</span>
 									</div>
 									<div class="h-1.5 rounded-full bg-black/10 dark:bg-white/10">
 										<div
@@ -125,7 +125,7 @@
 								{#if node.enabled}
 									<div class="space-y-2">
 										<Label for="cap-{node.id}" class="text-xs text-muted">
-											{tx('Batas kapasitas node (GB)', 'Node capacity limit (GB)')}
+											{tx('Batas kapasitas node (GiB)', 'Node capacity limit (GiB)')}
 										</Label>
 										<Input
 											id="cap-{node.id}"
@@ -170,7 +170,7 @@
 						<div class="min-w-0 flex-1">
 							<p class="text-sm font-medium text-main">{device.path}</p>
 							<p class="text-xs text-muted">
-								{device.model} · {device.sizeGb} GB
+							{device.model} · {device.sizeGb} GiB
 							</p>
 						</div>
 					</label>

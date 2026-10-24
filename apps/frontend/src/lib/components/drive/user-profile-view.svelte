@@ -88,8 +88,8 @@
 						{#if quota.limitGb == null}{tx(
 								'Tidak terbatas',
 								'Unlimited'
-							)}{:else}{quota.limitGb.toFixed(1).replace('.', locale.language === 'id' ? ',' : '.')} GB{/if}
-						<span class="text-muted"> · {tx('terpakai', 'used')} {user.usedGb.toFixed(1).replace('.', locale.language === 'id' ? ',' : '.')} GB</span>
+							)}{:else}{quota.limitGb.toFixed(1).replace('.', locale.language === 'id' ? ',' : '.')} GiB{/if}
+						<span class="text-muted"> · {tx('terpakai', 'used')} {user.usedGb.toFixed(1).replace('.', locale.language === 'id' ? ',' : '.')} GiB</span>
 					</p>
 				</div>
 			</Card.Content>

@@ -246,7 +246,7 @@
 
 				<div class="space-y-2">
 					<Label for="local-capacity"
-						>{locale.language === 'id' ? 'Kapasitas Maksimal (GB)' : 'Maximum capacity (GB)'}</Label
+						>{locale.language === 'id' ? 'Kapasitas Maksimal (GiB)' : 'Maximum capacity (GiB)'}</Label
 					>
 					<Input
 						id="local-capacity"
@@ -257,8 +257,8 @@
 					/>
 					<p class="text-xs text-muted">
 						{locale.language === 'id'
-							? 'Batas kapasitas node ini (minimal 1 GB).'
-							: 'Capacity limit for this node (minimum 1 GB).'}
+							? 'Batas kapasitas node ini (minimal 1 GiB).'
+							: 'Capacity limit for this node (minimum 1 GiB).'}
 					</p>
 				</div>
 
@@ -355,7 +355,7 @@
 
 				<div class="space-y-2">
 					<Label for="cloud-capacity"
-						>{locale.language === 'id' ? 'Kapasitas Maksimal (GB)' : 'Maximum capacity (GB)'}</Label
+						>{locale.language === 'id' ? 'Kapasitas Maksimal (GiB)' : 'Maximum capacity (GiB)'}</Label
 					>
 					<Input
 						id="cloud-capacity"
@@ -366,8 +366,8 @@
 					/>
 					<p class="text-xs text-muted">
 						{locale.language === 'id'
-							? 'Batas kapasitas penyimpanan cloud ini (minimal 1 GB).'
-							: 'Capacity limit for this cloud storage (minimum 1 GB).'}
+							? 'Batas kapasitas penyimpanan cloud ini (minimal 1 GiB).'
+							: 'Capacity limit for this cloud storage (minimum 1 GiB).'}
 					</p>
 				</div>
 

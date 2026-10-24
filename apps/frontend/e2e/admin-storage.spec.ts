@@ -37,9 +37,9 @@ async function ensureSetup(page: Page) {
 async function loginUser(page: Page, username: string, password: string) {
 	await page.context().clearCookies();
 	await page.goto('/login');
-	await page.getByLabel('Username atau Email').fill(username);
-	await page.getByRole('textbox', { name: 'Password' }).fill(password);
-	await page.getByRole('button', { name: 'Masuk' }).click();
+	await page.locator('#login-identifier').fill(username);
+	await page.locator('#login-password').fill(password);
+	await page.getByRole('button', { name: /Masuk|Sign in/i }).click();
 	await page.waitForURL('**/drive/home');
 }
 
@@ -133,7 +133,7 @@ test.describe('Admin Storage Stats & Top Users', () => {
 		await expect(overviewCard.getByRole('button', { name: 'Gambar' })).toBeVisible();
 		await expect(overviewCard.getByRole('button', { name: 'Dokumen' })).toBeVisible();
 		await expect(overviewCard.getByRole('button', { name: 'Arsip' })).toBeVisible();
-		await expect(overviewCard.getByRole('button', { name: 'Trash' })).toBeVisible();
+		await expect(overviewCard.getByRole('button', { name: /^(Trash|Sampah)$/ })).toBeVisible();
 		const topUsersSection = page.locator('section').filter({ hasText: 'Pengguna dengan konsumsi terbesar' });
 		await expect(topUsersSection).toBeVisible();
 

@@ -48,9 +48,9 @@ async function ensureAdminLoggedIn(page: Page) {
 
 	await page.context().clearCookies();
 	await page.goto('/login');
-	await page.getByLabel('Username atau Email').fill(username);
-	await page.getByRole('textbox', { name: 'Password' }).fill(password);
-	await page.getByRole('button', { name: 'Masuk' }).click();
+	await page.locator('#login-identifier').fill(username);
+	await page.locator('#login-password').fill(password);
+	await page.getByRole('button', { name: /Masuk|Sign in/i }).click();
 	await page.waitForURL('**/drive/home');
 }
 
@@ -66,7 +66,7 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 
 	// 1. Navigate to /admin/settings and open Add Storage Node modal
 	await page.goto('/admin/settings');
-	await expect(page.getByRole('heading', { name: 'Admin Settings' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: /Pengaturan Admin|Admin Settings/i })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Node penyimpanan' })).toBeVisible();
 
 	await page.getByTestId('btn-add-storage-node').click();
@@ -234,7 +234,7 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 
 	// Exercise the same S3 multipart path through the Organization drive.
 	await page.goto('/drive/organization');
-	await expect(page.getByRole('heading', { name: 'Organization' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: /Organization|Organisasi/i })).toBeVisible();
 	const orgIntentResponsePromise = page.waitForResponse(
 		(response) =>
 			response.url().endsWith('/api/v1/drive/organization/multipart-intent') &&

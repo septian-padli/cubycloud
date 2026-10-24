@@ -37,9 +37,9 @@
 						<span class="font-medium text-main">{categoryLabel(cat)}</span>
 						<span class="text-muted">
 							{#if empty}
-								{tx('0 GB · belum digunakan', '0 GB · unused')}
+							{tx('0 GiB · belum digunakan', '0 GiB · unused')}
 							{:else}
-								{cat.usedGb.toFixed(1).replace('.', locale.language === 'id' ? ',' : '.')} GB · {Math.round(ratio)}%
+								{cat.usedGb.toFixed(1).replace('.', locale.language === 'id' ? ',' : '.')} GiB · {Math.round(ratio)}%
 							{/if}
 						</span>
 					</div>
@@ -54,8 +54,8 @@
 			{/each}
 			<p class="text-xs text-muted">
 				{tx(
-					`Total kategori (My Storage): ${total.toFixed(1).replace('.', ',')} GB. Berkas Organization tidak dihitung. Bar kosong menampilkan track placeholder; isi hijau saat aman, terakota jika ≥ 80%.`,
-					`Category total (My Storage): ${total.toFixed(1)} GB. Organization files are excluded. Empty bars show a placeholder track; green indicates normal usage, terracotta indicates ≥ 80%.`
+					`Total kategori (My Storage): ${total.toFixed(1).replace('.', ',')} GiB. Berkas Organization tidak dihitung. Bar kosong menampilkan track placeholder; isi hijau saat aman, terakota jika ≥ 80%.`,
+					`Category total (My Storage): ${total.toFixed(1)} GiB. Organization files are excluded. Empty bars show a placeholder track; green indicates normal usage, terracotta indicates ≥ 80%.`
 				)}
 			</p>
 		</Card.Content>

@@ -221,21 +221,31 @@ func (s *Service) Breadcrumbs(ctx context.Context, owner string, parent *string)
 
 func (s *Service) get(ctx context.Context, owner, id string) (Item, error) {
 	var i Item
+	var nodeID string
 	err := s.db.DB.QueryRowContext(
 		ctx,
 		`SELECT i.id, i.name, i.kind, i.size_bytes, i.parent_id, i.modified_at, i.disk_key,
-			CASE WHEN s.id IS NOT NULL THEN 1 ELSE 0 END AS is_starred
+			CASE WHEN s.id IS NOT NULL THEN 1 ELSE 0 END AS is_starred,
+			COALESCE(i.storage_node_id, '')
 		FROM my_storage_items i
 		LEFT JOIN vfs_starred s ON s.node_id = i.id AND s.user_id = ?
 		WHERE i.id=? AND i.owner_id=? AND i.deleted_at IS NULL`,
 		owner,
 		id,
 		owner,
-	).Scan(&i.ID, &i.Name, &i.Kind, &i.SizeBytes, &i.ParentID, &i.ModifiedAt, &i.DiskKey, &i.IsStarred)
+	).Scan(&i.ID, &i.Name, &i.Kind, &i.SizeBytes, &i.ParentID, &i.ModifiedAt, &i.DiskKey, &i.IsStarred, &nodeID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return i, errNotFound
 	}
-	return i, err
+	if err != nil {
+		return i, err
+	}
+	if i.Kind != "folder" {
+		i.StorageAvailable = storage.NodeAvailable(ctx, s.storage, nodeID)
+	} else {
+		i.StorageAvailable = true
+	}
+	return i, nil
 }
 
 func (s *Service) Get(ctx context.Context, owner, id string) (Item, error) {
@@ -457,9 +467,8 @@ func (s *Service) localPlacement(ctx context.Context) (string, string, int64, er
 			if physicalCapacity%20 != 0 {
 				physicalReserve++
 			}
-			physicalFree -= physicalReserve
-			if physicalFree < candidates[i].capacity {
-				candidates[i].capacity = physicalFree
+			if physicalFree <= physicalReserve {
+				candidates[i].capacity = 0
 			}
 		}
 	}

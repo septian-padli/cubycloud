@@ -29,9 +29,9 @@ async function finishSetup(page: Page) {
 
 	await page.context().clearCookies();
 	await page.goto('/login');
-	await page.getByLabel('Username atau Email').fill(username);
-	await page.getByRole('textbox', { name: 'Password' }).fill(password);
-	await page.getByRole('button', { name: 'Masuk' }).click();
+	await page.locator('#login-identifier').fill(username);
+	await page.locator('#login-password').fill(password);
+	await page.getByRole('button', { name: /Masuk|Sign in/i }).click();
 	await page.waitForURL('**/drive/home');
 	await page.goto('/drive/my-storage');
 }
@@ -107,7 +107,7 @@ test('Multi-select actions in List & Grid view with bulk bar, move, delete, zip,
 		await expect(page.getByTestId('bulk-action-bar')).toBeHidden();
 
 		// 4. Test Grid View Selection & Star removal
-		await page.getByRole('button', { name: 'Tampilan Grid' }).click();
+		await page.getByRole('button', { name: 'Tampilan Kisi' }).click();
 		const alphaCard = itemRow(page, 'doc-alpha.txt');
 		await expect(alphaCard.getByTitle('Bintang')).toHaveCount(0);
 
@@ -117,7 +117,7 @@ test('Multi-select actions in List & Grid view with bulk bar, move, delete, zip,
 		await expect(page.getByTestId('selected-count-label')).toHaveText('1 item dipilih');
 
 		// Switch back to List view
-		await page.getByRole('button', { name: 'Tampilan List' }).click();
+		await page.getByRole('button', { name: 'Tampilan Daftar' }).click();
 		await expect(page.getByTestId('selected-count-label')).toHaveText('1 item dipilih');
 
 		// Deselect
@@ -185,7 +185,7 @@ test('Multi-select actions in List & Grid view with bulk bar, move, delete, zip,
 
 		// 8. Test Drag and Drop multi-item into folder
 		// Navigate back to root
-		await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('button', { name: 'My Storage' }).click();
+		await page.getByRole('navigation', { name: /Breadcrumb|Jejak navigasi/i }).getByRole('button', { name: 'My Storage' }).click();
 		await page.waitForURL((url) => !url.searchParams.get('folder'));
 		await expect(itemRow(page, 'doc-gamma.txt')).toBeVisible();
 		await expect(itemRow(page, 'ArchiveFolder')).toBeVisible();

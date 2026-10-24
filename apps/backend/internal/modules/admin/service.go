@@ -99,6 +99,11 @@ func (s *Service) Checkpoint(ctx context.Context) error {
 	return s.repo.Checkpoint(ctx)
 }
 
+// BackupTo writes a consistent database snapshot to a new file.
+func (s *Service) BackupTo(ctx context.Context, destPath string) error {
+	return s.repo.BackupTo(ctx, destPath)
+}
+
 // UpdateSystemSettings updates system settings with validation
 func (s *Service) UpdateSystemSettings(ctx context.Context, req *UpdateSettingsRequest) error {
 	if req.DefaultQuota != nil {
@@ -321,8 +326,9 @@ func (s *Service) RescanStorageNodes(ctx context.Context) ([]StorageNodeResponse
 		}
 
 		if existingNode != nil {
-			// Update capacity
-			existingNode.CapacityBytes = capacity
+			if existingNode.CapacityBytes <= 0 {
+				existingNode.CapacityBytes = capacity
+			}
 			if err := s.repo.UpsertStorageNode(ctx, existingNode); err != nil {
 				continue
 			}
@@ -957,14 +963,19 @@ func (s *Service) GetAdminStorageStats(ctx context.Context) (*AdminStorageStatsR
 
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT
-			COALESCE(disk_key, id) AS k,
+			disk_key AS k,
 			MAX(size_bytes) AS size_bytes,
 			MAX(CASE WHEN deleted_at IS NULL THEN name ELSE '' END) AS active_name,
 			MAX(name) AS any_name,
 			COUNT(CASE WHEN deleted_at IS NULL THEN 1 END) AS active_count
-		FROM my_storage_items
-		WHERE kind = 'file' AND disk_key IS NOT NULL
-		GROUP BY k
+		FROM (
+			SELECT disk_key, size_bytes, name, deleted_at FROM my_storage_items
+			WHERE kind = 'file' AND disk_key IS NOT NULL
+			UNION ALL
+			SELECT disk_key, size_bytes, name, deleted_at FROM organization_items
+			WHERE kind = 'file' AND disk_key IS NOT NULL
+		) AS items
+		GROUP BY disk_key
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("query storage usage stats: %w", err)

@@ -36,7 +36,7 @@
 			id: c.id,
 			label: c.label,
 			usedGb: c.used_gb,
-			description: `${c.label}: ${c.used_gb < 0.1 && c.used_gb > 0 ? '< 0,1' : c.used_gb.toFixed(2)} GB`
+			description: `${c.label}: ${c.used_gb < 0.1 && c.used_gb > 0 ? '< 0,1' : c.used_gb.toFixed(2)} GiB`
 		}))
 	);
 </script>

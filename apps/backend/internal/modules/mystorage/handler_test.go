@@ -660,7 +660,7 @@ func TestUploadBoundsStreamByQuotaAndNodeCapacity(t *testing.T) {
 		wantLimit        int64
 	}{
 		{name: "user quota", quotaBytes: 10, nodeCapacity: 5000, physicalCapacity: 1000, physicalFree: 900, wantError: "USER_QUOTA_EXCEEDED", wantLimit: 10},
-		{name: "physical reserve", quotaBytes: -1, nodeCapacity: 5000, physicalCapacity: 1000, physicalFree: 900, wantError: "STORAGE_POOL_FULL", wantLimit: 850},
+		{name: "physical reserve", quotaBytes: -1, nodeCapacity: 5000, physicalCapacity: 1000, physicalFree: 900, wantError: "STORAGE_POOL_FULL", wantLimit: 4650},
 		{name: "assigned node usage", quotaBytes: -1, nodeCapacity: 1000, physicalCapacity: 10000, physicalFree: 10000, wantError: "STORAGE_POOL_FULL", wantLimit: 850},
 	}
 

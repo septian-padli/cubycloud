@@ -160,7 +160,7 @@
 			{#if !unlimited}
 				<div class="space-y-2">
 					<Label for="default-quota-gb" class="text-sm font-medium text-main">
-						{locale.language === 'id' ? 'Kuota default (GB)' : 'Default quota (GB)'}
+						{locale.language === 'id' ? 'Kuota default (GiB)' : 'Default quota (GiB)'}
 					</Label>
 					<Input
 						id="default-quota-gb"
@@ -173,8 +173,8 @@
 					{#if isQuotaInvalid}
 						<p class="text-xs text-destructive" data-testid="error-quota">
 							{locale.language === 'id'
-								? 'Kuota minimal adalah 1 GB.'
-								: 'Quota must be at least 1 GB.'}
+								? 'Kuota minimal adalah 1 GiB.'
+								: 'Quota must be at least 1 GiB.'}
 						</p>
 					{/if}
 				</div>

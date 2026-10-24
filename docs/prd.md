@@ -136,10 +136,10 @@ Single image/binary; Go serves embedded static SvelteKit SPA, HTTP API, and back
 - Storage driver and VFS abstract physical nodes from regular users. Super Admin can inspect nodes, node names, capacity and actual usage, with local/cloud storage badges as specified by UI contracts.
 - If local free capacity drops below **5%**, mark node read-only and fail over new uploads to a healthy writable node where possible. If no node can accept the write, return a distinct **physical pool full** message.
 - Allow **Rescan Storage Nodes** without rerunning onboarding. Handle `Detach Node` by moving it to read-only and safely migrating its physical files to another node through background jobs.
-- Admin configures **Default User Quota** in GB or Unlimited, applying only to **new users**; existing users retain their effective settings unless explicitly updated.
+- Admin configures **Default User Quota** in GiB (binary 1024^3) or Unlimited, applying only to **new users**; existing users retain their effective settings unless explicitly updated.
 - **Audit-log retention:** default **90 days**, selectable **7/14/30/60/90** days, cleaned with `AUDIT_CLEANUP_JOB`.
 - **Background worker concurrency:** configurable, default **2**. Queued heavy operations remain `PENDING` until worker capacity is available.
-- `/admin/storage` shows node count/cumulative declared capacity, used physical space and available capacity, and users ranked by logical usage with pagination. The backend is authoritative for all numbers.
+- `/admin/storage` shows node count/cumulative declared capacity, used physical space and available capacity (calculated from configured node capacity limit minus usage, with physical free disk acting as a safety tripwire), and users ranked by logical usage with pagination. All capacity and size inputs and displays across the system use binary GiB/KiB/MiB/TiB (1024^n). The backend is authoritative for all numbers.
 - Provide **Download DB Backup** action for a consistent `cubycloud.db` SQLite snapshot. This is **database-only**, not a verified full-file backup; full disaster recovery also requires storage blobs and relevant secure configuration/credentials. Do not label DB backup as complete system backup.
 
 ### 4.3 Drive Home (`/drive/home`)

@@ -9,7 +9,7 @@ COPY apps/frontend ./
 RUN bun run build
 
 # Stage 2: Build Go Backend Binary
-FROM golang:1.24-alpine AS backend-builder
+FROM golang:alpine AS backend-builder
 WORKDIR /app/backend
 
 # Install build dependencies

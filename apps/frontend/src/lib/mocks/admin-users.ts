@@ -60,7 +60,7 @@ export function cloneMockAdminUsers(): AdminUser[] {
 	return MOCK_ADMIN_USERS.map((u) => ({ ...u }));
 }
 
-/** Effective quota label for table display (GB or Unlimited). */
+/** Effective quota label for table display (GiB or Unlimited). */
 export function effectiveQuotaLabel(
 	user: AdminUser,
 	defaultQuota: DefaultQuotaPolicy = MOCK_DEFAULT_QUOTA
@@ -72,19 +72,19 @@ export function effectiveQuotaLabel(
 	}
 	if (mode === 'override_gb' || mode === 'custom') {
 		if (user.quotaGb != null) {
-			return `${user.quotaGb} GB`;
+			return `${user.quotaGb} GiB`;
 		}
 	}
 	if (user.quotaGb != null) {
-		return `${user.quotaGb} GB`;
+		return `${user.quotaGb} GiB`;
 	}
 	if (user.quotaBytes != null) {
 		if (user.quotaBytes < 0) return 'Unlimited';
 		const gb = user.quotaBytes / (1024 * 1024 * 1024);
-		return `${Number(gb.toFixed(2))} GB`;
+		return `${Number(gb.toFixed(2))} GiB`;
 	}
 	if (defaultQuota.mode === 'unlimited') {
 		return 'Unlimited';
 	}
-	return `${defaultQuota.gb} GB`;
+	return `${defaultQuota.gb} GiB`;
 }

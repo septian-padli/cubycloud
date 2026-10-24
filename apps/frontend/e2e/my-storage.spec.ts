@@ -75,9 +75,9 @@ async function finishSetup(page: Page) {
 	// Setup is API-provisioned; clear its session and exercise the actual login form.
 	await page.context().clearCookies();
 	await page.goto('/login');
-	await page.getByLabel('Username atau Email').fill(username);
-	await page.getByRole('textbox', { name: 'Password' }).fill(password);
-	await page.getByRole('button', { name: 'Masuk' }).click();
+	await page.locator('#login-identifier').fill(username);
+	await page.locator('#login-password').fill(password);
+	await page.getByRole('button', { name: /Masuk|Sign in/i }).click();
 	await page.waitForURL('**/drive/home');
 	await page.goto('/drive/my-storage');
 	await expect(page.getByRole('heading', { name: 'My Storage' })).toBeVisible();
@@ -258,7 +258,7 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 			});
 		});
 		await openActions(page, 'notes.txt');
-		await page.getByRole('menuitem', { name: 'Duplikat' }).click();
+		await page.getByRole('menuitem', { name: 'Salin' }).click();
 		const errorToast = page.locator('[data-sonner-toast][data-type="error"]').first();
 		await expect(errorToast).toBeVisible();
 		const errorStyles = await errorToast.evaluate((el) => {
@@ -269,7 +269,7 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 		expect(errorStyles.border).toBe('rgb(236, 0, 63)');
 		await page.unroute('**/api/v1/drive/my-storage/*/duplicate');
 		await openActions(page, 'notes.txt');
-		await page.getByRole('menuitem', { name: 'Duplikat' }).click();
+		await page.getByRole('menuitem', { name: 'Salin' }).click();
 		await expect
 			.poll(async () => (await listing(page)).items.filter((item) => item.kind === 'file').length)
 			.toBe(3);
@@ -476,7 +476,7 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 		expect(renamed).toBeTruthy();
 
 		await openActions(page, 'renamed.txt');
-		await page.getByRole('menuitem', { name: 'Pindahkan ke' }).click();
+		await page.getByRole('menuitem', { name: /^(Pindahkan|Pindahkan ke|Move)$/ }).click();
 		const moveDialog1 = page.getByTestId('move-dialog');
 		await expect(moveDialog1).toBeVisible();
 		await expect(moveDialog1.getByRole('heading', { name: 'Pindahkan' })).toBeVisible();
@@ -524,7 +524,7 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 		await page.getByTestId('upload-file-input').setInputFiles(moveConflictFile);
 		await expect(itemRow(page, 'child.txt')).toBeVisible();
 		await openActions(page, 'child.txt');
-		await page.getByRole('menuitem', { name: 'Pindahkan ke' }).click();
+		await page.getByRole('menuitem', { name: /^(Pindahkan|Pindahkan ke|Move)$/ }).click();
 		const moveDialog2 = page.getByTestId('move-dialog');
 		await expect(moveDialog2).toBeVisible();
 		// Drill down into project folder
@@ -545,7 +545,7 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 		// Duplicate the folder and verify its descendants exist in the real API listing.
 		await page.goto('/drive/my-storage');
 		await openActions(page, 'project');
-		await page.getByRole('menuitem', { name: 'Duplikat' }).click();
+		await page.getByRole('menuitem', { name: 'Salin' }).click();
 		await expect.poll(async () => (await listing(page)).items.length).toBeGreaterThan(3);
 		root = await listing(page);
 		const duplicate = root.items.find(
@@ -592,7 +592,7 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 
 		// 2. Navigate to /drive/trash
 		await page.goto('/drive/trash');
-		await expect(page.getByRole('heading', { name: 'Trash' })).toBeVisible();
+		await expect(page.getByRole('heading', { name: /^(Trash|Sampah)$/ })).toBeVisible();
 
 		// Verify ordering: dropped-page.txt was deleted after duplicate folder, so dropped-page.txt appears first
 		const trashRows = page.getByRole('option');
@@ -902,11 +902,11 @@ test('logout pauses an active upload and preserves it for the next login', async
 			.toBeGreaterThan(0);
 
 		await page.getByRole('button', { name: 'Menu akun' }).click();
-		await page.getByRole('menuitem', { name: 'Logout' }).click();
+		await page.getByRole('menuitem', { name: 'Keluar' }).click();
 		await page.waitForURL('**/login');
-		await page.getByLabel('Username atau Email').fill(username);
-		await page.getByRole('textbox', { name: 'Password' }).fill(password);
-		await page.getByRole('button', { name: 'Masuk' }).click();
+		await page.locator('#login-identifier').fill(username);
+		await page.locator('#login-password').fill(password);
+		await page.getByRole('button', { name: /Masuk|Sign in/i }).click();
 		await page.waitForURL('**/drive/home');
 		await page.goto('/drive/my-storage');
 		await page.waitForFunction(async () => {
@@ -1130,9 +1130,9 @@ test('paused upload survives closing and reopening the browser', async ({ page }
 		browserContext = await launchBrowser();
 		let browserPage = browserContext.pages()[0] ?? (await browserContext.newPage());
 		await browserPage.goto('/login');
-		await browserPage.getByLabel('Username atau Email').fill(username);
-		await browserPage.getByRole('textbox', { name: 'Password' }).fill(password);
-		await browserPage.getByRole('button', { name: 'Masuk' }).click();
+		await browserPage.locator('#login-identifier').fill(username);
+		await browserPage.locator('#login-password').fill(password);
+		await browserPage.getByRole('button', { name: /Masuk|Sign in/i }).click();
 		await browserPage.waitForURL('**/drive/home');
 		await browserPage.goto('/drive/my-storage');
 		await browserPage.waitForFunction(async () => {
@@ -1181,11 +1181,11 @@ test('paused upload survives closing and reopening the browser', async ({ page }
 		browserContext = await launchBrowser();
 		browserPage = browserContext.pages()[0] ?? (await browserContext.newPage());
 		await browserPage.goto('/drive/my-storage');
-		const loginForm = browserPage.getByLabel('Username atau Email');
+		const loginForm = browserPage.locator('#login-identifier');
 		if (await loginForm.count()) {
 			await loginForm.fill(username);
-			await browserPage.getByRole('textbox', { name: 'Password' }).fill(password);
-			await browserPage.getByRole('button', { name: 'Masuk' }).click();
+			await browserPage.locator('#login-password').fill(password);
+			await browserPage.getByRole('button', { name: /Masuk|Sign in/i }).click();
 			await browserPage.waitForURL('**/drive/home');
 			await browserPage.goto('/drive/my-storage');
 		}

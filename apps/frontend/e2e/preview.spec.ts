@@ -56,9 +56,9 @@ async function setup(page: Page) {
 async function login(page: Page, username: string, password: string) {
 	await page.context().clearCookies();
 	await page.goto('/login');
-	await page.getByLabel('Username atau Email').fill(username);
-	await page.getByRole('textbox', { name: 'Password' }).fill(password);
-	await page.getByRole('button', { name: 'Masuk' }).click();
+	await page.locator('#login-identifier').fill(username);
+	await page.locator('#login-password').fill(password);
+	await page.getByRole('button', { name: /Masuk|Sign in/i }).click();
 	await page.waitForURL('**/drive/home');
 }
 
@@ -104,7 +104,7 @@ async function previewAll(page: Page) {
 			await expect(dialog.getByTestId('text-preview').locator('.token')).not.toHaveCount(0);
 			expect(await dialog.getByTestId('text-preview').locator('script').count()).toBe(0);
 		}
-		await dialog.getByRole('button', { name: 'Tutup' }).click();
+		await dialog.getByRole('button', { name: 'Tutup' }).first().click();
 		await expect(dialog).not.toBeVisible();
 	}
 }
@@ -137,11 +137,11 @@ test('My Storage, Organization, Shared and public nested folder render image, Vi
 	await page.getByText('preview-large.txt', { exact: true }).first().dblclick();
 	await expect(page.getByRole('dialog').getByText(/maksimum 1 MB/)).toBeVisible();
 	await expect(page.getByRole('dialog').getByRole('button', { name: 'Unduh' })).toBeVisible();
-	await page.getByRole('dialog').getByRole('button', { name: 'Tutup' }).click();
+	await page.getByRole('dialog').getByRole('button', { name: 'Tutup' }).first().click();
 	await page.getByText('preview-unsupported.zip', { exact: true }).first().dblclick();
 	await expect(page.getByRole('dialog').getByText(/Tidak ada pratinjau/)).toBeVisible();
 	await expect(page.getByRole('dialog').getByRole('button', { name: 'Unduh' })).toBeVisible();
-	await page.getByRole('dialog').getByRole('button', { name: 'Tutup' }).click();
+	await page.getByRole('dialog').getByRole('button', { name: 'Tutup' }).first().click();
 	await page.goto(`/drive/organization?folder=${org.id}`);
 	await expect(page.getByText(files[0].name, { exact: true })).toBeVisible();
 	await previewAll(page);
@@ -168,7 +168,7 @@ test('My Storage, Organization, Shared and public nested folder render image, Vi
 	await page.goto(`/drive/my-storage?preview=${image!.id}`);
 	const directDialog = page.getByRole('dialog');
 	await expect(directDialog.getByText(image!.name, { exact: true })).toBeVisible();
-	await directDialog.getByRole('button', { name: 'Tutup' }).click();
+	await directDialog.getByRole('button', { name: 'Tutup' }).first().click();
 
 	// 3. Star the item, navigate to /drive/starred, and verify preview opens via double-click
 	const starRes = await page.request.post(`/api/v1/drive/my-storage/items/${image!.id}/star`);
@@ -178,7 +178,7 @@ test('My Storage, Organization, Shared and public nested folder render image, Vi
 	await page.getByText(image!.name, { exact: true }).first().dblclick();
 	const starredDialog = page.getByRole('dialog');
 	await expect(starredDialog.getByText(image!.name, { exact: true })).toBeVisible();
-	await starredDialog.getByRole('button', { name: 'Tutup' }).click();
+	await starredDialog.getByRole('button', { name: 'Tutup' }).first().click();
 	await login(page, user.username, user.password);
 	await page.goto('/drive/shared');
 	await page.getByText(root.name, { exact: true }).first().dblclick();

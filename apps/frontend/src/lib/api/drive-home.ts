@@ -41,7 +41,7 @@ export function formatFileSize(bytes: number, kind: string): string {
 	if (kind === 'folder') return 'Folder';
 	if (bytes === 0) return '0 B';
 	const k = 1024;
-	const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+	const sizes = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
 	const i = Math.floor(Math.log(bytes) / Math.log(k));
 	const val = bytes / Math.pow(k, i);
 	return `${Number.isInteger(val) ? val : val.toFixed(1).replace('.', locale.language === 'id' ? ',' : '.')} ${sizes[i]}`;

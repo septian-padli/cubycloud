@@ -74,9 +74,9 @@ Use the existing shadcn-svelte primitives, particularly `$lib/components/ui/butt
 
 ## 6. Quota and transfer feedback
 
-- Quota Widget appears in sidebar for all logged-in users, with detailed breakdown on `/drive/storage-stats`; display in GB.
-- Limited: `My Storage`, `8.2 / 15 GB`, flat `h-1.5 rounded-full` bar on neutral track. Fill `bg-primary`; near-limit (≥80%) warn using `bg-secondary-accent` and corresponding toast; full quota blocks writes and shows localized `USER_QUOTA_EXCEEDED` feedback.
-- Unlimited/Super Admin: `Used: 8.2 GB` only; **no** limit number or capped progress bar.
+- Quota Widget appears in sidebar for all logged-in users, with detailed breakdown on `/drive/storage-stats`; display in GiB (binary 1024^3).
+- Limited: `My Storage`, `8.2 / 15 GiB`, flat `h-1.5 rounded-full` bar on neutral track. Fill `bg-primary`; near-limit (≥80%) warn using `bg-secondary-accent` and corresponding toast; full quota blocks writes and shows localized `USER_QUOTA_EXCEEDED` feedback.
+- Unlimited/Super Admin: `Used: 8.2 GiB` only; **no** limit number or capped progress bar.
 - Transfer progress: flat `h-1.5 rounded-full bg-black/10 dark:bg-white/10` with `bg-primary` fill; when paused due to network use `bg-secondary`. Progress reaches 100% only on confirmed server success. Queue layout/behavior follows `SITEMAP.md`.
 
 ## 7. Interactions and overlays

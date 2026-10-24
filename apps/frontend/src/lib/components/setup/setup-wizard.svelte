@@ -125,7 +125,7 @@
 					.filter((n) => n.enabled)
 					.map((n) => ({
 						path: n.path,
-						capacity_bytes: n.capacityCapGb * 1e9,
+						capacity_bytes: n.capacityCapGb * 1024 ** 3,
 						enabled: true
 					})),
 				placement_strategy: strategy
@@ -298,11 +298,11 @@
 				name: n.path.split('/').pop() || n.path,
 				path: n.path,
 				kind: (n.kind === 'SSD' || n.kind === 'HDD' ? n.kind : 'HDD') as 'SSD' | 'HDD',
-				totalGb: Math.round(n.capacity_bytes / 1e9),
-				freeGb: Math.round(n.free_bytes / 1e9),
+				totalGb: Math.round(n.capacity_bytes / 1024 ** 3),
+				freeGb: Math.round(n.free_bytes / 1024 ** 3),
 				enabled: true,
 				usedBytes: 0,
-				capacityCapGb: Math.round(n.capacity_bytes / 1e9)
+				capacityCapGb: Math.round(n.capacity_bytes / 1024 ** 3)
 			}));
 
 			// Merge: keep restored enabled state if paths match

@@ -26,6 +26,8 @@ export default defineConfig({
 	use: {
 		baseURL: frontendURL,
 		browserName: 'chromium',
+		locale: 'id-ID',
+		extraHTTPHeaders: { 'Accept-Language': 'id-ID,id;q=0.9,en;q=0.8' },
 		trace: 'retain-on-failure'
 	},
 	globalTeardown: './e2e/global-teardown.ts',

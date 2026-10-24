@@ -215,7 +215,7 @@
 													? 'Tanpa batas'
 													: 'Unlimited'
 												: user.quota_gb
-													? `${user.quota_gb} GB`
+													? `${user.quota_gb} GiB`
 													: user.quota_bytes > 0
 														? formatSize(user.quota_bytes)
 														: locale.language === 'id'
@@ -243,7 +243,7 @@
 													: 'of total files'}</span
 											>
 										{:else}
-											<span>{user.used_gb.toFixed(2)} GB</span>
+											<span>{user.used_gb.toFixed(2)} GiB</span>
 										{/if}
 									</p>
 								</div>

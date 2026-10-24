@@ -24,9 +24,9 @@ async function setup(page: Page) {
 
 	await page.context().clearCookies();
 	await page.goto('/login');
-	await page.getByLabel('Username atau Email').fill(admin.username);
-	await page.getByRole('textbox', { name: 'Password' }).fill(admin.password);
-	await page.getByRole('button', { name: 'Masuk' }).click();
+	await page.locator('#login-identifier').fill(admin.username);
+	await page.locator('#login-password').fill(admin.password);
+	await page.getByRole('button', { name: /Masuk|Sign in/i }).click();
 	await page.waitForURL('**/drive/home');
 }
 

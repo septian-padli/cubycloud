@@ -39,9 +39,9 @@ async function ensureSetup(page: Page) {
 async function loginUser(page: Page, username = adminUsername, password = adminPassword) {
 	await page.context().clearCookies();
 	await page.goto('/login');
-	await page.getByLabel('Username atau Email').fill(username);
-	await page.getByRole('textbox', { name: 'Password' }).fill(password);
-	await page.getByRole('button', { name: 'Masuk' }).click();
+	await page.locator('#login-identifier').fill(username);
+	await page.locator('#login-password').fill(password);
+	await page.getByRole('button', { name: /Masuk|Sign in/i }).click();
 	await page.waitForURL('**/drive/home');
 }
 
@@ -78,7 +78,7 @@ test.describe('Concurrent Upload Capacity in My Storage and Organization', () =>
 			// Tab 2: Organization (same authenticated context)
 			const orgPage = await context.newPage();
 			await orgPage.goto('/drive/organization');
-			await expect(orgPage.getByRole('heading', { name: 'Organization' })).toBeVisible();
+			await expect(orgPage.getByRole('heading', { name: /Organization|Organisasi/i })).toBeVisible();
 
 			const myStorageInput = myStoragePage.getByTestId('upload-file-input');
 			const orgInput = orgPage.getByTestId('upload-file-input');
@@ -158,7 +158,7 @@ test.describe('Concurrent Upload Capacity in My Storage and Organization', () =>
 			// Tab 2: Organization
 			const orgPage = await context.newPage();
 			await orgPage.goto('/drive/organization');
-			await expect(orgPage.getByRole('heading', { name: 'Organization' })).toBeVisible();
+			await expect(orgPage.getByRole('heading', { name: /Organization|Organisasi/i })).toBeVisible();
 
 			// Simulate that available physical node capacity was exhausted by the first upload,
 			// causing the concurrent organization upload to receive STORAGE_POOL_FULL (413)
@@ -236,7 +236,7 @@ test.describe('Concurrent Upload Capacity in My Storage and Organization', () =>
 			// Tab 2: Organization
 			const orgPage = await context.newPage();
 			await orgPage.goto('/drive/organization');
-			await expect(orgPage.getByRole('heading', { name: 'Organization' })).toBeVisible();
+			await expect(orgPage.getByRole('heading', { name: /Organization|Organisasi/i })).toBeVisible();
 
 			// Simulate node physical storage pool being completely full for both endpoints
 			await myStoragePage.route('**/api/v1/drive/my-storage/upload**', async (route) => {

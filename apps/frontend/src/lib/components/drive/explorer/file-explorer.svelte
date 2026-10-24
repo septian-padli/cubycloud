@@ -381,35 +381,35 @@
 		}
 	}
 	let fetchedPreviewEntry = $state<FileEntry | null>(null);
+	let lastFetchedPreviewId = $state<string | null>(null);
 
 	$effect(() => {
-		if (!previewId) {
+		const targetId = previewId;
+		if (!targetId) {
 			fetchedPreviewEntry = null;
+			lastFetchedPreviewId = null;
 			return;
 		}
 		if (!isApiBacked) return;
 
-		const inCurrent = currentItems.find((entry) => entry.id === previewId);
+		const inCurrent = currentItems.find((entry) => entry.id === targetId);
 		if (inCurrent) {
 			if (fetchedPreviewEntry) fetchedPreviewEntry = null;
 			return;
 		}
 
-		if (fetchedPreviewEntry?.id !== previewId) {
-			let cancelled = false;
+		if (fetchedPreviewEntry?.id !== targetId && lastFetchedPreviewId !== targetId) {
+			lastFetchedPreviewId = targetId;
 			api
-				.getItem(previewId)
+				.getItem(targetId)
 				.then((item) => {
-					if (!cancelled && item) {
+					if (previewId === targetId && item) {
 						fetchedPreviewEntry = api.toEntry(item);
 					}
 				})
 				.catch(() => {
 					// Item tidak ditemukan atau link tidak valid
 				});
-			return () => {
-				cancelled = true;
-			};
 		}
 	});
 
@@ -1281,6 +1281,7 @@
 
 	function onDelete(entry: FileEntry) {
 		if (entry.kind !== 'folder' && entry.storageAvailable === false) return;
+		deleteTargetEntry = entry;
 		deleteConfirmOpen = true;
 	}
 
@@ -1300,6 +1301,9 @@
 						// continue
 					}
 				}
+				selectedIds = [];
+				await refreshStorage();
+				if (variant === 'my-storage') void chrome?.refreshQuota();
 				toast.success(
 					variant === 'organization'
 						? tx(`${deletedCount} item dihapus`, `${deletedCount} items deleted`)

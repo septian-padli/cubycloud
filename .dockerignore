@@ -1,0 +1,32 @@
+.git
+.github
+.cursor
+.codegraph
+**/.codegraph*
+**/.DS_Store
+
+# Frontend
+**/node_modules
+apps/frontend/.svelte-kit
+apps/frontend/build
+apps/frontend/test-results
+apps/frontend/playwright-report
+
+# Backend
+apps/backend/data
+apps/backend/web/dist
+apps/backend/bin
+apps/backend/tmp
+*.db
+*.db-shm
+*.db-wal
+**/*.log
+
+# Docs & Configs
+docs/
+*.md
+compose*.yaml
+compose*.yml
+.env
+.env.*
+!.env.example

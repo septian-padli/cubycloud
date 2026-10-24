@@ -47,9 +47,9 @@ async function ensureSetup(page: Page) {
 async function loginUser(page: Page, username: string, password: string) {
 	await page.context().clearCookies();
 	await page.goto('/login');
-	await page.getByLabel('Username atau Email').fill(username);
-	await page.getByRole('textbox', { name: 'Password' }).fill(password);
-	await page.getByRole('button', { name: 'Masuk' }).click();
+	await page.locator('#login-identifier').fill(username);
+	await page.locator('#login-password').fill(password);
+	await page.getByRole('button', { name: /Masuk|Sign in/i }).click();
 	await page.waitForURL('**/drive/home');
 }
 
@@ -85,7 +85,7 @@ test('Organization shared drive provides multi-user collaboration and isolates p
 
 	// 3b. Check absence of storage node labels in Organization
 	await page.goto('/drive/organization');
-	await expect(page.getByRole('heading', { name: 'Organization' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: /Organization|Organisasi/i })).toBeVisible();
 	await expect(page.getByText('SSD-1')).toHaveCount(0);
 	await expect(page.getByText('HDD-2')).toHaveCount(0);
 	await expect(page.getByText('R2')).toHaveCount(0);
@@ -148,7 +148,7 @@ test('Organization shared drive provides multi-user collaboration and isolates p
 
 	// 7b. Bob goes to Organization: Bob MUST see the shared folder and file created by Alice!
 	await page.goto('/drive/organization');
-	await expect(page.getByRole('heading', { name: 'Organization' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: /Organization|Organisasi/i })).toBeVisible();
 	await expect(page.getByText('Proyek Bersama Tim', { exact: true })).toBeVisible();
 	await expect(page.getByText('shared-spec.txt', { exact: true })).toBeVisible();
 
@@ -164,7 +164,7 @@ test('Organization shared drive provides multi-user collaboration and isolates p
 	// 9. Bob logs out and Alice logs back in to verify shared state in Organization
 	await loginUser(page, userAlice.username, userAlice.password);
 	await page.goto('/drive/organization');
-	await expect(page.getByRole('heading', { name: 'Organization' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: /Organization|Organisasi/i })).toBeVisible();
 	// Alice sees the file renamed by Bob
 	await expect(page.getByText('shared-spec-revised.txt', { exact: true })).toBeVisible();
 

@@ -2,24 +2,27 @@ package main
 
 import (
 	"context"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/cubycloud/backend/internal/config"
 	"github.com/cubycloud/backend/internal/database"
+	"github.com/cubycloud/backend/internal/jobs"
 	"github.com/cubycloud/backend/internal/middleware"
 	"github.com/cubycloud/backend/internal/modules/admin"
 	"github.com/cubycloud/backend/internal/modules/auth"
-	"github.com/cubycloud/backend/internal/jobs"
 	"github.com/cubycloud/backend/internal/modules/mystorage"
 	"github.com/cubycloud/backend/internal/modules/organization"
-	"github.com/cubycloud/backend/internal/modules/setup"
 	"github.com/cubycloud/backend/internal/modules/search"
+	"github.com/cubycloud/backend/internal/modules/setup"
 	"github.com/cubycloud/backend/internal/modules/share"
 	"github.com/cubycloud/backend/internal/storage"
 	"github.com/cubycloud/backend/web"
@@ -112,7 +115,7 @@ func main() {
 	if err != nil {
 		log.Fatal("Embed FS failed:", err)
 	}
-	e.GET("/*", echo.WrapHandler(http.FileServer(http.FS(distFS))))
+	e.GET("/*", echo.WrapHandler(newSPAHandler(distFS)))
 
 	// 10. Start server
 	go func() {
@@ -135,6 +138,53 @@ func main() {
 		log.Fatal("Shutdown failed:", err)
 	}
 	log.Println("Server stopped")
+}
+func newSPAHandler(distFS fs.FS) http.Handler {
+	fileServer := http.FileServer(http.FS(distFS))
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			http.NotFound(w, r)
+			return
+		}
+
+		cleanPath := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
+		if cleanPath != "" && cleanPath != "." {
+			if f, err := distFS.Open(cleanPath); err == nil {
+				defer f.Close()
+				if stat, err := f.Stat(); err == nil && !stat.IsDir() {
+					fileServer.ServeHTTP(w, r)
+					return
+				}
+			}
+		}
+
+		indexFile, err := distFS.Open("index.html")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer indexFile.Close()
+
+		stat, err := indexFile.Stat()
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		if seeker, ok := indexFile.(io.ReadSeeker); ok {
+			http.ServeContent(w, r, "index.html", stat.ModTime(), seeker)
+			return
+		}
+
+		data, err := io.ReadAll(indexFile)
+		if err != nil {
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(data)
+	})
 }
 
 func initSetupGuard(db *bun.DB) *middleware.SetupGuard {
