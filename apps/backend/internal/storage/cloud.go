@@ -17,13 +17,33 @@ import (
 
 // CloudStorageDriver provides node-scoped cloud I/O without exposing node credentials.
 type CloudStorageDriver interface {
- StorageDriver
- ReadObject(context.Context, string, string) (io.ReadCloser, error)
- WriteObject(context.Context, string, string, io.Reader, int64) error
- DeleteObject(context.Context, string, string) error
- HeadObject(context.Context, string, string) (int64, error)
- PresignUpload(context.Context, string, string, time.Duration) (string, error)
- PresignDownload(context.Context, string, string, string, time.Duration) (string, error)
+	StorageDriver
+	ReadObject(context.Context, string, string) (io.ReadCloser, error)
+	WriteObject(context.Context, string, string, io.Reader, int64) error
+	DeleteObject(context.Context, string, string) error
+	HeadObject(context.Context, string, string) (int64, error)
+	ListObjects(context.Context, string, string) ([]string, error)
+	PresignUpload(context.Context, string, string, time.Duration) (string, error)
+	PresignDownload(context.Context, string, string, string, time.Duration) (string, error)
+}
+
+func (d *nodeDriver) ListObjects(ctx context.Context, nodeID, prefix string) ([]string, error) {
+	c, b, err := d.client(ctx, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	paginator := s3.NewListObjectsV2Paginator(c, &s3.ListObjectsV2Input{Bucket: &b, Prefix: aws.String(prefix)})
+	var keys []string
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, obj := range page.Contents {
+			keys = append(keys, aws.ToString(obj.Key))
+		}
+	}
+	return keys, nil
 }
 
 type nodeDriver struct {

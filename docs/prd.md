@@ -137,7 +137,7 @@ Single image/binary; Go serves embedded static SvelteKit SPA, HTTP API, and back
 - If local free capacity drops below **5%**, mark node read-only and fail over new uploads to a healthy writable node where possible. If no node can accept the write, return a distinct **physical pool full** message.
 - Allow **Rescan Storage Nodes** without rerunning onboarding. Handle `Detach Node` by moving it to read-only and safely migrating its physical files to another node through background jobs.
 - Admin configures **Default User Quota** in GiB (binary 1024^3) or Unlimited, applying only to **new users**; existing users retain their effective settings unless explicitly updated.
-- **Audit-log retention:** default **90 days**, selectable **7/14/30/60/90** days, cleaned with `AUDIT_CLEANUP_JOB`.
+- **Audit-log retention:** default **90 days**, selectable **7/14/30/60/90** days, cleaned with `AUDIT_CLEANUP_JOB`. The backend logs all state-mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`) including failures, with sensitive secret redaction (`password`, `recovery_key`, `secret_key`, tokens), without auditing read-only `GET` requests. Logs are viewable by admins via `GET /api/v1/admin/audit-logs`.
 - **Background worker concurrency:** configurable, default **2**. Queued heavy operations remain `PENDING` until worker capacity is available.
 - `/admin/storage` shows node count/cumulative declared capacity, used physical space and available capacity (calculated from configured node capacity limit minus usage, with physical free disk acting as a safety tripwire), and users ranked by logical usage with pagination. All capacity and size inputs and displays across the system use binary GiB/KiB/MiB/TiB (1024^n). The backend is authoritative for all numbers.
 - Provide **Download DB Backup** action for a consistent `cubycloud.db` SQLite snapshot. This is **database-only**, not a verified full-file backup; full disaster recovery also requires storage blobs and relevant secure configuration/credentials. Do not label DB backup as complete system backup.
@@ -259,7 +259,7 @@ Target responsive compatibility: current Chrome/Firefox/Edge on Windows, Linux, 
 ### 5.2 Authentication, secrets, and authorization
 
 - JWT tokens signed with **HS256** in **HttpOnly cookie** (`SameSite=Lax`; `Secure` whenever deployed through HTTPS, including TLS-terminating proxies). No separate refresh-token service is required in v1.0.
-- **Original PRD specified a 24-hour token lifetime**; the backend at the preceding code audit used a seven-day cookie/JWT. This discrepancy is explicitly unresolved; do not silently change session lifetime as part of unrelated documentation work. All password changes must still revoke existing sessions regardless of token expiry.
+- JWT lifetime is **24 hours** (aligned with the PRD specification). Session cookies use 24-hour MaxAge (`cuby_token`). All password changes must still revoke existing sessions regardless of token expiry.
 - Passwords for users and protected share links use **bcrypt (cost 10)** per original requirement; ensure safe verification, throttling, and error handling.
 - Emergency 6×5 Recovery Key uses **SHA-256 of canonical value**, single-use rotation; legacy bcrypt-hashed 64-hex key compatibility is backend migration-only, never UI-generated.
 - No automatic application-level encryption of physical uploaded file contents; rely on OS/container volume permissions and operator controls. Storage credentials and other application secrets require secure handling and must not be exposed via API, log, or public health response.
@@ -268,7 +268,7 @@ Target responsive compatibility: current Chrome/Firefox/Edge on Windows, Linux, 
 ### 5.3 Durability and failure recovery
 
 - SQLite **WAL** with appropriate transaction durability and integrity checks; original configuration requirement: `PRAGMA journal_mode=WAL` and `synchronous=NORMAL`. WAL improves crash recovery but does not replace backups or make every failure mode impossible.
-- Startup orphan-file audit reconciles `physical_blobs` and storage to remove genuinely abandoned upload debris **without deleting valid resumable sessions or referenced data**.
+- Startup orphan-file audit reconciles `physical_blobs` and storage across both local disk and S3 nodes to automatically remove genuinely abandoned upload debris **without deleting valid resumable sessions, unexpired intents, items in trash, or referenced data**, with a grace period protecting concurrent/recent uploads.
 - Interrupted jobs recover safely; the original design marks unfinished jobs `FAILED` at restart and permits explicit safe retry. Respect atomic claims, idempotency, clean rollback, and consistent VFS metadata/physical bytes.
 - Interrupted upload and multipart sessions follow the recovery rules in §4.4; never report successful commit or resume support without backend evidence.
 
@@ -311,7 +311,7 @@ Version numbers in the earlier PRD (such as Go 1.22+, framework minimums, or `la
 These items existed as differences among dated requirements, UI documentation, and implementation at the audit point. They **do not supersede** the active product contract without approval.
 
 1. **List-only vs List/Grid:** Original PRD §3.2/§4.4 deferred grid; recently revised frontend SITEMAP/DESIGN describe a working toggle. Preserve existing behavior; decide and align documents explicitly.
-2. **JWT lifetime:** Original PRD says 24 hours, earlier backend code audit reported 7 days. Confirm desired security/session lifetime and update implementation + documentation together.
+2. **JWT lifetime:** Resolved: confirmed 24 hours (PRD contract aligned; backend JWT expiry and session cookie MaxAge set to 24 hours).
 3. **Scope vs delivered state:** Features and performance numbers listed here are requirements/targets. Do not mark shipping, benchmarks, security hardening, or backup/recovery as verified without real integration tests and measurements.
 4. **Historical release schedule:** The original 1 October 2026 date has passed. It is retained for provenance only and does not serve as an active deadline or release-status statement.
 

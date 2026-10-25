@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cubycloud/backend/internal/httputil"
 	"github.com/cubycloud/backend/internal/modules/mystorage"
 	"github.com/labstack/echo/v4"
 )
@@ -105,7 +106,7 @@ func (h *PublicHandler) UnlockPublicShare(c echo.Context) error {
 			Value:    expiry + "." + unlockSignature(link, expiry),
 			Path:     "/api/v1/s/" + token,
 			HttpOnly: true,
-			Secure:   c.Request().TLS != nil,
+			Secure:   httputil.IsSecureCookie(c),
 			SameSite: http.SameSiteLaxMode,
 			Expires:  expires,
 			MaxAge:   int(time.Until(expires).Seconds()),

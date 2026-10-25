@@ -115,6 +115,23 @@ type ActivityLog struct {
 	CreatedAt time.Time `bun:"created_at,notnull,default:current_timestamp"`
 }
 
+
+type AuditLog struct {
+	bun.BaseModel `bun:"table:audit_logs,alias:al"`
+
+	ID           string    `bun:"id,pk"`
+	UserID       *string   `bun:"user_id"`
+	IPAddress    *string   `bun:"ip_address"`
+	UserAgent    *string   `bun:"user_agent"`
+	Method       string    `bun:"method,notnull"`
+	Path         string    `bun:"path,notnull"`
+	StatusCode   int       `bun:"status_code,notnull"`
+	Action       string    `bun:"action,notnull"`
+	Details      *string   `bun:"details"`
+	ErrorMessage *string   `bun:"error_message"`
+	CreatedAt    time.Time `bun:"created_at,notnull,default:current_timestamp"`
+}
+
 type RecentAccess struct {
 	bun.BaseModel `bun:"table:vfs_recent_access,alias:vra"`
 

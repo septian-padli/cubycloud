@@ -57,6 +57,14 @@ func main() {
 	// 4. Init storage driver
 	driver := storage.NewStorageDriver(db, cfg.StoragePath)
 
+	// Reconcile orphan blobs across local disk and S3 nodes on startup
+	if orphanReport, err := storage.ReconcileOrphanBlobs(context.Background(), db, driver, 5*time.Minute); err != nil {
+		log.Printf("[STARTUP_ORPHAN_AUDIT] Error reconciling orphan blobs: %v", err)
+	} else if orphanReport.LocalDeleted > 0 || orphanReport.S3Deleted > 0 {
+		log.Printf("[STARTUP_ORPHAN_AUDIT] Reconciled orphans: local (scanned=%d, deleted=%d), S3 (scanned=%d, deleted=%d)",
+			orphanReport.LocalScanned, orphanReport.LocalDeleted, orphanReport.S3Scanned, orphanReport.S3Deleted)
+	}
+
 	// 5. Init setup guard cache
 	setupGuard := initSetupGuard(db)
 
@@ -69,9 +77,10 @@ func main() {
 	e.Use(echomw.Logger())
 	e.Use(echomw.Recover())
 	e.Use(echomw.CORSWithConfig(echomw.CORSConfig{
-		AllowOrigins: []string{"*"},
+		AllowOrigins: cfg.AllowedOrigins,
 		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
 	}))
+	e.Use(middleware.AuditLog(db))
 	e.GET("/health", func(c echo.Context) error {
 		if storage.AllConfiguredNodesAvailable(c.Request().Context(), db, driver) {
 			return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
@@ -109,6 +118,8 @@ func main() {
 	// Background cron worker for 30-day trash auto-purge
 	trashPurgeJob := jobs.StartTrashPurgeJob(context.Background(), db, driver, 1*time.Hour, 30*24*time.Hour)
 	defer trashPurgeJob.Stop()
+ auditCleanupJob := jobs.StartAuditCleanupJob(context.Background(), db, time.Hour)
+ defer auditCleanupJob.Stop()
 
 	// 9. Serve embedded frontend
 	distFS, err := fs.Sub(web.Dist, "dist")

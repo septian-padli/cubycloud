@@ -104,6 +104,10 @@ func (*syncCloudTestDriver) PresignDownload(context.Context, string, string, str
 	return "", nil
 }
 
+func (*syncCloudTestDriver) ListObjects(context.Context, string, string) ([]string, error) {
+	return nil, nil
+}
+
 func TestUploadIntentRejectsNegativeSize(t *testing.T) {
 	dataDir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dataDir, "db"), 0o755); err != nil {

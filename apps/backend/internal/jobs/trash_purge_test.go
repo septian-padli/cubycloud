@@ -71,6 +71,9 @@ func (*mockStorageDriver) PresignUpload(context.Context, string, string, time.Du
 func (*mockStorageDriver) PresignDownload(context.Context, string, string, string, time.Duration) (string, error) {
 	return "", nil
 }
+func (*mockStorageDriver) ListObjects(context.Context, string, string) ([]string, error) {
+	return nil, nil
+}
 
 func TestTrashPurgeJobExpiredRetention(t *testing.T) {
 	dataDir := t.TempDir()

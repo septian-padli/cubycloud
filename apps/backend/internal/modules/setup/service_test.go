@@ -1002,8 +1002,8 @@ func TestHandler_CompleteSetup_HTTP(t *testing.T) {
 			if cookie.SameSite != http.SameSiteLaxMode {
 				t.Error("cookie should be SameSite=Lax")
 			}
-			if cookie.MaxAge != 7*24*3600 {
-				t.Errorf("cookie MaxAge = %d, want %d", cookie.MaxAge, 7*24*3600)
+			if cookie.MaxAge != 24*3600 {
+				t.Errorf("cookie MaxAge = %d, want %d", cookie.MaxAge, 24*3600)
 			}
 			break
 		}

@@ -413,5 +413,6 @@ func RegisterRoutes(e *echo.Echo, db *bun.DB, storage storage.StorageDriver, dat
 	admin.GET("/backup", handler.DownloadBackup)
 	// Storage stats & top users
 	admin.GET("/storage/stats", handler.GetStorageStats)
+ admin.GET("/audit-logs", handler.GetAuditLogs)
 	admin.GET("/storage/top-users", handler.GetTopStorageUsers)
 }

@@ -2,6 +2,7 @@ package config
 
 import (
 	"bufio"
+	"errors"
 	"log"
 	"os"
 	"path/filepath"
@@ -10,17 +11,28 @@ import (
 )
 
 type Config struct {
-	Port        string
-	DataDirPath string
-	JWTSecret   string
-	DBPath      string
-	StoragePath string
-	TempTUSPath string
+	Port           string
+	DataDirPath    string
+	JWTSecret      string
+	DBPath         string
+	StoragePath    string
+	TempTUSPath    string
+	IsProduction   bool
+	CookieSecure   bool
+	AllowedOrigins []string
 }
 
 func Load() *Config {
 	loadDotEnv()
+	cfg, err := LoadConfig()
+	if err != nil {
+		panic(err.Error())
+	}
+	return cfg
+}
 
+// LoadConfig parses and validates configuration from environment variables.
+func LoadConfig() (*Config, error) {
 	port := getEnv("PORT", "8383")
 
 	// Determine DataDirPath with sensible defaults:
@@ -37,26 +49,65 @@ func Load() *Config {
 	}
 	dataDir = filepath.Clean(dataDir)
 
+	env := strings.ToLower(os.Getenv("ENV"))
+	appEnv := strings.ToLower(os.Getenv("APP_ENV"))
+	isProduction := env == "production" || appEnv == "production"
+
 	// Determine JWTSecret:
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
-		env := strings.ToLower(os.Getenv("ENV"))
-		appEnv := strings.ToLower(os.Getenv("APP_ENV"))
-		if env == "production" || appEnv == "production" {
-			panic("JWT_SECRET required in production environment")
+		if isProduction {
+			return nil, errors.New("JWT_SECRET required in production environment")
 		}
 		jwtSecret = "cubycloud-dev-secret-change-in-production"
 		log.Println("[WARN] JWT_SECRET not set. Using default development secret. DO NOT use in production!")
 	}
 
-	return &Config{
-		Port:        port,
-		DataDirPath: dataDir,
-		JWTSecret:   jwtSecret,
-		DBPath:      filepath.Join(dataDir, "db", "cubycloud.db"),
-		StoragePath: filepath.Join(dataDir, "storage"),
-		TempTUSPath: filepath.Join(dataDir, "temp", "tus"),
+	cookieSecureRaw := strings.TrimSpace(os.Getenv("COOKIE_SECURE"))
+	if isProduction {
+		if !strings.EqualFold(cookieSecureRaw, "true") {
+			return nil, errors.New("COOKIE_SECURE=true required in production environment")
+		}
 	}
+	cookieSecure := strings.EqualFold(cookieSecureRaw, "true")
+
+	originsRaw := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
+	var allowedOrigins []string
+	if originsRaw != "" {
+		for _, p := range strings.Split(originsRaw, ",") {
+			trimmed := strings.TrimSpace(p)
+			if trimmed != "" {
+				allowedOrigins = append(allowedOrigins, trimmed)
+			}
+		}
+	}
+
+	if isProduction {
+		if len(allowedOrigins) == 0 {
+			return nil, errors.New("ALLOWED_ORIGINS required in production environment")
+		}
+		for _, origin := range allowedOrigins {
+			if origin == "*" {
+				return nil, errors.New("ALLOWED_ORIGINS cannot contain wildcard '*' in production environment")
+			}
+		}
+	} else {
+		if len(allowedOrigins) == 0 {
+			allowedOrigins = []string{"*"}
+		}
+	}
+
+	return &Config{
+		Port:           port,
+		DataDirPath:    dataDir,
+		JWTSecret:      jwtSecret,
+		DBPath:         filepath.Join(dataDir, "db", "cubycloud.db"),
+		StoragePath:    filepath.Join(dataDir, "storage"),
+		TempTUSPath:    filepath.Join(dataDir, "temp", "tus"),
+		IsProduction:   isProduction,
+		CookieSecure:   cookieSecure,
+		AllowedOrigins: allowedOrigins,
+	}, nil
 }
 
 func getEnv(key, fallback string) string {

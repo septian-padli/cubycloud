@@ -246,6 +246,10 @@ func (singlePutTestDriver) PresignDownload(context.Context, string, string, stri
 	return "", errors.New("not used")
 }
 
+func (singlePutTestDriver) ListObjects(context.Context, string, string) ([]string, error) {
+	return nil, nil
+}
+
 func TestMultipartDirectUploadFlow(t *testing.T) {
 	svc, db, fake, ctx := newMultipartHarness(t, int64(1<<40))
 	size := int64(100<<20) + 1 // just past the single-PUT threshold

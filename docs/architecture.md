@@ -52,7 +52,7 @@ Boot-time settings are read from process environment variables (and supported `.
 | `JWT_SECRET`      | Secret used to sign sessions; required when `ENV=production` or `APP_ENV=production` |
 | `ENV` / `APP_ENV` | Selects production safety behavior                                                   |
 
-Application settings such as default quota and audit retention are managed through the admin interface and persisted in SQLite.
+Application settings such as default quota and audit retention are managed through the admin interface and persisted in SQLite. The audit log subsystem captures all mutating HTTP operations (`POST`, `PUT`, `PATCH`, `DELETE`) with sensitive credential redaction, preserving non-mutating `GET` requests from log bloat. A background worker (`AUDIT_CLEANUP_JOB`) purges records older than the configured retention period (7, 14, 30, 60, or 90 days).
 
 ## Storage and capacity
 
@@ -61,7 +61,7 @@ The storage driver supports local filesystem nodes and configured S3-compatible 
 Physical node capacity is enforced independently from per-user My Storage quota. Organization data is not charged to an individual user's quota, but it still consumes shared node capacity. Capacity checks include active upload reservations to prevent concurrent uploads from over-allocating a node.
 
 For browser-to-S3 uploads, a presigned PUT URL lasts 15 minutes, while its pending upload intent lasts 24 hours. Finalization verifies that S3 reports exactly the requested object size before recording metadata. A failed metadata commit preserves the object and intent for retry; cancellation or expiry deletes a cloud object only when no My Storage or Organization item still references it.
-
+On server startup, an orphan-file reconciliation audit scans registered local filesystem and S3 nodes, removing unreferenced storage blobs while safeguarding active files, trash items, unexpired upload intents, and recent writes within a safety grace period.
 Batch ZIP downloads use the existing authenticated POST endpoint. The browser submits selected IDs as form fields and handles the ZIP attachment as a native download, without collecting the response in JavaScript memory. Native downloads do not expose byte progress or reliable completion events to the page; the UI reports that the download has started, not that it has finished.
 
 ## Health, storage availability, and interface-language contract
@@ -74,10 +74,10 @@ Batch ZIP downloads use the existing authenticated POST endpoint. The browser su
 ## Security boundaries
 
 - User passwords are bcrypt-hashed.
-- Authenticated sessions are carried in HTTP-only `SameSite=Lax` cookies.
+- Authenticated sessions are carried in HTTP-only `SameSite=Lax` cookies with `Secure` enforced when `COOKIE_SECURE=true`, direct TLS is active, or reverse proxies forward `X-Forwarded-Proto: https`.
 - Login and public share-unlock endpoints have an in-memory rate limiter; its counters reset when the server restarts.
 - Storage credentials are encrypted; this does not imply that uploaded file contents are end-to-end encrypted.
-- The server requires an explicit `JWT_SECRET` when started in production mode.
+- In production mode (`ENV=production` or `APP_ENV=production`), the server enforces an explicit `JWT_SECRET`, `COOKIE_SECURE=true`, and explicit `ALLOWED_ORIGINS` (rejecting wildcards `*`), refusing startup if any are missing.
 
 See [SECURITY.md](../SECURITY.md) for disclosure guidance. No CPU, memory, latency, or image-size benchmark is published in this document.
 

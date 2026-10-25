@@ -6,19 +6,23 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/cubycloud/backend/internal/database"
-	"github.com/cubycloud/backend/internal/middleware"
-	"github.com/cubycloud/backend/internal/modules/auth"
-	"github.com/labstack/echo/v4"
-	"github.com/oklog/ulid/v2"
-	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/cubycloud/backend/internal/database"
+	"github.com/cubycloud/backend/internal/middleware"
+	"github.com/cubycloud/backend/internal/modules/auth"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/labstack/echo/v4"
+	"github.com/oklog/ulid/v2"
+	"golang.org/x/crypto/bcrypt"
 )
+
+const testJWTSecret = "test-secret-key-12345"
 
 func setupTestDB(t *testing.T) (*echo.Echo, string) {
 	tempDir, err := os.MkdirTemp("", "cubycloud-auth-test-*")
@@ -35,7 +39,7 @@ func setupTestDB(t *testing.T) (*echo.Echo, string) {
 		t.Fatalf("failed to connect db: %v", err)
 	}
 
-	jwtSecret := "test-secret-key-12345"
+	jwtSecret := testJWTSecret
 	jwtAuth := middleware.JWTAuth(jwtSecret, db)
 
 	// Create test user
@@ -105,12 +109,83 @@ func TestLogin_Success(t *testing.T) {
 			if !c.HttpOnly {
 				t.Errorf("cookie should be HttpOnly")
 			}
+			if c.MaxAge != 24*3600 {
+				t.Errorf("cookie MaxAge = %d, want %d", c.MaxAge, 24*3600)
+			}
+			if c.Secure {
+				t.Errorf("expected plain HTTP cookie to have Secure=false")
+			}
+			tok, _ := jwt.Parse(c.Value, func(token *jwt.Token) (interface{}, error) {
+				return []byte(testJWTSecret), nil
+			})
+			if tok != nil {
+				if claims, ok := tok.Claims.(jwt.MapClaims); ok {
+					exp := int64(claims["exp"].(float64))
+					diff := time.Until(time.Unix(exp, 0))
+					if diff < 23*time.Hour || diff > 25*time.Hour {
+						t.Errorf("expected token lifetime around 24h, got %v", diff)
+					}
+				}
+			}
 			break
 		}
 	}
 	if !foundCookie {
 		t.Errorf("expected cuby_token cookie to be set")
 	}
+}
+func TestLogin_CookieSecure(t *testing.T) {
+	e, tempDir := setupTestDB(t)
+	defer os.RemoveAll(tempDir)
+
+	loginBody, _ := json.Marshal(auth.LoginRequest{
+		Identifier: "admin",
+		Password:   "password123",
+	})
+
+	t.Run("with X-Forwarded-Proto https", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(loginBody))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("X-Forwarded-Proto", "https")
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		var found bool
+		for _, c := range rec.Result().Cookies() {
+			if c.Name == "cuby_token" {
+				found = true
+				if !c.Secure {
+					t.Errorf("expected cookie Secure=true with X-Forwarded-Proto https")
+				}
+			}
+		}
+		if !found {
+			t.Fatal("cuby_token cookie not found")
+		}
+	})
+
+	t.Run("with COOKIE_SECURE=true env", func(t *testing.T) {
+		_ = os.Setenv("COOKIE_SECURE", "true")
+		defer os.Unsetenv("COOKIE_SECURE")
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(loginBody))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		var found bool
+		for _, c := range rec.Result().Cookies() {
+			if c.Name == "cuby_token" {
+				found = true
+				if !c.Secure {
+					t.Errorf("expected cookie Secure=true with COOKIE_SECURE=true")
+				}
+			}
+		}
+		if !found {
+			t.Fatal("cuby_token cookie not found")
+		}
+	})
 }
 
 func TestLogin_InvalidPassword(t *testing.T) {

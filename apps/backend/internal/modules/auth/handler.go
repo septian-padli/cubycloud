@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/cubycloud/backend/internal/httputil"
 	"github.com/cubycloud/backend/internal/middleware"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
@@ -39,7 +40,7 @@ func (h *Handler) Login(c echo.Context) error {
 		"sub":           user.ID,
 		"role":          user.Role,
 		"token_version": user.TokenVersion,
-		"exp":           time.Now().Add(7 * 24 * time.Hour).Unix(),
+		"exp":           time.Now().Add(24 * time.Hour).Unix(),
 	})
 	tokenString, err := token.SignedString([]byte(h.jwtSecret))
 	if err != nil {
@@ -56,8 +57,8 @@ func (h *Handler) Login(c echo.Context) error {
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   c.Request().TLS != nil,
-		MaxAge:   7 * 24 * 3600, // 7 days
+		Secure:   httputil.IsSecureCookie(c),
+		MaxAge:   24 * 3600, // 24 hours
 	}
 	c.SetCookie(cookie)
 	quotaBytes := user.QuotaBytes
@@ -86,7 +87,7 @@ func (h *Handler) Logout(c echo.Context) error {
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   c.Request().TLS != nil,
+		Secure:   httputil.IsSecureCookie(c),
 		MaxAge:   -1,
 	}
 	c.SetCookie(cookie)
