@@ -2,7 +2,7 @@
 	import type { ExplorerVariant, FileEntry } from '$lib/types/drive.js';
 	import type { Snippet } from 'svelte';
 	import * as ContextMenu from '$lib/components/ui/context-menu/index.js';
-	import { Copy, Download, Eye, FolderInput, Pencil, Share2, Star, Trash2 } from '@lucide/svelte';
+	import { Archive, Copy, Download, Eye, FolderInput, Pencil, Share2, Star, Trash2 } from '@lucide/svelte';
 	import { cn } from '$lib/utils.js';
 	import { locale } from '$lib/locale.svelte.js';
 
@@ -18,6 +18,7 @@
 		onStar,
 		onShare,
 		onDelete,
+		onCompress,
 		children
 	}: {
 		entry: FileEntry;
@@ -31,6 +32,7 @@
 		onStar: (entry: FileEntry) => void;
 		onShare: (entry: FileEntry) => void;
 		onDelete: (entry: FileEntry) => void;
+		onCompress?: (entry: FileEntry) => void;
 		children: Snippet;
 	} = $props();
 </script>
@@ -65,6 +67,17 @@
 			<ContextMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 				<Download class="size-4 stroke-2" />
 				{locale.t('action.download')}
+			</ContextMenu.Item>
+		{/if}
+		{#if onCompress}
+			<ContextMenu.Item
+				disabled={entry.kind !== 'folder' && entry.storageAvailable === false}
+				class="gap-2"
+				onclick={() => onCompress?.(entry)}
+				data-testid="context-action-compress"
+			>
+				<Archive class="size-4 stroke-2" />
+				{locale.t('action.compress')}
 			</ContextMenu.Item>
 		{/if}
 		<ContextMenu.Item

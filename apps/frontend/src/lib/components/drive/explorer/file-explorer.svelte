@@ -61,6 +61,7 @@
 	import OfflineFileNotice from './offline-file-notice.svelte';
 	import { driveView } from '$lib/drive-view.svelte.js';
 	import {
+		Archive,
 		ChevronDown,
 		ChevronUp,
 		Download,
@@ -78,7 +79,7 @@
 		name: string;
 		size: number;
 		progress: number;
-		state: 'uploading' | 'started' | 'failed';
+		state: 'uploading' | 'started' | 'completed' | 'failed';
 		error?: string;
 	};
 
@@ -378,6 +379,85 @@
 			toast.error(
 				error instanceof Error ? error.message : tx('Gagal mengunduh ZIP', 'Failed to download ZIP')
 			);
+		}
+	}
+
+	async function handleBulkCompress(targetEntry?: FileEntry) {
+		const targetIds = targetEntry ? [targetEntry.id] : selectedIds;
+		const selected = visible.filter((e) => targetIds.includes(e.id));
+		if (
+			selected.length === 0 ||
+			selected.some((e) => e.kind !== 'folder' && e.storageAvailable === false)
+		) {
+			return;
+		}
+
+		if (!isApiBacked) {
+			toast.info(tx('Mengompres berkas sebagai ZIP (mock)', 'Compressing files as ZIP (mock)'));
+			return;
+		}
+
+		const queueIndex = downloadQueue.length;
+		const totalSize = selected.reduce((acc, e) => acc + (e.sizeBytes || 1), 0);
+		const name =
+			selected.length === 1
+				? tx(`Mengompres ${selected[0].name}`, `Compressing ${selected[0].name}`)
+				: tx(`Mengompres ${selected.length} item`, `Compressing ${selected.length} items`);
+
+		downloadQueue = [
+			...downloadQueue,
+			{
+				name,
+				size: totalSize,
+				progress: 10,
+				state: 'uploading'
+			}
+		];
+		queueDismissed = false;
+		queueOpen = true;
+
+		try {
+			const res = await api.compressBatchZip(targetIds, folderId);
+			toast.info(tx('Mengompres arsip di latar belakang...', 'Compressing archive in background...'));
+
+			const pollInterval = setInterval(async () => {
+				try {
+					const resp = await fetch(`/api/v1/jobs/${res.job_id}`);
+					if (!resp.ok) return;
+					const job = await resp.json();
+					downloadQueue = downloadQueue.map((item, idx) =>
+						idx === queueIndex
+							? { ...item, progress: Math.max(item.progress, job.progress) }
+							: item
+					);
+
+					if (job.status === 'COMPLETED') {
+						clearInterval(pollInterval);
+						downloadQueue = downloadQueue.map((item, idx) =>
+							idx === queueIndex ? { ...item, progress: 100, state: 'completed' } : item
+						);
+						toast.success(tx('Arsip berhasil dibuat', 'Archive created successfully'));
+						selectedIds = [];
+						await refreshStorage();
+						if (variant === 'my-storage') void chrome?.refreshQuota();
+					} else if (job.status === 'FAILED') {
+						clearInterval(pollInterval);
+						downloadQueue = downloadQueue.map((item, idx) =>
+							idx === queueIndex ? { ...item, state: 'failed', error: job.error_message } : item
+						);
+						toast.error(job.error_message || tx('Kompresi arsip gagal', 'Archive compression failed'));
+					}
+				} catch {
+					// Network hiccup during poll; will retry on next tick
+				}
+			}, 1000);
+
+			setTimeout(() => clearInterval(pollInterval), 5 * 60 * 1000);
+		} catch (error: any) {
+			downloadQueue = downloadQueue.map((item, idx) =>
+				idx === queueIndex ? { ...item, state: 'failed', error: error?.message } : item
+			);
+			toast.error(error?.message || tx('Kompresi arsip gagal', 'Archive compression failed'));
 		}
 	}
 	let fetchedPreviewEntry = $state<FileEntry | null>(null);
@@ -1947,6 +2027,15 @@
 					<DropdownMenu.Item
 						disabled={hasUnavailableSelection}
 						class="cursor-pointer gap-2"
+						onclick={() => handleBulkCompress()}
+						data-testid="bulk-action-compress"
+					>
+						<Archive class="size-4 stroke-2" />
+						<span>{locale.t('action.compress')}</span>
+					</DropdownMenu.Item>
+					<DropdownMenu.Item
+						disabled={hasUnavailableSelection}
+						class="cursor-pointer gap-2"
 						onclick={handleBulkMove}
 						data-testid="bulk-action-move"
 					>
@@ -2000,7 +2089,8 @@
 							actionEntry = e;
 							shareOpen = true;
 						},
-						onDelete
+						onDelete,
+						onCompress: (e: FileEntry) => handleBulkCompress(e)
 					}}
 					<div
 						data-folder-id={entry.kind === 'folder' ? entry.id : undefined}
@@ -2157,6 +2247,7 @@
 								shareOpen = true;
 							}}
 							{onDelete}
+							onCompress={(e) => handleBulkCompress(e)}
 						/>
 					</div>
 				{/each}

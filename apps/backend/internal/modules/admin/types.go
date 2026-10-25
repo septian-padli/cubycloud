@@ -31,7 +31,20 @@ type StorageNodeResponse struct {
 	FreeGB        int64  `json:"free_gb"`
 	CapacityCapGB int64  `json:"capacity_cap_gb"`
 	UsedBytes     int64  `json:"used_bytes"`
-	Enabled       bool   `json:"enabled"`
+	Enabled          bool   `json:"enabled"`
+	SafeToDisconnect bool   `json:"safe_to_disconnect"`
+	MigrationStatus  string `json:"migration_status,omitempty"`
+	MigrationJobID   string `json:"migration_job_id,omitempty"`
+}
+
+type DetachNodeRequest struct {
+	TargetNodeID string `json:"target_node_id,omitempty"`
+}
+
+type DetachNodeResponse struct {
+	Message          string  `json:"message"`
+	JobID            *string `json:"job_id,omitempty"`
+	SafeToDisconnect bool    `json:"safe_to_disconnect"`
 }
 type StorageNodesListResponse struct {
 	Nodes []StorageNodeResponse `json:"nodes"`

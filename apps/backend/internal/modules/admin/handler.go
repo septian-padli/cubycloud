@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cubycloud/backend/internal/modules/jobs"
 	"github.com/cubycloud/backend/internal/storage"
 	"github.com/labstack/echo/v4"
 	"github.com/uptrace/bun"
@@ -19,9 +20,9 @@ type Handler struct {
 	dataDirPath string
 }
 
-func NewHandler(db *bun.DB, storage storage.StorageDriver, dataDirPath, dbPath string) *Handler {
+func NewHandler(db *bun.DB, storage storage.StorageDriver, dataDirPath, dbPath string, queue ...*jobs.Queue) *Handler {
 	return &Handler{
-		service:     NewService(db, storage, dataDirPath),
+		service:     NewService(db, storage, dataDirPath, queue...),
 		dbPath:      dbPath,
 		dataDirPath: dataDirPath,
 	}
@@ -96,6 +97,30 @@ func (h *Handler) DisableStorageNode(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{
 		"message": "node disabled successfully",
 	})
+}
+
+// DetachStorageNode disables a storage node and starts physical migration
+func (h *Handler) DetachStorageNode(c echo.Context) error {
+	nodeID := c.Param("id")
+	if nodeID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{
+			"error": "node id required",
+		})
+	}
+
+	var req DetachNodeRequest
+	_ = c.Bind(&req)
+
+	actorID, _ := c.Get("user_id").(string)
+
+	resp, err := h.service.DetachStorageNode(c.Request().Context(), nodeID, req.TargetNodeID, actorID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(http.StatusOK, resp)
 }
 
 // RescanStorageNodes rescans local storage
@@ -383,9 +408,8 @@ func (h *Handler) GetTopStorageUsers(c echo.Context) error {
 }
 
 // RegisterRoutes registers all admin endpoints with JWT auth + Super Admin guard
-func RegisterRoutes(e *echo.Echo, db *bun.DB, storage storage.StorageDriver, dataDirPath, dbPath string, jwtAuth, superAdminGuard echo.MiddlewareFunc) {
-	handler := NewHandler(db, storage, dataDirPath, dbPath)
-
+func RegisterRoutes(e *echo.Echo, db *bun.DB, storage storage.StorageDriver, dataDirPath, dbPath string, jwtAuth, superAdminGuard echo.MiddlewareFunc, queue ...*jobs.Queue) {
+	handler := NewHandler(db, storage, dataDirPath, dbPath, queue...)
 	// Admin group with JWT auth + Super Admin guard
 	admin := e.Group("/api/v1/admin", jwtAuth, superAdminGuard)
 
@@ -400,6 +424,7 @@ func RegisterRoutes(e *echo.Echo, db *bun.DB, storage storage.StorageDriver, dat
 	admin.PUT("/storage-nodes/:id", handler.UpdateNode)
 	admin.PUT("/storage-nodes/:id/disable", handler.DisableStorageNode)
 	admin.DELETE("/storage-nodes/:id", handler.DeleteNode)
+	admin.POST("/storage-nodes/:id/detach", handler.DetachStorageNode)
 	admin.POST("/storage-nodes/rescan", handler.RescanStorageNodes)
 
 	// Users management

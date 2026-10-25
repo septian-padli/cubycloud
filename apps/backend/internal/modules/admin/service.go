@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/cubycloud/backend/internal/database"
+	"github.com/cubycloud/backend/internal/modules/jobs"
 	"github.com/cubycloud/backend/internal/storage"
 	"github.com/oklog/ulid/v2"
 	"github.com/uptrace/bun"
@@ -33,15 +34,23 @@ type Service struct {
 	db          *bun.DB
 	storage     storage.StorageDriver
 	dataDirPath string
+	queue       *jobs.Queue
 	nodeNameMu  sync.Mutex
 }
 
-func NewService(db *bun.DB, storage storage.StorageDriver, dataDirPath string) *Service {
+func NewService(db *bun.DB, storage storage.StorageDriver, dataDirPath string, queue ...*jobs.Queue) *Service {
+	var q *jobs.Queue
+	if len(queue) > 0 && queue[0] != nil {
+		q = queue[0]
+	} else {
+		q = jobs.NewQueue(db)
+	}
 	return &Service{
 		repo:        NewRepository(db),
 		db:          db,
 		storage:     storage,
 		dataDirPath: dataDirPath,
+		queue:       q,
 	}
 }
 
@@ -223,6 +232,32 @@ func (s *Service) GetStorageNodes(ctx context.Context) ([]StorageNodeResponse, e
 			ID: node.ID, Type: node.Type, Name: node.Name, CapacityCapGB: capGB,
 			TotalGB: capGB, UsedBytes: used, Enabled: node.Enabled,
 			FreeGB: freeBytes / (1024 * 1024 * 1024),
+			SafeToDisconnect: !node.Enabled && used == 0,
+		}
+		var migrationJob database.Job
+		if err := s.db.NewSelect().Model(&migrationJob).
+			Where("type = ?", jobs.TypeNodeMigration).
+			Where("json_extract(payload, '$.source_node_id') = ?", node.ID).
+			Order("created_at DESC").
+			Limit(1).
+			Scan(ctx); err == nil {
+			nodeResp.MigrationJobID = migrationJob.ID
+			switch migrationJob.Status {
+			case jobs.StatusPending, jobs.StatusProcessing:
+				nodeResp.MigrationStatus = "MIGRATING"
+				nodeResp.SafeToDisconnect = false
+			case jobs.StatusFailed:
+				nodeResp.MigrationStatus = "FAILED"
+				nodeResp.SafeToDisconnect = false
+			case jobs.StatusCompleted:
+				if used == 0 {
+					nodeResp.MigrationStatus = "COMPLETED"
+					nodeResp.SafeToDisconnect = true
+				} else {
+					nodeResp.MigrationStatus = "FAILED"
+					nodeResp.SafeToDisconnect = false
+				}
+			}
 		}
 		if node.Type == "LOCAL" && node.Path != nil {
 			nodeResp.Path = *node.Path
@@ -267,6 +302,60 @@ func (s *Service) DisableStorageNode(ctx context.Context, nodeID string) error {
 	}
 
 	return nil
+}
+
+// DetachStorageNode disables a storage node and enqueues a physical migration background job if files exist
+func (s *Service) DetachStorageNode(ctx context.Context, nodeID, targetNodeID, adminUserID string) (*DetachNodeResponse, error) {
+	node, err := s.repo.GetStorageNodeByID(ctx, nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("get node: %w", err)
+	}
+	if node == nil {
+		return nil, fmt.Errorf("node not found")
+	}
+
+	// Immediately disable node to halt any new uploads or allocations
+	if node.Enabled {
+		if err := s.repo.DisableNode(ctx, nodeID); err != nil {
+			return nil, fmt.Errorf("disable node: %w", err)
+		}
+	}
+
+	legacyNodeID, err := s.legacyLocalNodeID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	used, err := s.repo.StorageNodeUsedBytes(ctx, node.ID, legacyNodeID)
+	if err != nil {
+		return nil, fmt.Errorf("check node usage: %w", err)
+	}
+
+	if used == 0 {
+		return &DetachNodeResponse{
+			Message:          "node detached successfully (no files to migrate)",
+			SafeToDisconnect: true,
+		}, nil
+	}
+
+	if s.queue == nil {
+		s.queue = jobs.NewQueue(s.db)
+	}
+
+	payload := jobs.NodeMigrationPayload{
+		SourceNodeID: nodeID,
+		TargetNodeID: targetNodeID,
+	}
+
+	enqueuedJob, err := s.queue.Enqueue(ctx, jobs.TypeNodeMigration, adminUserID, payload)
+	if err != nil {
+		return nil, fmt.Errorf("enqueue migration job: %w", err)
+	}
+
+	return &DetachNodeResponse{
+		Message:          "node detachment and migration started",
+		JobID:            &enqueuedJob.ID,
+		SafeToDisconnect: false,
+	}, nil
 }
 
 // RescanStorageNodes rescans local storage nodes

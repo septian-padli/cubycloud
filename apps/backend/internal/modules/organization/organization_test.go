@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -330,6 +331,47 @@ func TestOrganization_BatchDownloadZipForm(t *testing.T) {
 	}
 	if len(archive.File) != 1 || archive.File[0].Name != "first.txt" {
 		t.Fatalf("archive entries = %v, want first.txt", archive.File)
+	}
+}
+
+func TestOrganization_BatchCompressZip(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.db.Close()
+	user1ID := ulid.Make().String()
+	insertTestUser(t, env.db, user1ID, "user1", "REGULAR", 100*1024*1024)
+	token := generateToken(env.secret, user1ID, "REGULAR")
+
+	fileContent := []byte("first content")
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, _ := writer.CreateFormFile("file", "first.txt")
+	part.Write(fileContent)
+	writer.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/drive/organization/upload?filename=first.txt", body)
+	req.Header.Set(echo.HeaderContentType, writer.FormDataContentType())
+	req.Header.Set(echo.HeaderAuthorization, "Bearer "+token)
+	rec := httptest.NewRecorder()
+	env.echo.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("upload first: %d %s", rec.Code, rec.Body.String())
+	}
+	var first organization.Item
+	if err := json.Unmarshal(rec.Body.Bytes(), &first); err != nil {
+		t.Fatal(err)
+	}
+
+	compressBody := fmt.Sprintf(`{"ids":["%s"],"parent_id":null,"name":"OrgZip.zip"}`, first.ID)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/drive/organization/batch/compress-zip", strings.NewReader(compressBody))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set(echo.HeaderAuthorization, "Bearer "+token)
+	rec = httptest.NewRecorder()
+	env.echo.ServeHTTP(rec, req)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("batch compress status = %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "job_id") || !strings.Contains(rec.Body.String(), "PENDING") {
+		t.Fatalf("unexpected response body: %s", rec.Body.String())
 	}
 }
 

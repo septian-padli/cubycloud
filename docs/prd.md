@@ -135,7 +135,7 @@ Single image/binary; Go serves embedded static SvelteKit SPA, HTTP API, and back
 
 - Storage driver and VFS abstract physical nodes from regular users. Super Admin can inspect nodes, node names, capacity and actual usage, with local/cloud storage badges as specified by UI contracts.
 - If local free capacity drops below **5%**, mark node read-only and fail over new uploads to a healthy writable node where possible. If no node can accept the write, return a distinct **physical pool full** message.
-- Allow **Rescan Storage Nodes** without rerunning onboarding. Handle `Detach Node` by moving it to read-only and safely migrating its physical files to another node through background jobs.
+- Allow **Rescan Storage Nodes** without rerunning onboarding. Handle `Detach Node` by setting the node read-only (`enabled=false`) and safely migrating its physical files to eligible nodes via stream-based background jobs (`node_migration`). Each copied file is verified with SHA-256 and size matching before database pointers are updated. The node is declared safe to disconnect only when all files are verified and migrated (`used_bytes=0`); on any failure, source files remain accessible and the node is not declared safe to disconnect. Source files are never deleted by migration.
 - Admin configures **Default User Quota** in GiB (binary 1024^3) or Unlimited, applying only to **new users**; existing users retain their effective settings unless explicitly updated.
 - **Audit-log retention:** default **90 days**, selectable **7/14/30/60/90** days, cleaned with `AUDIT_CLEANUP_JOB`. The backend logs all state-mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`) including failures, with sensitive secret redaction (`password`, `recovery_key`, `secret_key`, tokens), without auditing read-only `GET` requests. Logs are viewable by admins via `GET /api/v1/admin/audit-logs`.
 - **Background worker concurrency:** configurable, default **2**. Queued heavy operations remain `PENDING` until worker capacity is available.
@@ -234,9 +234,9 @@ Single image/binary; Go serves embedded static SvelteKit SPA, HTTP API, and back
 
 ### 4.12 Core archive and background jobs
 
-- **Download as ZIP** streams selected files/folders as one `.zip`; **Compress to ZIP** stores selected content as an archive. Both are **core**, not an opt-in add-on. `/admin/addons` is removed.
-- Background operations, including archive compression, image conversion where supported, and maintenance tasks, use SQLite transactional jobs and a bounded Go worker pool (default concurrency **2**). States include `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`.
-- Job failures (e.g. disk full, corrupt input) must not leave partial committed output; surface user-facing error/notification and appropriate Admin audit diagnostics; support safe recovery/retry.
+- **Download as ZIP** streams selected files/folders as one `.zip`; **Compress to ZIP** stores selected content as a persistent `.zip` archive directly in the folder where the action was initiated (action-origin folder `parent_id`), supporting both My Storage and Organization even when items originate from different locations. Sibling name conflicts in destination folder resolve automatically with numbered suffixes (e.g. `Archive (1).zip`). Both are **core**, not an opt-in add-on. `/admin/addons` is removed.
+- Background operations, including archive compression and maintenance tasks, use SQLite transactional jobs (`jobs` table) and a bounded Go worker pool (concurrency limit configured in `settings`, default **2**). States include `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`, inspectable via `GET /api/v1/jobs/:id` and real-time SSE (`GET /api/v1/events`).
+- Job failures (e.g. disk full, corrupt input, or server restart) must not leave partial committed output or orphan blobs; lingering `PROCESSING` jobs are recovered to `FAILED` at startup; surface user-facing error/notification and support safe retry.
 
 ### 4.13 Account Profile and session security (`/drive/profile/:userId`)
 

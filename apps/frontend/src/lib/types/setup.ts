@@ -17,6 +17,9 @@ export interface StorageNode {
 	usedBytes: number;
 	enabled: boolean;
 	capacityCapGb: number;
+	safeToDisconnect?: boolean;
+	migrationStatus?: 'MIGRATING' | 'COMPLETED' | 'FAILED' | 'IDLE';
+	migrationJobId?: string;
 }
 
 export interface LinuxDevice {

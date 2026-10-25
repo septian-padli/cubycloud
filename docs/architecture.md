@@ -64,6 +64,16 @@ For browser-to-S3 uploads, a presigned PUT URL lasts 15 minutes, while its pendi
 On server startup, an orphan-file reconciliation audit scans registered local filesystem and S3 nodes, removing unreferenced storage blobs while safeguarding active files, trash items, unexpired upload intents, and recent writes within a safety grace period.
 Batch ZIP downloads use the existing authenticated POST endpoint. The browser submits selected IDs as form fields and handles the ZIP attachment as a native download, without collecting the response in JavaScript memory. Native downloads do not expose byte progress or reliable completion events to the page; the UI reports that the download has started, not that it has finished.
 
+## Background job queue, Compress to ZIP, and Node Detach Migration
+
+Asynchronous server-side operations are coordinated using a SQLite-backed transactional queue (`jobs` table) and a bounded Go worker pool. Concurrency defaults to `2` (governed by `settings.worker_concurrency_limit`).
+
+- **Atomic Job Claims:** Workers acquire pending tasks using atomic `UPDATE jobs SET status = 'PROCESSING' WHERE id = (SELECT id FROM jobs WHERE status = 'PENDING' ORDER BY created_at ASC LIMIT 1) RETURNING *`.
+- **Compress to ZIP Workflow:** Invoked via `POST /api/v1/drive/my-storage/batch/compress-zip` and `POST /api/v1/drive/organization/batch/compress-zip`, returning `202 Accepted` with a `job_id`. Selected files/folders are recursively packaged into a temporary archive, verified against quota (for personal storage) and storage capacity, placed on a local or S3 node via placement strategy, and registered as a `.zip` file in the folder where the user triggered the action (`parent_id`). Sibling naming conflicts resolve with numbered suffixes (`Archive (1).zip`).
+- **Rollback & Restart Recovery:** Job errors or cancellations immediately unlink temporary archive files and do not commit VFS metadata. Upon server boot, lingering `PROCESSING` jobs automatically transition to `FAILED` (`Interrupted by server restart`), preventing hung states.
+- **Real-Time Events:** Real-time updates stream through SSE at `GET /api/v1/events` (authenticated), while direct job polling remains available via `GET /api/v1/jobs/:id`.
+- **Node Detach & Physical Migration Workflow:** Triggered via `POST /api/v1/admin/storage-nodes/:id/detach`, returning `safe_to_disconnect: true` immediately if the node has zero used bytes, or enqueuing a `node_migration` job when files are present. The background worker disables the source node (`enabled = false`), streams each unique blob across drivers (`LOCAL ↔ S3`), verifies the destination with SHA-256 and byte length checks, and updates VFS pointers atomically. Under the zero-deletion invariant, source blobs are never deleted, ensuring that any migration error leaves source files completely readable. A node is declared safe to disconnect only when all files have been migrated (`used_bytes = 0`).
+
 ## Health, storage availability, and interface-language contract
 
 - `GET /health` is unauthenticated. It returns HTTP `200` only if every currently configured storage node is accessible, and HTTP `503` if any one is inaccessible. The health check probes all registered nodes. Its public response does not expose storage names, physical paths, or credentials.

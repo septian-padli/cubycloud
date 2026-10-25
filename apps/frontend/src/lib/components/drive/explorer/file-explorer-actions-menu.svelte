@@ -3,6 +3,7 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import {
+		Archive,
 		Copy,
 		Download,
 		Eye,
@@ -27,7 +28,8 @@
 		onCopy,
 		onStar,
 		onShare,
-		onDelete
+		onDelete,
+		onCompress
 	}: {
 		entry: FileEntry;
 		variant?: ExplorerVariant;
@@ -40,6 +42,7 @@
 		onStar: (entry: FileEntry) => void;
 		onShare: (entry: FileEntry) => void;
 		onDelete: (entry: FileEntry) => void;
+		onCompress?: (entry: FileEntry) => void;
 	} = $props();
 </script>
 
@@ -85,6 +88,17 @@
 			<DropdownMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 				<Download class="size-4 stroke-2" />
 				{locale.t('action.download')}
+			</DropdownMenu.Item>
+		{/if}
+		{#if onCompress}
+			<DropdownMenu.Item
+				disabled={entry.kind !== 'folder' && entry.storageAvailable === false}
+				class="gap-2"
+				onclick={() => onCompress?.(entry)}
+				data-testid="action-compress"
+			>
+				<Archive class="size-4 stroke-2" />
+				{locale.t('action.compress')}
 			</DropdownMenu.Item>
 		{/if}
 		<DropdownMenu.Item

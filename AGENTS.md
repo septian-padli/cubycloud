@@ -84,3 +84,14 @@ For independently scoped work, use **native OMP subagents** when they materially
 5. Communicate with the user in **Bahasa Indonesia**. Keep code identifiers, file paths, API names and commands in their original form.
 
 **Git safety rule:** Do not commit, push, force-push, reset destructively, delete branches/worktrees, or publish without specific authorization. Implement, verify, and report first. The detailed workflow is in `.cursor/WORKFLOW_RULES.md` and need not be read in full for every task.
+
+<!-- CODEGRAPH_START -->
+## CodeGraph
+
+In repositories indexed by CodeGraph (a `.codegraph/` directory exists at the repo root), reach for it BEFORE grep/find or reading files when you need to understand or locate code:
+
+- **MCP tool** (when available): `codegraph_explore` answers most code questions in one call — the relevant symbols' verbatim source plus the call paths between them, including dynamic-dispatch hops grep can't follow. Name a file or symbol in the query to read its current line-numbered source. If it's listed but deferred, load it by name via tool search.
+- **Shell** (always works): `codegraph explore "<symbol names or question>"` prints the same output.
+
+If there is no `.codegraph/` directory, skip CodeGraph entirely — indexing is the user's decision.
+<!-- CODEGRAPH_END -->

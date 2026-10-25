@@ -33,6 +33,9 @@ export interface StorageNode {
 	capacity_cap_gb: number;
 	used_bytes: number;
 	enabled: boolean;
+	safe_to_disconnect?: boolean;
+	migration_status?: string;
+	migration_job_id?: string;
 	endpoint?: string;
 	bucket?: string;
 }
@@ -113,6 +116,16 @@ class AdminAPI {
 	async disableNode(nodeId: string): Promise<{ error?: string }> {
 		return this.request(`/admin/storage-nodes/${nodeId}/disable`, {
 			method: 'PUT'
+		});
+	}
+
+	async detachNode(
+		nodeId: string,
+		targetNodeId?: string
+	): Promise<{ data?: { message: string; job_id?: string; safe_to_disconnect: boolean }; error?: string }> {
+		return this.request(`/admin/storage-nodes/${nodeId}/detach`, {
+			method: 'POST',
+			body: JSON.stringify({ target_node_id: targetNodeId || undefined })
 		});
 	}
 

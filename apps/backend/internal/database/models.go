@@ -141,3 +141,19 @@ type RecentAccess struct {
 	Source     string    `bun:"source,notnull"`
 	AccessedAt time.Time `bun:"accessed_at,notnull,default:current_timestamp"`
 }
+
+type Job struct {
+	bun.BaseModel `bun:"table:jobs,alias:j"`
+
+	ID           string     `bun:"id,pk"`
+	Type         string     `bun:"type,notnull"`
+	Status       string     `bun:"status,notnull,default:'PENDING'"`
+	UserID       string     `bun:"user_id,notnull"`
+	Payload      string     `bun:"payload,notnull"`
+	Progress     int        `bun:"progress,notnull,default:0"`
+	ErrorMessage *string    `bun:"error_message"`
+	Result       *string    `bun:"result"`
+	CreatedAt    time.Time  `bun:"created_at,notnull,default:current_timestamp"`
+	StartedAt    *time.Time `bun:"started_at"`
+	CompletedAt  *time.Time `bun:"completed_at"`
+}

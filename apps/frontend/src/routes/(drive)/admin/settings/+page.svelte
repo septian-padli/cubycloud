@@ -8,6 +8,7 @@
 	import DrivePageHeader from '$lib/components/drive/drive-page-header.svelte';
 	import AddStorageNodeDialog from '$lib/components/admin/add-storage-node-dialog.svelte';
 	import EditStorageNodeDialog from '$lib/components/admin/edit-storage-node-dialog.svelte';
+	import DetachNodeDialog from '$lib/components/admin/detach-node-dialog.svelte';
 	import StorageNodesGrid from '$lib/components/admin/storage-nodes-grid.svelte';
 	import AdminSystemSettings from '$lib/components/admin/admin-system-settings.svelte';
 	import { ConfirmDialog } from '$lib/components/ui/confirm-dialog/index.js';
@@ -31,7 +32,8 @@
 	let showAddNodeDialog = $state(false);
 	let showEditNodeDialog = $state(false);
 	let nodeToEdit = $state<StorageNode | null>(null);
-
+	let showDetachNodeDialog = $state(false);
+	let nodeToDetach = $state<StorageNode | null>(null);
 	// Navigation leave confirmation
 	let showLeaveConfirmDialog = $state(false);
 	let pendingNavigationUrl = $state<string | null>(null);
@@ -91,7 +93,10 @@
 				freeGb: Math.max((n.capacity_cap_gb * 1024 ** 3 - n.used_bytes) / 1024 ** 3, 0),
 				usedBytes: n.used_bytes,
 				capacityCapGb: n.capacity_cap_gb,
-				enabled: n.enabled
+				enabled: n.enabled,
+				safeToDisconnect: n.safe_to_disconnect,
+				migrationStatus: n.migration_status as any,
+				migrationJobId: n.migration_job_id
 			}));
 		}
 
@@ -106,6 +111,20 @@
 		nodeToEdit = node;
 		showEditNodeDialog = true;
 	}
+
+	function handleDetachNode(node: StorageNode) {
+		nodeToDetach = node;
+		showDetachNodeDialog = true;
+	}
+
+	$effect(() => {
+		const isAnyMigrating = nodes.some((n) => n.migrationStatus === 'MIGRATING');
+		if (!isAnyMigrating) return;
+		const timer = setInterval(() => {
+			void loadData();
+		}, 2000);
+		return () => clearInterval(timer);
+	});
 
 	function handleNodeUpdated() {
 		void loadData();
@@ -274,7 +293,7 @@
 					{tx('Tambah Node', 'Add Node')}
 				</Button>
 			</div>
-			<StorageNodesGrid {nodes} onEdit={handleEditNode} />
+			<StorageNodesGrid {nodes} onEdit={handleEditNode} onDetach={handleDetachNode} />
 		</section>
 
 		<section>
@@ -297,7 +316,11 @@
 	node={nodeToEdit}
 	onUpdated={handleNodeUpdated}
 />
-
+<DetachNodeDialog
+	bind:open={showDetachNodeDialog}
+	node={nodeToDetach}
+	onDetach={() => loadData()}
+/>
 <ConfirmDialog
 	bind:open={showLeaveConfirmDialog}
 	title={tx('Tinggalkan Halaman?', 'Leave this page?')}

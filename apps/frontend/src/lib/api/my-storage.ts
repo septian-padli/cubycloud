@@ -535,6 +535,17 @@ export const myStorageAPI = {
 	downloadBatchZip(ids: string[], onError?: (message: string) => void): 'started' {
 		return downloadBatchZip(base, ids, onError);
 	},
+	async compressBatchZip(ids: string[], parentId?: string | null, name?: string): Promise<{ job_id: string; status: string }> {
+		return request<{ job_id: string; status: string }>('/batch/compress-zip', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				ids,
+				parent_id: parentId ?? null,
+				name: name ?? ''
+			})
+		});
+	},
 	toEntry(item: StorageItem): FileEntry {
 		const extension = item.name.split('.').pop()?.toLowerCase() ?? '';
 		const category: FileEntry['kind'] =

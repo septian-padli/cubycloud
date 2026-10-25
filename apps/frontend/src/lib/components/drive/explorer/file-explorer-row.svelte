@@ -23,7 +23,8 @@
 		onCopy,
 		onStar,
 		onShare,
-		onDelete
+		onDelete,
+		onCompress
 	}: {
 		entry: FileEntry;
 		variant?: ExplorerVariant;
@@ -39,6 +40,7 @@
 		onStar: (entry: FileEntry) => void;
 		onShare: (entry: FileEntry) => void;
 		onDelete: (entry: FileEntry) => void;
+		onCompress?: (entry: FileEntry) => void;
 	} = $props();
 	const modifiedAt = $derived(
 		entry.modifiedAt === 'Baru saja'
@@ -60,6 +62,7 @@
 	{onStar}
 	{onShare}
 	{onDelete}
+	{onCompress}
 >
 	<div
 		role="option"
@@ -149,6 +152,7 @@
 				{onStar}
 				{onShare}
 				{onDelete}
+				{onCompress}
 			/>
 		</div>
 	</div>

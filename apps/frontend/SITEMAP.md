@@ -86,7 +86,7 @@ src/routes/
 
 - **URL:** `?folder=folder_id&preview=file_id`; authenticated.
 - **Explorer:** category filters; list/grid according to existing view toggle; filename, size, date, actions; physical node badge **Super Admin only**.
-- **Actions:** file/folder upload via picker or drag/drop (including hierarchy and per-file errors); download; rename; move; recursive zero-byte-reference duplicate; delete recursively to Trash; share; star; preview image/video/text/code/PDF/audio.
+- **Actions:** file/folder upload via picker or drag/drop (including hierarchy and per-file errors); download; streaming ZIP download; Compress to ZIP (asynchronous persistent archive created in the folder where action was triggered, with conflict resolution and background queue progress); rename; move; recursive zero-byte-reference duplicate; delete recursively to Trash; share; star; preview image/video/text/code/PDF/audio.
 - **Conflicts:** upload/duplicate automatically get next available numeric suffix; rename/move offer suggested available name or cancel. No overwrite/merge folders.
 - **UI:** New Folder, Folder Delete Confirmation (all contents to Trash), Share Sheet, File Preview Lightbox, quota warnings/errors.
 - **Upload queue:** floating top-right below nav; progress weighted by file size and 100% only after server confirmation; expandable queued/uploading entries until dismissed or swiped right; completion toast bottom-right.
@@ -97,7 +97,7 @@ src/routes/
 - **URL:** `?folder=folder_id&preview=file_id`; accessible to **all registered users** with full read/write/download/delete rights.
 - **Model:** fixed Organization tree, **not** personal folders marked by an admin. Uses shared file explorer and corresponding previews/conflict modal.
 - **Quota:** Organization items **do not count toward per-user quota**; enforce physical-node capacity.
-- **UI:** same file offline behavior and admin-only node badges as My Storage. Hide `Bagikan` action because internal access is already shared.
+- **Actions & UI:** supports same upload, streaming ZIP, Compress to ZIP (archive stored in current folder), rename, move, duplicate, and delete-to-trash actions as My Storage. Hide `Bagikan` action because internal access is already shared.
 
 ### `/drive/shared` — Shared With Me
 

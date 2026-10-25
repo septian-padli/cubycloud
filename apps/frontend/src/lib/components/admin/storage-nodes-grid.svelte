@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Cloud, HardDrive, Settings } from '@lucide/svelte';
+	import { Cloud, HardDrive, Settings, Unplug } from '@lucide/svelte';
 	import type { StorageNode } from '$lib/types/setup.js';
 	import { isNodeCritical } from '$lib/mocks/admin-settings.js';
 	import * as Card from '$lib/components/ui/card/index.js';
@@ -9,10 +9,12 @@
 	import { Progress } from '$lib/components/ui/progress/index.js';
 	let {
 		nodes,
-		onEdit
+		onEdit,
+		onDetach
 	}: {
 		nodes: StorageNode[];
 		onEdit: (node: StorageNode) => void;
+		onDetach?: (node: StorageNode) => void;
 	} = $props();
 
 	function usedPercent(node: StorageNode) {
@@ -75,9 +77,23 @@
 								>
 							{/if}
 							{#if !node.enabled}
-								<Badge variant="outline" class="rounded-full border-subtle text-muted">
-									{locale.language === 'id' ? 'Dilepas' : 'Detached'}
-								</Badge>
+								{#if node.migrationStatus === 'MIGRATING'}
+									<Badge variant="outline" class="animate-pulse rounded-full border-primary/50 text-primary">
+										{locale.language === 'id' ? 'Memigrasikan...' : 'Migrating...'}
+									</Badge>
+								{:else if node.safeToDisconnect}
+									<Badge variant="outline" class="rounded-full border-emerald-500/50 text-emerald-500">
+										{locale.language === 'id' ? 'Aman Dicabut' : 'Safe to disconnect'}
+									</Badge>
+								{:else if node.usedBytes > 0}
+									<Badge variant="outline" class="rounded-full border-amber-500/50 text-amber-500">
+										{locale.language === 'id' ? 'Ada Berkas' : 'Has files'}
+									</Badge>
+								{:else}
+									<Badge variant="outline" class="rounded-full border-subtle text-muted">
+										{locale.language === 'id' ? 'Dilepas' : 'Detached'}
+									</Badge>
+								{/if}
 							{/if}
 						</div>
 					</div>
@@ -98,16 +114,37 @@
 						</p>
 					</div>
 
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						class="w-full gap-1.5"
-						onclick={() => onEdit(node)}
-					>
-						<Settings class="size-3.5" />
-						{locale.language === 'id' ? 'Ubah' : 'Edit'}
-					</Button>
+					<div class="flex gap-2">
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							class="flex-1 gap-1.5"
+							onclick={() => onEdit(node)}
+						>
+							<Settings class="size-3.5" />
+							{locale.language === 'id' ? 'Ubah' : 'Edit'}
+						</Button>
+						{#if node.enabled || (!node.safeToDisconnect && node.usedBytes > 0)}
+							<Button
+								type="button"
+								variant="destructive"
+								size="sm"
+								class="flex-1 gap-1.5"
+								disabled={node.migrationStatus === 'MIGRATING'}
+								onclick={() => onDetach?.(node)}
+							>
+								<Unplug class="size-3.5" />
+								{node.migrationStatus === 'MIGRATING'
+									? locale.language === 'id'
+										? 'Migrasi...'
+										: 'Migrating...'
+									: locale.language === 'id'
+										? 'Lepaskan'
+										: 'Detach'}
+							</Button>
+						{/if}
+					</div>
 				</Card.Content>
 			</Card.Root>
 		{/each}

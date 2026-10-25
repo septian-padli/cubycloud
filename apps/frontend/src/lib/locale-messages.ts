@@ -23,8 +23,9 @@ const en = {
 	'action.copy': 'Copy',
 	'action.star': 'Star',
 	'action.share': 'Share',
-	'action.delete': 'Delete'
-} as const;
+	'action.delete': 'Delete',
+	'action.compress': 'Compress to ZIP'
+};
 
 const id = {
 	'language.label': 'Bahasa',
@@ -51,8 +52,9 @@ const id = {
 	'action.copy': 'Salin',
 	'action.star': 'Bintangi',
 	'action.share': 'Bagikan',
-	'action.delete': 'Hapus'
-} satisfies Record<keyof typeof en, string>;
+	'action.delete': 'Hapus',
+	'action.compress': 'Kompres ke ZIP'
+};
 
 export const messages = { en, id } as const;
 export type Language = keyof typeof messages;

@@ -19,11 +19,13 @@ import (
 	"github.com/cubycloud/backend/internal/middleware"
 	"github.com/cubycloud/backend/internal/modules/admin"
 	"github.com/cubycloud/backend/internal/modules/auth"
+	jobsmod "github.com/cubycloud/backend/internal/modules/jobs"
 	"github.com/cubycloud/backend/internal/modules/mystorage"
 	"github.com/cubycloud/backend/internal/modules/organization"
 	"github.com/cubycloud/backend/internal/modules/search"
 	"github.com/cubycloud/backend/internal/modules/setup"
 	"github.com/cubycloud/backend/internal/modules/share"
+	"github.com/cubycloud/backend/internal/sse"
 	"github.com/cubycloud/backend/internal/storage"
 	"github.com/cubycloud/backend/web"
 	"github.com/labstack/echo/v4"
@@ -95,13 +97,29 @@ func main() {
 	dbPath := cfg.DataDirPath + "/db/cubycloud.db"
 	jwtAuth := middleware.JWTAuth(cfg.JWTSecret, db)
 	adminGuard := middleware.SuperAdminGuard(db)
-	admin.RegisterRoutes(e, db, driver, cfg.DataDirPath, dbPath, jwtAuth, adminGuard)
+
+	// Real-time SSE hub
+	sseHub := sse.NewHub()
+	e.GET("/api/v1/events", sseHub.Handler(), jwtAuth)
+
+	// SQLite transactional job queue & bounded worker pool
+	jobQueue := jobsmod.NewQueue(db)
+	jobsmod.RegisterRoutes(e, jobQueue, jwtAuth)
+	workerPool := jobsmod.NewWorkerPool(db, jobQueue, sseHub)
+	compressHandler := jobsmod.NewCompressHandler(db, driver)
+	workerPool.RegisterHandler(jobsmod.TypeCompressZip, compressHandler.Execute)
+	nodeMigrationHandler := jobsmod.NewNodeMigrationHandler(db, driver)
+	workerPool.RegisterHandler(jobsmod.TypeNodeMigration, nodeMigrationHandler.Execute)
+	workerPool.Start(context.Background())
+	defer workerPool.Stop()
+
+	admin.RegisterRoutes(e, db, driver, cfg.DataDirPath, dbPath, jwtAuth, adminGuard, jobQueue)
 
 	// Auth routes (login, logout, me, reset-password)
 	auth.RegisterRoutes(e, db, cfg.JWTSecret, jwtAuth)
 
 	// My Storage VFS endpoints (authenticated per-user file operations & trash).
-	myStorageHandler := mystorage.RegisterRoutes(e, db, driver, jwtAuth)
+	myStorageHandler := mystorage.RegisterRoutes(e, db, driver, jwtAuth, jobQueue)
 	driveGroup := e.Group("/api/v1/drive", jwtAuth)
 	driveGroup.PATCH("/items/:id/move", myStorageHandler.MoveItem)
 	driveGroup.POST("/items/:id/star", myStorageHandler.ToggleStar)
@@ -110,7 +128,7 @@ func main() {
 	driveGroup.POST("/sync-cloud", myStorageHandler.SyncCloud)
 	driveGroup.GET("/home", myStorageHandler.GetHome)
 	driveGroup.POST("/access", myStorageHandler.RecordAccess)
-	organization.RegisterRoutes(e, db, driver, jwtAuth)
+	organization.RegisterRoutes(e, db, driver, jwtAuth, jobQueue)
 	// Share endpoints (internal user grants & public share links)
 	share.RegisterRoutes(e, db, driver, jwtAuth)
 	// Global search endpoint across My Storage, Organization, and Shared With Me
