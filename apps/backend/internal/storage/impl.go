@@ -6,9 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -65,18 +63,7 @@ func (d *LocalDriver) DeleteLocal(ctx context.Context, nodePath, filename string
 
 func (d *LocalDriver) StatLocal(ctx context.Context, nodePath string) (capacity, free int64, err error) {
 	fullPath := d.localPath(nodePath, ".")
-	
-	if runtime.GOOS == "windows" {
-		// ponytail: Windows GetDiskFreeSpaceEx — implement when Windows container needed.
-		return 0, 0, fmt.Errorf("Windows stat not implemented")
-	}
-	var stat syscall.Statfs_t
-	if err := syscall.Statfs(fullPath, &stat); err != nil {
-		return 0, 0, fmt.Errorf("statfs failed: %w", err)
-	}
-	capacity = int64(stat.Blocks) * int64(stat.Bsize)
-	free = int64(stat.Bavail) * int64(stat.Bsize)
-	return capacity, free, nil
+	return statfsCapacity(fullPath)
 }
 
 func (d *LocalDriver) GeneratePresignedUploadURL(ctx context.Context, bucket, key string, expiry time.Duration) (string, error) {
@@ -88,6 +75,9 @@ func (d *LocalDriver) GeneratePresignedDownloadURL(ctx context.Context, bucket, 
 }
 
 func (d *LocalDriver) ValidateCloudCredentials(ctx context.Context, endpoint, region, bucket, accessKey, secretKey string) error {
+	if region == "" {
+		region = "us-east-1"
+	}
 	cfg, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion(region),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKey, secretKey, "")),

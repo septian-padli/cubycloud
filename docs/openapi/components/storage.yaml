@@ -1,0 +1,299 @@
+ItemResponse:
+  type: object
+  required: [id, name, kind, size_bytes, parent_id, modified_at, is_starred, storage_available]
+  properties:
+    id: { type: string, example: "01JQ2Z5X7K9M3N4P6R8T0V1W2Y" }
+    name: { type: string, example: "Project notes.pdf" }
+    kind: { type: string, enum: [file, folder], example: file }
+    size_bytes: { type: integer, format: int64, example: 245760 }
+    parent_id: { type: [string, 'null'], example: null }
+    modified_at: { type: string, format: date-time, example: "2026-02-14T10:30:00Z" }
+    is_starred: { type: boolean, example: false }
+    storage_available: { type: boolean, example: true }
+FolderCreateRequest:
+  type: object
+  required: [name]
+  properties:
+    name: { type: string, example: "Invoices" }
+    parent_id: { type: [string, 'null'], example: null }
+    unique_name: { type: boolean, description: When true, resolve name collisions by selecting an available name., default: false }
+FolderListResponse:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: { $ref: '#/components/schemas/Breadcrumb' }
+StorageListingResponse:
+  type: object
+  required: [items, breadcrumbs]
+  properties:
+    items:
+      type: array
+      items: { $ref: '#/components/schemas/ItemResponse' }
+    breadcrumbs:
+      type: array
+      items: { $ref: '#/components/schemas/Breadcrumb' }
+LargestFileItem:
+  type: object
+  required: [id, name, kind, size_bytes, parent_id, location, modified_at]
+  properties:
+    id: { type: string }
+    name: { type: string }
+    kind: { type: string, enum: [file, folder] }
+    size_bytes: { type: integer, format: int64 }
+    parent_id: { type: [string, 'null'] }
+    location: { type: string }
+    modified_at: { type: string, format: date-time }
+LargestFilesResponse:
+  type: object
+  required: [items, total, has_more, next_offset]
+  properties:
+    items: { type: array, items: { $ref: '#/components/schemas/LargestFileItem' } }
+    total: { type: integer, format: int64 }
+    has_more: { type: boolean }
+    next_offset: { type: integer }
+StorageCategoryUsage:
+  type: object
+  required: [id, label, bytes, used_gb]
+  properties:
+    id: { type: string }
+    label: { type: string }
+    bytes: { type: integer, format: int64 }
+    used_gb: { type: number, format: double }
+CategoryUsageResponse:
+  type: object
+  required: [total_bytes, total_gb, categories]
+  properties:
+    total_bytes: { type: integer, format: int64 }
+    total_gb: { type: number, format: double }
+    categories: { type: array, items: { $ref: '#/components/schemas/StorageCategoryUsage' } }
+UploadIntentRequest:
+  type: object
+  required: [filename, size]
+  properties:
+    filename: { type: string, example: "archive.zip" }
+    size: { type: integer, format: int64, minimum: 0, example: 104857600 }
+    parent_id: { type: [string, 'null'] }
+    unique_name: { type: boolean, default: false }
+UploadIntentResponse:
+  type: object
+  required: [placement]
+  properties:
+    placement: { type: string, enum: [local, s3] }
+    upload_id: { type: string }
+    url: { type: string, format: uri }
+    method: { type: string, example: PUT }
+    expires_at: { type: string, format: date-time }
+DownloadURLResponse:
+  type: object
+  required: [url, filename]
+  properties:
+    url: { type: [string, 'null'], format: uri }
+    filename: { type: string }
+    expires_at: { type: [string, 'null'], format: date-time }
+MoveItemRequest:
+  type: object
+  properties:
+    target_parent_id: { type: [string, 'null'], description: Target folder ID; null moves the item to the root. }
+MoveItemResponse:
+  allOf:
+    - $ref: '#/components/schemas/ItemResponse'
+StarResponse:
+  type: object
+  required: [id, is_starred]
+  properties:
+    id: { type: string }
+    is_starred: { type: boolean }
+ItemListResponse:
+  type: object
+  required: [items]
+  properties:
+    items: { type: array, items: { $ref: '#/components/schemas/ItemResponse' } }
+TrashItem:
+  type: object
+  required: [id, name, kind, size_bytes, parent_id, modified_at, deleted_at, days_remaining, original_parent_missing]
+  properties:
+    id: { type: string }
+    name: { type: string }
+    kind: { type: string, enum: [file, folder] }
+    size_bytes: { type: integer, format: int64 }
+    parent_id: { type: [string, 'null'] }
+    modified_at: { type: string, format: date-time }
+    deleted_at: { type: string, format: date-time }
+    days_remaining: { type: integer }
+    original_parent_missing: { type: boolean }
+TrashListResponse:
+  type: object
+  required: [items]
+  properties:
+    items: { type: array, items: { $ref: '#/components/schemas/TrashItem' } }
+TrashRestoreResponse:
+  type: object
+  required: [item, restored_to_root]
+  properties:
+    item:
+      type: object
+      required: [id, name, kind, size_bytes, parent_id, modified_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [file, folder] }
+        size_bytes: { type: integer, format: int64 }
+        parent_id: { type: [string, 'null'] }
+        modified_at: { type: string, format: date-time }
+    restored_to_root: { type: boolean }
+TrashRestoreRequest:
+  type: object
+  properties:
+    to_root: { type: boolean, description: Force restoration to the root folder. }
+BatchDownloadRequest:
+  type: object
+  required: [ids]
+  properties:
+    ids: { type: array, items: { type: string }, minItems: 1 }
+BatchCompressRequest:
+  type: object
+  required: [ids]
+  properties:
+    ids: { type: array, items: { type: string }, minItems: 1 }
+    parent_id: { type: [string, 'null'] }
+    name: { type: string }
+CompressJobResponse:
+  type: object
+  required: [job_id, status]
+  properties:
+    job_id: { type: string }
+    status: { type: string }
+UploadSyncRequest:
+  type: object
+  required: [upload_id]
+  properties:
+    upload_id: { type: string }
+TusOptionsHeaders:
+  type: object
+  properties:
+    Tus-Version: { type: string, example: "1.0.0" }
+    Tus-Resumable: { type: string, example: "1.0.0" }
+    Tus-Extension: { type: string, example: "creation,termination,checksum" }
+TusCreateHeaders:
+  type: object
+  required: [Upload-Length, Tus-Resumable]
+  properties:
+    Upload-Length: { type: integer, format: int64, minimum: 0 }
+    Upload-Metadata: { type: string, description: Base64 encoded metadata values; supported keys include filename, parent_id, and checksum. }
+    Tus-Resumable: { type: string, enum: ["1.0.0"] }
+TusOffsetHeaders:
+  type: object
+  required: [Upload-Offset, Tus-Resumable]
+  properties:
+    Upload-Offset: { type: integer, format: int64 }
+    Upload-Length: { type: integer, format: int64 }
+    Tus-Resumable: { type: string, enum: ["1.0.0"] }
+MultipartPartState:
+  type: object
+  required: [part_number, size_bytes, status]
+  properties:
+    part_number: { type: integer, format: int32 }
+    size_bytes: { type: integer, format: int64 }
+    etag: { type: string }
+    status: { type: string, enum: [pending, completed, failed] }
+MultipartIntentResponse:
+  type: object
+  required: [placement, mode]
+  properties:
+    placement: { type: string, enum: [local, s3] }
+    mode: { type: string, enum: [local, single_put, multipart] }
+    upload_id: { type: string }
+    url: { type: string, format: uri }
+    method: { type: string }
+    expires_at: { type: string, format: date-time }
+    size_bytes: { type: integer, format: int64 }
+    part_size_bytes: { type: integer, format: int64 }
+    part_count: { type: integer, format: int32 }
+    parts: { type: array, items: { $ref: '#/components/schemas/MultipartPartState' } }
+MultipartStateResponse:
+  type: object
+  required: [upload_id, filename, size_bytes, part_size_bytes, part_count, status, parts]
+  properties:
+    upload_id: { type: string }
+    filename: { type: string }
+    size_bytes: { type: integer, format: int64 }
+    part_size_bytes: { type: integer, format: int64 }
+    part_count: { type: integer, format: int32 }
+    status: { type: string, enum: [active, completed, expired, aborted] }
+    expires_at: { type: string, format: date-time }
+    final_item_id: { type: string }
+    parts: { type: array, items: { $ref: '#/components/schemas/MultipartPartState' } }
+MultipartIntentRequest:
+  allOf:
+    - $ref: '#/components/schemas/UploadIntentRequest'
+MultipartPartURLsRequest:
+  type: object
+  properties:
+    part_numbers: { type: array, items: { type: integer, format: int32 }, description: Empty or omitted requests URLs for all incomplete parts. }
+MultipartPartURL:
+  type: object
+  required: [part_number, url, expires_at]
+  properties:
+    part_number: { type: integer, format: int32 }
+    url: { type: string, format: uri }
+    expires_at: { type: string, format: date-time }
+MultipartPartURLsResponse:
+  type: object
+  required: [parts]
+  properties:
+    parts: { type: array, items: { $ref: '#/components/schemas/MultipartPartURL' } }
+MultipartPartUpdate:
+  type: object
+  required: [part_number, size_bytes, status]
+  properties:
+    part_number: { type: integer, format: int32 }
+    etag: { type: string }
+    size_bytes: { type: integer, format: int64 }
+    status: { type: string, enum: [completed, failed] }
+MultipartCheckpointRequest:
+  type: object
+  required: [parts]
+  properties:
+    parts: { type: array, items: { $ref: '#/components/schemas/MultipartPartUpdate' } }
+DriveHomeResponse:
+  type: object
+  required: [quick_access, activities]
+  properties:
+    quick_access:
+      type: array
+      items:
+        type: object
+        required: [id, name, kind, size_bytes, source, accessed_at]
+        properties:
+          id: { type: string }
+          name: { type: string }
+          kind: { type: string }
+          size_bytes: { type: integer, format: int64 }
+          source: { type: string, enum: [my-storage, organization] }
+          accessed_at: { type: string, format: date-time }
+    activities:
+      type: array
+      items:
+        type: object
+        required: [id, action, item_id, file_name, item_kind, source, created_at]
+        properties:
+          id: { type: string }
+          action: { type: string, enum: [upload, edit] }
+          item_id: { type: string }
+          file_name: { type: string }
+          item_kind: { type: string }
+          source: { type: string, enum: [my-storage, organization] }
+          created_at: { type: string, format: date-time }
+AccessRequest:
+  type: object
+  required: [item_id]
+  properties:
+    item_id: { type: string }
+    source: { type: string, enum: [my-storage, organization], default: my-storage }
+AccessResponse:
+  type: object
+  required: [ok]
+  properties:
+    ok: { type: boolean, example: true }

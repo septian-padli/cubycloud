@@ -1,0 +1,121 @@
+/api/v1/setup/status:
+  get:
+    operationId: getSetupStatus
+    summary: Get initial setup status
+    description: Returns whether initial setup has completed. This endpoint is public.
+    security: []
+    responses:
+      '200':
+        description: Setup status.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetupStatusResponse'
+            example:
+              is_setup_completed: false
+      '500':
+        description: Setup status could not be retrieved.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error: failed to get setup status
+/api/v1/setup/scan-nodes:
+  get:
+    operationId: scanSetupStorageNodes
+    summary: Scan for local storage nodes
+    description: Publicly scans local storage directories for candidate nodes and reports detected capacity and free space. If the storage directory has no readable candidates, the backend may return a default DATA_DIR candidate or an empty nodes array. The devices array is currently empty.
+    security: []
+    responses:
+      '200':
+        description: Scanned storage candidates; nodes may be empty.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScanNodesResponse'
+            example:
+              nodes:
+                - path: /srv/cubycloud/storage/default
+                  kind: HDD
+                  capacity_bytes: 1099511627776
+                  free_bytes: 536870912000
+              devices: []
+      '500':
+        description: Storage candidates could not be scanned.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error: scan failed
+/api/v1/setup/complete:
+  post:
+    operationId: completeSetup
+    summary: Complete initial setup
+    description: Initializes the SUPER_ADMIN account and selected storage configuration. This endpoint is protected by setupGuard, not normal user authentication, and is available only before setup has completed. At least one local storage node must be enabled unless cloud storage is enabled. Enabled local paths may be created if missing and must be writable; enabled cloud credentials are validated. On success, the endpoint sets a 24-hour `cuby_token` HttpOnly, SameSite=Lax cookie, Secure when applicable.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/CompleteSetupRequest'
+          example:
+            admin:
+              username: admin
+              email: admin@example.com
+              password: initial-secure-password
+              recovery_key: ABCDE-FGHIJ-KLMNP-QRSTU-VWXYZ-23456
+            storage_nodes:
+              - path: /srv/cubycloud/storage/default
+                capacity_bytes: 1099511627776
+                enabled: true
+            placement_strategy: balanced
+            cloud:
+              enabled: false
+              provider: S3_COMPATIBLE
+              node_name: s3-primary
+              endpoint: https://s3.example.com
+              bucket: cubycloud-data
+              region: us-east-1
+              access_key: EXAMPLEACCESSKEY
+              secret_key: example-secret-key
+              capacity_cap_gb: 0
+    responses:
+      '200':
+        description: Setup completed; response includes the supplied recovery key and client redirect path.
+        headers:
+          Set-Cookie:
+            description: Sets the `cuby_token` cookie with Path=/, HttpOnly, SameSite=Lax, a 24-hour lifetime, and Secure when applicable.
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteSetupResponse'
+            example:
+              recovery_key: ABCDE-FGHIJ-KLMNP-QRSTU-VWXYZ-23456
+              redirect: /drive/home
+      '400':
+        description: Invalid request or setup values, duplicate username/email, invalid recovery key, password shorter than 8 characters, no enabled local or cloud storage, unwritable local path, or invalid cloud credentials.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error: at least one storage node must be enabled
+      '403':
+        description: Setup has already completed; setupGuard prevents another initialization.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error: setup already completed
+      '500':
+        description: Setup initialization, storage configuration, or token generation failed.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'

@@ -42,11 +42,14 @@
 	let strategy = $state<PlacementStrategy>('FILL_FIRST');
 	let cloud = $state<CloudForm>({
 		enabled: false,
-		provider: 'R2',
+		provider: 'S3_COMPATIBLE',
+		nodeName: '',
 		endpoint: '',
+		region: '',
 		bucket: '',
 		accessKey: '',
-		secretKey: ''
+		secretKey: '',
+		capacityCapGb: null
 	});
 	let recoveryKey = $state('');
 	let recoveryDownloaded = $state(false);
@@ -60,12 +63,22 @@
 			admin.password.length >= 8 &&
 			admin.password === admin.confirmPassword
 	);
+	const cloudCapValid = $derived(
+		cloud.capacityCapGb === null ||
+			cloud.capacityCapGb === undefined ||
+			cloud.capacityCapGb === '' ||
+			(Number(cloud.capacityCapGb) >= 1 &&
+				Math.floor(Number(cloud.capacityCapGb)) === Number(cloud.capacityCapGb))
+	);
 	const cloudValid = $derived(
 		!cloud.enabled ||
-			(cloud.endpoint.trim() !== '' &&
+			(cloud.nodeName.trim() !== '' &&
+				cloud.endpoint.trim() !== '' &&
+				cloud.region.trim() !== '' &&
 				cloud.bucket.trim() !== '' &&
 				cloud.accessKey.trim() !== '' &&
-				cloud.secretKey.trim() !== '')
+				cloud.secretKey.trim() !== '' &&
+				cloudCapValid)
 	);
 
 	const canNext = $derived.by(() => {
@@ -131,13 +144,17 @@
 				placement_strategy: strategy
 			};
 			if (cloud.enabled) {
+				const capNum = cloud.capacityCapGb ? Math.floor(Number(cloud.capacityCapGb)) : 0;
 				req.cloud = {
 					enabled: true,
 					provider: cloud.provider,
-					endpoint: cloud.endpoint,
-					bucket: cloud.bucket,
-					access_key: cloud.accessKey,
-					secret_key: cloud.secretKey
+					node_name: cloud.nodeName.trim(),
+					endpoint: cloud.endpoint.trim(),
+					region: cloud.region.trim(),
+					bucket: cloud.bucket.trim(),
+					access_key: cloud.accessKey.trim(),
+					secret_key: cloud.secretKey.trim(),
+					capacity_cap_gb: capNum > 0 ? capNum : 0
 				};
 			}
 			await completeSetup(req);
@@ -171,10 +188,13 @@
 		cloud = {
 			...cloud,
 			enabled: false,
+			nodeName: '',
 			endpoint: '',
+			region: '',
 			bucket: '',
 			accessKey: '',
-			secretKey: ''
+			secretKey: '',
+			capacityCapGb: null
 		};
 		currentStep = 4;
 	}
@@ -297,7 +317,10 @@
 				id: `node-${i}`,
 				name: n.path.split('/').pop() || n.path,
 				path: n.path,
-				kind: (n.kind === 'SSD' || n.kind === 'HDD' ? n.kind : 'HDD') as 'SSD' | 'HDD',
+				kind: (n.kind === 'SSD' || n.kind === 'HDD' || n.kind === 'UNKNOWN' ? n.kind : 'UNKNOWN') as
+					| 'SSD'
+					| 'HDD'
+					| 'UNKNOWN',
 				totalGb: Math.round(n.capacity_bytes / 1024 ** 3),
 				freeGb: Math.round(n.free_bytes / 1024 ** 3),
 				enabled: true,
@@ -357,6 +380,7 @@
 			<StepRecovery bind:recoveryKey bind:downloaded={recoveryDownloaded} />
 			{#if !adminValid || !cloudValid}
 				<Alert.Root>
+					<Info class="size-4 stroke-2" />
 					<Alert.Title>{tx('Data belum lengkap', 'Incomplete information')}</Alert.Title>
 					<Alert.Description>
 						{!adminValid

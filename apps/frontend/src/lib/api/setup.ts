@@ -31,11 +31,13 @@ export interface CompleteSetupRequest {
 	cloud?: {
 		enabled: true;
 		provider: CloudProvider;
+		node_name: string;
 		endpoint: string;
 		bucket: string;
-		region?: string;
+		region: string;
 		access_key: string;
 		secret_key: string;
+		capacity_cap_gb?: number;
 	};
 }
 
@@ -52,6 +54,12 @@ const SETUP_ERROR_MESSAGES: Record<string, [string, string]> = {
 	'setup already completed': ['Penyiapan sudah selesai.', 'Setup has already been completed.'],
 	'invalid request body': ['Isi permintaan tidak valid.', 'Invalid request body.'],
 	'invalid request': ['Permintaan tidak valid.', 'Invalid request.'],
+	'cloud node name is required': ['Nama node cloud wajib diisi.', 'Cloud node name is required.'],
+	'cloud region is required': ['Region cloud wajib diisi.', 'Cloud region is required.'],
+	'cloud endpoint is required': ['Endpoint cloud wajib diisi.', 'Cloud endpoint is required.'],
+	'cloud bucket is required': ['Nama bucket cloud wajib diisi.', 'Cloud bucket is required.'],
+	'cloud access key is required': ['Access key cloud wajib diisi.', 'Cloud access key is required.'],
+	'cloud secret key is required': ['Secret key cloud wajib diisi.', 'Cloud secret key is required.'],
 	'username is required': ['Nama pengguna wajib diisi.', 'Username is required.'],
 	'username must be at least 3 characters': [
 		'Nama pengguna harus terdiri dari minimal 3 karakter.',
@@ -188,6 +196,11 @@ function localizeSetupError(message: string): string {
 		return locale.language === 'id'
 			? 'Gagal memindai node penyimpanan.'
 			: 'Failed to scan storage nodes.';
+	}
+	if (/(?:cloud|s3|bucket).*(?:credential|invalid|endpoint|failed)|(?:credential|endpoint|bucket).*(?:invalid|failed)/i.test(key)) {
+		return locale.language === 'id'
+			? 'Kredensial penyimpanan cloud tidak valid atau bucket/endpoint tidak dapat dijangkau.'
+			: 'Cloud storage credentials are invalid or the bucket/endpoint is unreachable.';
 	}
 	if (/invalid.*request|request.*invalid|failed to fetch|request failed|network error/i.test(key)) {
 		return locale.language === 'id' ? 'Permintaan ke server tidak valid atau gagal.' : 'The server request is invalid or failed.';

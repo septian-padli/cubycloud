@@ -1,0 +1,70 @@
+openapi: 3.1.0
+info:
+  title: CubyCloud API
+  version: 1.0.0
+  description: |
+    Comprehensive HTTP API documentation for **CubyCloud**, a self-hosted single-container cloud storage platform.
+    
+    ### Authentication & Sessions
+    CubyCloud uses HTTP-only cookie session authentication (`cuby_token`).
+    Interactive API exploration via **Try it out** automatically sends this cookie from your active browser session.
+    A fallback `Authorization: Bearer <token>` header is also supported.
+    
+    ### Role Access Control
+    - **Public**: Endpoints accessible without authentication (e.g. `/health`, setup status, public links).
+    - **Authenticated**: Endpoints requiring an active user session (`USER` or `SUPER_ADMIN` role).
+    - **Super Admin Only**: Endpoints restricted strictly to users with the `SUPER_ADMIN` role (e.g. `/api/v1/admin/*`, `/api/docs/*`).
+servers:
+  - url: /
+    description: Current CubyCloud instance (relative root)
+tags:
+  - name: Setup
+    description: Initial system configuration and storage initialization
+  - name: Authentication
+    description: User authentication, session management, and profile operations
+  - name: My Storage
+    description: Personal virtual file system (VFS) operations, uploads, and downloads
+  - name: Trash
+    description: Soft-delete trash management, restoration, and permanent purging
+  - name: Organization
+    description: Shared organization drive for collaboration across all users
+  - name: Drive Common
+    description: Common drive endpoints including home feed, starred items, access logs, and move/star operations
+  - name: Search
+    description: Global full-text search across My Storage, Organization, and Shared drives
+  - name: Sharing
+    description: Granular internal user permissions and share link management
+  - name: Public Share
+    description: Token-based public file/folder links, password protection, and public downloads/uploads
+  - name: Jobs
+    description: Background asynchronous job queue status (ZIP compression, migration)
+  - name: Realtime
+    description: Server-Sent Events (SSE) stream for real-time file and system updates
+  - name: Admin Settings
+    description: Super Admin system settings and global configuration
+  - name: Admin Storage
+    description: Super Admin storage node management, metrics, and capacity
+  - name: Admin Users
+    description: Super Admin user provisioning, quotas, and credential resets
+  - name: Admin Backup & Audit
+    description: Super Admin database backups and audit logging
+  - name: Documentation
+    description: Interactive API documentation and OpenAPI specification
+security:
+  - CookieAuth: []
+  - BearerAuth: []
+components:
+  securitySchemes:
+    CookieAuth:
+      type: apiKey
+      in: cookie
+      name: cuby_token
+      description: |
+        HTTP-only signed JWT session cookie (`cuby_token`).
+        Automatically sent by browser requests in Swagger UI "Try it out".
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Fallback JWT bearer token passed in `Authorization: Bearer <token>` header.

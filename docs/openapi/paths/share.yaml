@@ -1,0 +1,424 @@
+/api/v1/share/users:
+  get:
+    operationId: searchShareUsers
+    summary: Search users for sharing
+    description: Searches users for the share autocomplete, excluding the authenticated user. An empty query returns up to 20 users.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - name: q
+        in: query
+        required: false
+        description: Optional substring matched against usernames and email addresses.
+        schema: {type: string}
+        example: alex
+    responses:
+      '200':
+        description: Matching users, ordered by username, limited to 20.
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ShareUserSearchResponse'}
+            example: {users: [{id: usr_01JABCDEF, username: alex, email: alex@example.com}]}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to search users, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+
+/api/v1/drive/items/{id}/shares:
+  parameters:
+    - name: id
+      in: path
+      required: true
+      description: ID of the shared item or folder.
+      schema: {type: string}
+      example: item_01JABCDEF
+  get:
+    operationId: getItemShares
+    summary: Get item shares
+    description: Returns user grants and share links for an item. Only the item owner can manage or view its shares.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Current grants and links.
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ItemShares'}
+            example:
+              grants: [{id: grant_01, user_id: usr_01JABCDEF, username: alex, email: alex@example.com, permission: viewer}]
+              links: [{id: link_01, token: sh_7Kp4mN2x, permission: viewer, has_password: false, expires_at: null, created_at: '2026-10-25T12:00:00Z'}]
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: Only the item owner can manage its shares, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: Item not found, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to retrieve item shares, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+
+/api/v1/drive/items/{id}/shares/users:
+  parameters:
+    - name: id
+      in: path
+      required: true
+      description: ID of the shared item.
+      schema: {type: string}
+      example: item_01JABCDEF
+  put:
+    operationId: putItemShareGrants
+    summary: Set user grants on an item
+    description: Replaces the item's complete user-grant list. Only the item owner can manage shares. Permissions must be viewer or editor; the owner cannot grant access to themselves.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/PutShareGrantsRequest'}
+          example: {grants: [{user_id: usr_01JABCDEF, permission: editor}]}
+    responses:
+      '200':
+        description: Grants successfully replaced.
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ShareSuccessResponse'}
+            example: {success: true}
+      '400': {description: Invalid request or permission, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: Only the item owner can manage shares, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: Item not found, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to update grants, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+
+/api/v1/drive/items/{id}/shares/users/{userId}:
+  parameters:
+    - name: id
+      in: path
+      required: true
+      description: ID of the shared item.
+      schema: {type: string}
+      example: item_01JABCDEF
+    - name: userId
+      in: path
+      required: true
+      description: ID of the user whose grant is being revoked.
+      schema: {type: string}
+  delete:
+    operationId: deleteItemShareGrant
+    summary: Revoke a user grant
+    description: Removes the specified user's grant from the item. Only the item owner can manage shares.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '204': {description: Grant revoked}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: Only the item owner can manage shares, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: Item or user grant not found, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to revoke grant, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+
+/api/v1/drive/items/{id}/shares/links:
+  parameters:
+    - name: id
+      in: path
+      required: true
+      description: ID of the shared item.
+      schema: {type: string}
+      example: item_01JABCDEF
+  post:
+    operationId: createItemShareLink
+    summary: Create a share link
+    description: Creates a public link for the item, optionally protected by a password and/or expiry. Only the item owner can manage shares. Permission must be viewer or editor; expires_days accepts 1, 7, 30, or 90.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/CreateShareLinkRequest'}
+          example: {permission: viewer, password: spring-river-42, expires_days: 7}
+    responses:
+      '201':
+        description: Link created.
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/CreateShareLinkResponse'}
+            example:
+              link: {id: link_01, token: sh_7Kp4mN2x, permission: viewer, has_password: true, expires_at: '2026-11-01T12:00:00Z', created_at: '2026-10-25T12:00:00Z', url: https://cloud.example.com/s/sh_7Kp4mN2x}
+      '400': {description: Invalid request, permission, or expiry, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: Only the item owner can manage shares, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: Item not found, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to create share link, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+
+/api/v1/drive/items/{id}/shares/links/{linkId}:
+  parameters:
+    - name: id
+      in: path
+      required: true
+      description: ID of the shared item.
+      schema: {type: string}
+      example: item_01JABCDEF
+    - name: linkId
+      in: path
+      required: true
+      description: ID of the share link to revoke.
+      schema: {type: string}
+  delete:
+    operationId: deleteItemShareLink
+    summary: Revoke a share link
+    description: Deletes the specified share link. Only the item owner can manage shares.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '204': {description: Share link revoked}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: Only the item owner can manage shares, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: Item or share link not found, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to revoke share link, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+
+/api/v1/drive/shared:
+  get:
+    operationId: listSharedWithMe
+    summary: List items shared with me
+    description: Returns items directly shared with the authenticated user and each item's permission.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Items shared with the current user.
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SharedItemsResponse'}
+            example:
+              items: [{id: item_01JABCDEF, name: Project plan.pdf, kind: file, size_bytes: 245760, modified_at: '2026-10-24T16:30:00Z', owner_id: usr_01JOWNER, owner_name: sam, permission: viewer}]
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to list shared items, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+
+/api/v1/drive/shared/folders/{id}:
+  parameters:
+    - name: id
+      in: path
+      required: true
+      description: ID of the shared folder.
+      schema: {type: string}
+      example: item_01JROOT
+  get:
+    operationId: getSharedFolder
+    summary: Get shared folder contents
+    description: Returns the contents and breadcrumbs for a folder accessible through a user grant. Editor permission is needed for write actions; viewer permission allows reading and downloads.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Folder contents and shared-tree context.
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SharedFolderResponse'}
+            example:
+              root_id: item_01JROOT
+              permission: editor
+              items: [{id: item_01JABCDEF, name: notes.txt, kind: file, size_bytes: 1200, parent_id: item_01JROOT, modified_at: '2026-10-24T16:30:00Z'}]
+              breadcrumbs: [{id: item_01JROOT, name: Shared project}]
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: Folder not found or not shared with the user, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to retrieve folder, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+
+/api/v1/drive/shared/folders/{id}/upload:
+  parameters:
+    - name: id
+      in: path
+      required: true
+      description: ID of the shared folder.
+      schema: {type: string}
+      example: item_01JROOT
+  post:
+    operationId: uploadSharedFolderFile
+    summary: Upload a file to a shared folder
+    description: Uploads the first file part in a multipart request. Requires an authenticated user with editor permission on the shared folder. Optional filename and unique_name query parameters override the uploaded filename and request a unique name.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - name: filename
+        in: query
+        required: false
+        description: Optional filename override.
+        schema: {type: string}
+        example: notes.txt
+      - name: unique_name
+        in: query
+        required: false
+        description: When exactly true, request a unique filename.
+        schema: {type: boolean, default: false}
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            required: [file]
+            properties:
+              file: {type: string, format: binary}
+    responses:
+      '201': {description: Uploaded shared item, content: {application/json: {schema: {$ref: '#/components/schemas/SharedNode'}}}}
+      '400': {description: Missing file or malformed multipart request, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: Editor permission required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: Folder not found or not shared with the user, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Upload failed, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+
+/api/v1/drive/shared/folders/{id}/folders:
+  parameters:
+    - name: id
+      in: path
+      required: true
+      description: ID of the shared folder.
+      schema: {type: string}
+      example: item_01JROOT
+  post:
+    operationId: createSharedFolder
+    summary: Create a folder in a shared folder
+    description: Creates a child folder. Requires an authenticated user with editor permission on the shared folder.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/SharedFolderCreateRequest'}
+          example: {name: Reports}
+    responses:
+      '201': {description: Folder created, content: {application/json: {schema: {$ref: '#/components/schemas/SharedNode'}}}}
+      '400': {description: Folder name is required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: Editor permission required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: Folder not found or not shared with the user, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Folder creation failed, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+
+/api/v1/drive/shared/items/{id}:
+  parameters:
+    - name: id
+      in: path
+      required: true
+      description: ID of the shared item.
+      schema: {type: string}
+      example: item_01JABCDEF
+  patch:
+    operationId: renameSharedItem
+    summary: Rename an item in a shared tree
+    description: Renames a shared item. Requires an authenticated user with editor permission; the root item of the shared tree cannot be renamed.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/SharedItemRenameRequest'}
+          example: {name: Final report.pdf}
+    responses:
+      '200': {description: Renamed item, content: {application/json: {schema: {$ref: '#/components/schemas/SharedNode'}}}}
+      '400': {description: Name is required or the shared root cannot be renamed, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: Editor permission required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: Item not found or not shared with the user, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Rename failed, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+  delete:
+    operationId: deleteSharedItem
+    summary: Delete an item in a shared tree
+    description: Deletes an item in the shared tree. Requires an authenticated user with editor permission; the root item of the shared tree cannot be deleted.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '204': {description: Item deleted}
+      '400': {description: The shared root cannot be deleted, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: Editor permission required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: Item not found or not shared with the user, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Delete failed, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+
+/api/v1/drive/shared/items/{id}/move:
+  parameters:
+    - name: id
+      in: path
+      required: true
+      description: ID of the shared item.
+      schema: {type: string}
+      example: item_01JABCDEF
+  patch:
+    operationId: moveSharedItem
+    summary: Move an item within a shared tree
+    description: Moves an item to a destination folder within the same shared tree. Requires an authenticated user with editor permission; moving the root item or moving outside the shared tree is rejected.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/MoveSharedItemRequest'}
+          example: {target_parent_id: item_01JDESTINATION}
+    responses:
+      '200': {description: Moved item, content: {application/json: {schema: {$ref: '#/components/schemas/SharedNode'}}}}
+      '400': {description: Destination is required, outside the shared tree, or the shared root cannot be moved, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: Editor permission required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: Item or destination not found in the shared tree, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Move failed, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+
+/api/v1/drive/shared/items/{id}/download:
+  parameters:
+    - name: id
+      in: path
+      required: true
+      description: ID of the shared item.
+      schema: {type: string}
+      example: item_01JABCDEF
+  get:
+    operationId: downloadSharedItem
+    summary: Download a shared item
+    description: Downloads the shared file or folder. Folder downloads are ZIP archives. The response includes Content-Disposition; file downloads may include Content-Length.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200':
+        description: File content or a ZIP archive for a folder.
+        headers:
+          Content-Disposition: {schema: {type: string}, description: Attachment filename.}
+          Content-Length: {schema: {type: integer}, description: Present for non-empty file downloads when known.}
+        content:
+          application/octet-stream: {schema: {type: string, format: binary}}
+          application/zip: {schema: {type: string, format: binary}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: Item not found or not shared with the user, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Download failed, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+
+/api/v1/drive/shared/folders/{id}/download-zip:
+  parameters:
+    - name: id
+      in: path
+      required: true
+      description: ID of the shared folder.
+      schema: {type: string}
+      example: item_01JROOT
+  get:
+    operationId: downloadSharedFolderZip
+    summary: Download a shared folder as ZIP
+    description: Streams the shared folder as a ZIP archive with an attachment filename.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200':
+        description: ZIP archive.
+        headers:
+          Content-Disposition: {schema: {type: string}, description: Attachment filename.}
+        content:
+          application/zip: {schema: {type: string, format: binary}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: Folder not found or not shared with the user, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Download failed, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}

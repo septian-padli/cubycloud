@@ -1,0 +1,349 @@
+/api/v1/drive/my-storage:
+  get:
+    operationId: listMyStorage
+    summary: List items in My Storage
+    description: Returns the items in the requested folder and its ancestor breadcrumbs.
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    parameters:
+      - { name: parent_id, in: query, required: false, schema: { type: string }, description: Folder whose children are listed. Omit to list root items. }
+    responses:
+      '200':
+        description: Items and breadcrumbs.
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StorageListingResponse' }
+      '404': { description: Parent folder not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+/api/v1/drive/my-storage/folders:
+  get:
+    operationId: listMyStorageFolders
+    summary: List folders for selection
+    description: Returns all non-deleted folders owned by the authenticated user.
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    responses:
+      '200': { description: Folder list., content: { application/json: { schema: { $ref: '#/components/schemas/FolderListResponse' } } } }
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+  post:
+    operationId: createMyStorageFolder
+    summary: Create a folder
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    requestBody:
+      required: true
+      content: { application/json: { schema: { $ref: '#/components/schemas/FolderCreateRequest' }, example: { name: Invoices, parent_id: null, unique_name: false } } }
+    responses:
+      '201': { description: Created folder., content: { application/json: { schema: { $ref: '#/components/schemas/ItemResponse' } } } }
+      '400': { description: Invalid name or parent., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+      '409': { description: "Name conflict; response may include suggested_name and existing item details.", content: { application/json: { schema: { type: object, properties: { error: { type: string }, suggested_name: { type: string }, existing_id: { type: string }, existing_kind: { type: string } } } } } }
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+/api/v1/drive/my-storage/largest-files:
+  get:
+    operationId: listLargestMyStorageFiles
+    summary: List largest files
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    parameters:
+      - { name: limit, in: query, schema: { type: integer, default: 20 }, description: "Maximum number requested; invalid values fall back to 20." }
+      - { name: offset, in: query, schema: { type: integer, default: 0 }, description: "Result offset; invalid values fall back to 0." }
+    responses:
+      '200': { description: Largest-file result page., content: { application/json: { schema: { $ref: '#/components/schemas/LargestFilesResponse' } } } }
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+/api/v1/drive/my-storage/category-usage:
+  get:
+    operationId: getMyStorageCategoryUsage
+    summary: Get storage usage by category
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    responses:
+      '200': { description: Total and per-category storage usage., content: { application/json: { schema: { $ref: '#/components/schemas/CategoryUsageResponse' } } } }
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+/api/v1/drive/my-storage/categories:
+  get:
+    operationId: getMyStorageCategories
+    summary: Get storage category usage
+    description: Alias of the category-usage endpoint.
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    responses:
+      '200': { description: Total and per-category storage usage., content: { application/json: { schema: { $ref: '#/components/schemas/CategoryUsageResponse' } } } }
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+/api/v1/drive/my-storage/upload:
+  post:
+    operationId: uploadMyStorageFile
+    summary: Upload a file
+    description: Accepts a single multipart file part named file. Filename, parent_id, and unique_name are query parameters.
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    parameters:
+      - { name: parent_id, in: query, schema: { type: string } }
+      - { name: unique_name, in: query, schema: { type: boolean, default: false } }
+      - { name: filename, in: query, schema: { type: string }, description: Optional filename override. }
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema: { type: object, required: [file], properties: { file: { type: string, format: binary } } }
+    responses:
+      '201': { description: Uploaded item., content: { application/json: { schema: { $ref: '#/components/schemas/ItemResponse' } } } }
+      '400': { description: Missing file or invalid input., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+      '413': { description: User quota or storage capacity exceeded., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+      '503': { description: Storage unavailable., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+/api/v1/drive/my-storage/upload-intent:
+  post:
+    operationId: createMyStorageUploadIntent
+    summary: Create an upload intent
+    description: Checks quota and placement and may return a presigned single-PUT URL for cloud storage.
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    requestBody:
+      required: true
+      content: { application/json: { schema: { $ref: '#/components/schemas/UploadIntentRequest' }, example: { filename: report.pdf, size: 1048576, parent_id: null, unique_name: false } } }
+    responses:
+      '200': { description: Upload intent and placement information., content: { application/json: { schema: { $ref: '#/components/schemas/UploadIntentResponse' } } } }
+      '400': { description: Invalid filename, size, or parent., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+      '413': { description: Quota or storage capacity exceeded., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+      '409': { description: Name conflict., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+/api/v1/drive/my-storage/upload-intent/{id}:
+  parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+  delete:
+    operationId: cancelMyStorageUploadIntent
+    summary: Cancel an upload intent
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    responses:
+      '204': { description: Intent cancelled. }
+      '404': { description: Upload intent not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+/api/v1/drive/my-storage/upload-intent/{id}/renew-url:
+  post:
+    operationId: renewMyStorageUploadURL
+    summary: Renew a presigned upload URL
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    responses:
+      '200': { description: Renewed URL information., content: { application/json: { schema: { $ref: '#/components/schemas/UploadIntentResponse' } } } }
+      '404': { description: Intent not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+/api/v1/drive/my-storage/upload-tus:
+  options:
+    operationId: getMyStorageTusCapabilities
+    summary: Get TUS upload capabilities
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    responses:
+      '204': { description: TUS capability headers., headers: { Tus-Version: { schema: { type: string }, example: "1.0.0" }, Tus-Resumable: { schema: { type: string }, example: "1.0.0" }, Tus-Extension: { schema: { type: string }, example: "creation,termination,checksum" } } }
+  post:
+    operationId: createMyStorageTusUpload
+    summary: Create a resumable TUS upload
+    description: Upload-Length is required; filename and parent_id can be supplied as TUS Upload-Metadata or query parameters.
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    parameters:
+      - { name: filename, in: query, schema: { type: string } }
+      - { name: parent_id, in: query, schema: { type: string } }
+    responses:
+      '201': { description: Upload session created., headers: { Location: { schema: { type: string }, description: Relative URL of the created upload resource. }, Tus-Resumable: { schema: { type: string } } } }
+      '400': { description: Invalid TUS headers or metadata., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+      '413': { description: Upload exceeds quota., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+/api/v1/drive/my-storage/upload-tus/{id}:
+  parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+  options:
+    operationId: getMyStorageTusResourceCapabilities
+    summary: Get TUS resource capabilities
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    responses: { '204': { description: TUS capability headers., headers: { Tus-Version: { schema: { type: string } }, Tus-Resumable: { schema: { type: string } }, Tus-Extension: { schema: { type: string } } } } }
+  head:
+    operationId: getMyStorageTusUploadOffset
+    summary: Get current upload offset
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    parameters: [{ name: Tus-Resumable, in: header, required: true, schema: { type: string, enum: ["1.0.0"] } }]
+    responses:
+      '200': { description: Current offset and total length., headers: { Upload-Offset: { schema: { type: integer, format: int64 } }, Upload-Length: { schema: { type: integer, format: int64 } }, Tus-Resumable: { schema: { type: string } } } }
+      '404': { description: Upload not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+  patch:
+    operationId: appendMyStorageTusUpload
+    summary: Append a TUS upload chunk
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    parameters:
+      - { name: Tus-Resumable, in: header, required: true, schema: { type: string, enum: ["1.0.0"] } }
+      - { name: Upload-Offset, in: header, required: true, schema: { type: integer, format: int64 } }
+      - { name: Upload-Checksum, in: header, schema: { type: string } }
+    requestBody: { required: true, content: { application/offset+octet-stream: { schema: { type: string, format: binary } } } }
+    responses:
+      '204': { description: Chunk accepted., headers: { Upload-Offset: { schema: { type: integer, format: int64 } }, Tus-Resumable: { schema: { type: string } } } }
+      '409': { description: Offset does not match current server offset., headers: { Upload-Offset: { schema: { type: integer, format: int64 } } }, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+      '400': { description: Invalid offset or checksum., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+      '404': { description: Upload not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+  delete:
+    operationId: terminateMyStorageTusUpload
+    summary: Terminate a TUS upload
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    parameters: [{ name: Tus-Resumable, in: header, required: true, schema: { type: string, enum: ["1.0.0"] } }]
+    responses: { '204': { description: Upload terminated. }, '404': { description: Upload not found. } }
+
+/api/v1/drive/my-storage/multipart-intent:
+  post:
+    operationId: createMyStorageMultipartIntent
+    summary: Create multipart upload intent
+    description: Chooses local, single-PUT, or S3 multipart upload mode according to placement and size.
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/MultipartIntentRequest' } } } }
+    responses:
+      '200': { description: Upload intent., content: { application/json: { schema: { $ref: '#/components/schemas/MultipartIntentResponse' } } } }
+      '400': { description: Invalid request., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+      '413': { description: Quota or storage capacity exceeded., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+/api/v1/drive/my-storage/multipart/{id}:
+  parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+  get:
+    operationId: getMyStorageMultipartState
+    summary: Get multipart upload state
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    responses: { '200': { description: Session snapshot., content: { application/json: { schema: { $ref: '#/components/schemas/MultipartStateResponse' } } } }, '404': { description: Session not found. } }
+  delete:
+    operationId: abortMyStorageMultipartUpload
+    summary: Abort multipart upload
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    responses: { '204': { description: Session aborted. }, '409': { description: Session already completed. } }
+
+/api/v1/drive/my-storage/multipart/{id}/parts/urls:
+  post:
+    operationId: createMyStorageMultipartPartURLs
+    summary: Generate presigned part URLs
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/MultipartPartURLsRequest' } } } }
+    responses: { '200': { description: Presigned URLs., content: { application/json: { schema: { $ref: '#/components/schemas/MultipartPartURLsResponse' } } } }, '400': { description: Invalid part number. }, '410': { description: Multipart session expired. } }
+
+/api/v1/drive/my-storage/multipart/{id}/parts:
+  put:
+    operationId: checkpointMyStorageMultipartParts
+    summary: Checkpoint multipart part results
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/MultipartCheckpointRequest' } } } }
+    responses: { '204': { description: Part checkpoints saved. }, '400': { description: Invalid part update. }, '410': { description: Multipart session expired. } }
+
+/api/v1/drive/my-storage/multipart/{id}/complete:
+  post:
+    operationId: completeMyStorageMultipartUpload
+    summary: Complete multipart upload
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    responses: { '201': { description: Completed file item., content: { application/json: { schema: { $ref: '#/components/schemas/ItemResponse' } } } }, '409': { description: Parts are incomplete or session cannot be completed., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }, '410': { description: Multipart session expired., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } } }
+
+/api/v1/drive/my-storage/sync-cloud:
+  post:
+    operationId: syncMyStorageCloudUpload
+    summary: Finalize a cloud upload
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UploadSyncRequest' } } } }
+    responses:
+      '201': { description: Finalized file item., content: { application/json: { schema: { $ref: '#/components/schemas/ItemResponse' } } } }
+      '400': { description: upload_id is required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+      '404': { description: Upload intent not found. }
+
+/api/v1/drive/my-storage/{id}/download:
+  parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+  get:
+    operationId: downloadMyStorageItem
+    summary: Download a file or folder archive
+    description: Supports byte ranges for seekable file downloads. Folder downloads are ZIP archives; file downloads use application/octet-stream.
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    parameters: [{ name: Range, in: header, schema: { type: string, example: "bytes=0-1023" } }]
+    responses:
+      '200': { description: File bytes or folder ZIP stream., headers: { Content-Disposition: { schema: { type: string } }, ETag: { schema: { type: string } }, Accept-Ranges: { schema: { type: string } } }, content: { application/octet-stream: { schema: { type: string, format: binary } }, application/zip: { schema: { type: string, format: binary } } } }
+      '206': { description: Requested byte range., headers: { Content-Range: { schema: { type: string } }, ETag: { schema: { type: string } } }, content: { application/octet-stream: { schema: { type: string, format: binary } } } }
+      '416': { description: Requested range is not satisfiable. }
+      '404': { description: Item not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+  head:
+    operationId: inspectMyStorageDownload
+    summary: Inspect download headers
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    responses: { '200': { description: "Download metadata headers; no response body.", headers: { Content-Type: { schema: { type: string } }, Content-Length: { schema: { type: integer, format: int64 } }, Content-Disposition: { schema: { type: string } }, ETag: { schema: { type: string } } } }, '404': { description: Item not found. } }
+
+/api/v1/drive/my-storage/{id}/download-url:
+  get:
+    operationId: getMyStorageDownloadURL
+    summary: Get a presigned download URL
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    responses: { '200': { description: "URL and filename; URL can be null when no cloud URL is available.", content: { application/json: { schema: { $ref: '#/components/schemas/DownloadURLResponse' } } } }, '404': { description: Item not found. } }
+
+/api/v1/drive/my-storage/batch/download-zip:
+  post:
+    operationId: downloadMyStorageBatchZip
+    summary: Stream a ZIP of selected items
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/BatchDownloadRequest' } } } }
+    responses: { '200': { description: ZIP archive stream., headers: { Content-Disposition: { schema: { type: string }, example: 'attachment; filename="cubycloud-archive.zip"' } }, content: { application/zip: { schema: { type: string, format: binary } } } }, '400': { description: ids is required or request invalid. }, '404': { description: Item not found. } }
+
+/api/v1/drive/my-storage/batch/compress-zip:
+  post:
+    operationId: createMyStorageCompressionJob
+    summary: Enqueue background ZIP compression
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/BatchCompressRequest' }, example: { ids: ["01JQ2Z5X7K9M3N4P6R8T0V1W2Y"], parent_id: null, name: "archive.zip" } } } }
+    responses:
+      '202': { description: Compression job accepted., content: { application/json: { schema: { $ref: '#/components/schemas/CompressJobResponse' } } } }
+      '400': { description: Invalid request or ids missing. }
+      '500': { description: Job could not be enqueued., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+/api/v1/drive/my-storage/{id}:
+  parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+  patch:
+    operationId: updateMyStorageItem
+    summary: Rename or update an item
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    requestBody: { required: true, content: { application/json: { schema: { type: object, properties: { name: { type: string }, parent_id: { type: [string, 'null'] } } } } } }
+    responses: { '200': { description: Updated item., content: { application/json: { schema: { $ref: '#/components/schemas/ItemResponse' } } } }, '400': { description: Invalid update. }, '404': { description: Item not found. }, '409': { description: "Name conflict; includes suggested_name." } }
+  delete:
+    operationId: moveMyStorageItemToTrash
+    summary: Move an item to trash
+    description: Soft-deletes the item and returns no content.
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    responses: { '204': { description: Item moved to trash. }, '404': { description: Item not found. } }
+
+/api/v1/drive/my-storage/{id}/duplicate:
+  post:
+    operationId: duplicateMyStorageItem
+    summary: Duplicate an item
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    responses: { '201': { description: Duplicated item., content: { application/json: { schema: { $ref: '#/components/schemas/ItemResponse' } } } }, '404': { description: Item not found. } }
+
+/api/v1/drive/my-storage/items/{id}:
+  get:
+    operationId: getMyStorageItem
+    summary: Get an item by ID
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    responses: { '200': { description: Item details., content: { application/json: { schema: { $ref: '#/components/schemas/ItemResponse' } } } }, '404': { description: Item not found. } }
+
+/api/v1/drive/my-storage/items/{id}/move:
+  patch:
+    operationId: moveMyStorageItem
+    summary: Move an item to another folder
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/MoveItemRequest' }, example: { target_parent_id: null } } } }
+    responses: { '200': { description: Moved item., content: { application/json: { schema: { $ref: '#/components/schemas/ItemResponse' } } } }, '400': { description: Invalid parent or circular move. }, '404': { description: Item not found. }, '409': { description: "Name conflict; includes suggested_name." } }
+
+/api/v1/drive/my-storage/items/{id}/star:
+  parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+  post:
+    operationId: toggleMyStorageItemStarPost
+    summary: Toggle item star
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    responses: { '200': { description: Updated star state., content: { application/json: { schema: { $ref: '#/components/schemas/StarResponse' } } } }, '404': { description: Item not found. } }
+  put:
+    operationId: toggleMyStorageItemStarPut
+    summary: Toggle item star
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    responses: { '200': { description: Updated star state., content: { application/json: { schema: { $ref: '#/components/schemas/StarResponse' } } } }, '404': { description: Item not found. } }
+
+/api/v1/drive/my-storage/starred:
+  get:
+    operationId: listMyStorageStarredItems
+    summary: List starred items
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    responses: { '200': { description: Starred item list., content: { application/json: { schema: { $ref: '#/components/schemas/ItemListResponse' } } } } }

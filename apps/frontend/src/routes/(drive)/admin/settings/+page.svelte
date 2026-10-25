@@ -85,8 +85,9 @@
 				type: (n.type === 'S3' ? 'S3' : 'LOCAL') as 'LOCAL' | 'S3',
 				name: n.name,
 				path: n.path,
-				kind: (n.kind === 'SSD' || n.kind === 'HDD' || n.kind === 'S3' ? n.kind : 'HDD') as
-					'SSD' | 'HDD' | 'S3',
+				kind: (n.kind === 'SSD' || n.kind === 'HDD' || n.kind === 'S3' || n.kind === 'UNKNOWN'
+					? n.kind
+					: 'UNKNOWN') as 'SSD' | 'HDD' | 'S3' | 'UNKNOWN',
 				endpoint: n.endpoint,
 				bucket: n.bucket,
 				totalGb: n.capacity_cap_gb,

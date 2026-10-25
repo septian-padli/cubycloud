@@ -1,12 +1,12 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import * as Alert from '$lib/components/ui/alert/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
-	import { Download, KeyRound, Check } from '@lucide/svelte';
+	import { Download, KeyRound, Check, AlertTriangle } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
 	import { locale } from '$lib/locale.svelte.js';
 	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
-
 	let {
 		recoveryKey = $bindable(),
 		downloaded = $bindable()
@@ -14,6 +14,20 @@
 		recoveryKey: string;
 		downloaded: boolean;
 	} = $props();
+	let justDownloaded = $state(false);
+	let timer: ReturnType<typeof setTimeout> | undefined;
+
+	function triggerJustDownloaded() {
+		justDownloaded = true;
+		if (timer) clearTimeout(timer);
+		timer = setTimeout(() => {
+			justDownloaded = false;
+		}, 3000);
+	}
+
+	onDestroy(() => {
+		if (timer) clearTimeout(timer);
+	});
 
 	function downloadKey() {
 		if (!recoveryKey || recoveryKey.length !== 35) {
@@ -32,6 +46,7 @@
 		URL.revokeObjectURL(url);
 
 		downloaded = true;
+		triggerJustDownloaded();
 		toast.success(tx('Kunci pemulihan berhasil diunduh', 'Recovery key downloaded successfully'));
 	}
 
@@ -43,6 +58,7 @@
 		navigator.clipboard.writeText(recoveryKey).then(() => {
 			downloaded = true;
 			toast.success(tx('Kunci pemulihan disalin ke papan klip', 'Recovery key copied to clipboard'));
+			triggerJustDownloaded();
 		});
 	}
 </script>
@@ -62,7 +78,8 @@
 	</Card.Header>
 	<Card.Content class="space-y-4">
 		<Alert.Root variant="destructive">
-			<Alert.Title>{tx('⚠️ Penting!', '⚠️ Important!')}</Alert.Title>
+			<AlertTriangle class="size-4 stroke-2" />
+			<Alert.Title>{tx('Penting!', 'Important!')}</Alert.Title>
 			<Alert.Description>
 				{tx('Kunci pemulihan ini', 'This recovery key')}
 				<strong>{tx('tidak akan ditampilkan lagi', 'will not be shown again')}</strong>
@@ -100,10 +117,18 @@
 
 		<!-- Action Buttons -->
 		<div class="flex gap-3">
-			<Button onclick={downloadKey} variant="default" class="flex-1 gap-2" disabled={downloaded}>
-				{#if downloaded}
+			<Button
+				onclick={downloadKey}
+				variant={downloaded && !justDownloaded ? 'outline' : 'default'}
+				class="flex-1 gap-2"
+				disabled={justDownloaded}
+			>
+				{#if justDownloaded}
 					<Check class="size-4" />
 					{tx('Sudah Disimpan', 'Saved')}
+				{:else if downloaded}
+					<Download class="size-4" />
+					{tx('Unduh lagi', 'Download again')}
 				{:else}
 					<Download class="size-4" />
 					{tx('Unduh Kunci Pemulihan', 'Download Key')}

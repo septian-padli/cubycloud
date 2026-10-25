@@ -67,6 +67,7 @@ func (d *nodeDriver) client(ctx context.Context, nodeID string) (*s3.Client, str
  if err != nil { return nil,"",err }
  access,err := DecryptCredential(accessEncrypted,d.keyMaterial); if err != nil { return nil,"",fmt.Errorf("decrypt cloud access key: %w",err) }
  secret,err := DecryptCredential(secretEncrypted,d.keyMaterial); if err != nil { return nil,"",fmt.Errorf("decrypt cloud secret key: %w",err) }
+ if region == "" { region = "us-east-1" }
  cfg,err := config.LoadDefaultConfig(ctx,config.WithRegion(region),config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(string(access),string(secret),"")))
  if err != nil { return nil,"",err }
  return s3.NewFromConfig(cfg,func(o *s3.Options){ if endpoint!="" { o.BaseEndpoint=aws.String(endpoint) }; o.UsePathStyle=true }),bucket,nil

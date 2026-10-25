@@ -1,0 +1,130 @@
+/health:
+  get:
+    operationId: getHealth
+    tags: [Core]
+    summary: Check storage node health
+    description: Returns `ok` when all configured storage nodes are available; otherwise returns `unavailable` with HTTP 503.
+    security: []
+    responses:
+      '200':
+        description: All configured nodes are available.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HealthResponse'
+            example:
+              status: ok
+      '503':
+        description: One or more configured nodes are unavailable.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HealthResponse'
+            example:
+              status: unavailable
+
+/api/v1/events:
+  get:
+    operationId: streamEvents
+    tags: [Realtime]
+    summary: Subscribe to server-sent events
+    description: "Opens a long-lived authenticated Server-Sent Events stream. The server first sends `event: connected` with `data: {}`, then emits named events with JSON data payloads."
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Continuous Server-Sent Events stream.
+        headers:
+          Cache-Control:
+            schema:
+              type: string
+              example: no-cache
+          Connection:
+            schema:
+              type: string
+              example: keep-alive
+          X-Accel-Buffering:
+            schema:
+              type: string
+              example: 'no'
+        content:
+          text/event-stream:
+            schema:
+              type: string
+              description: UTF-8 SSE frames, each with an `event` field and a JSON `data` field, separated by blank lines.
+            examples:
+              connected:
+                summary: Initial connection event
+                value: |-
+                  event: connected
+                  data: {}
+              notification:
+                summary: Example named event
+                value: |-
+                  event: file_changed
+                  data: {"item_id":"01JGF7Y8M0D6RH4M2N8K3VQZ1A"}
+      '401':
+        description: Authentication required.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+
+/api/docs:
+  get:
+    operationId: getApiDocs
+    tags: [Documentation]
+    summary: Open interactive API documentation
+    description: Super Admin role required. Returns the interactive Swagger UI HTML page. Non-Super Admin users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Swagger UI HTML.
+        content:
+          text/html:
+            schema:
+              type: string
+      '401':
+        description: Authentication required.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '403':
+        description: Super Admin role required.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+
+/api/docs/openapi.yaml:
+  get:
+    operationId: getApiOpenApiYaml
+    tags: [Documentation]
+    summary: Download the OpenAPI specification
+    description: Super Admin role required. Returns the OpenAPI YAML document. Non-Super Admin users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200':
+        description: OpenAPI specification in YAML format.
+        content:
+          application/yaml:
+            schema:
+              type: string
+      '401':
+        description: Authentication required.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '403':
+        description: Super Admin role required.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'

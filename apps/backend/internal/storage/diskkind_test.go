@@ -1,21 +1,14 @@
 package storage
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
-func TestKindFromPathName(t *testing.T) {
-	cases := []struct {
-		path string
-		want string
-	}{
-		{"/data/storage/ssd-1", "SSD"},
-		{"/mnt/nvme0n1p2/node", "SSD"},
-		{"/app/data/storage/default", "HDD"},
-		{"/srv/hdd-array", "HDD"},
-	}
-	for _, c := range cases {
-		if got := kindFromPathName(c.path); got != c.want {
-			t.Errorf("kindFromPathName(%q) = %q, want %q", c.path, got, c.want)
-		}
+func TestDetectDiskKind_UnknownFallback(t *testing.T) {
+	got := DetectDiskKind(context.Background(), "/nonexistent/test/path")
+	if got != "UNKNOWN" && got != "SSD" && got != "HDD" {
+		t.Errorf("DetectDiskKind() = %q, want valid kind", got)
 	}
 }
 

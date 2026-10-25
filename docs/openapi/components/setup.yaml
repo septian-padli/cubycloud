@@ -1,0 +1,178 @@
+SetupStatusResponse:
+  type: object
+  required:
+    - is_setup_completed
+  properties:
+    is_setup_completed:
+      type: boolean
+      description: Whether initial setup has completed.
+      example: false
+StorageNodeScan:
+  type: object
+  required:
+    - path
+    - kind
+    - capacity_bytes
+    - free_bytes
+  properties:
+    path:
+      type: string
+      description: Candidate storage path.
+      example: /srv/cubycloud/storage/default
+    kind:
+      type: string
+      description: Disk kind detected for the candidate path.
+      example: HDD
+    capacity_bytes:
+      type: integer
+      format: int64
+      description: Total capacity in bytes.
+      example: 1099511627776
+    free_bytes:
+      type: integer
+      format: int64
+      description: Available capacity in bytes.
+      example: 536870912000
+ScanNodesResponse:
+  type: object
+  required:
+    - nodes
+    - devices
+  properties:
+    nodes:
+      type: array
+      description: Scanned local storage candidates; may be empty if no candidate can be read.
+      items:
+        $ref: '#/components/schemas/StorageNodeScan'
+    devices:
+      type: array
+      description: Device details; currently returned as an empty array.
+      items: {}
+      example: []
+SetupAdminInput:
+  type: object
+  required:
+    - username
+    - email
+    - password
+    - recovery_key
+  properties:
+    username:
+      type: string
+      example: admin
+    email:
+      type: string
+      format: email
+      example: admin@example.com
+    password:
+      type: string
+      format: password
+      minLength: 8
+      description: Administrator password; setup enforces a minimum of 8 characters.
+      example: initial-secure-password
+    recovery_key:
+      type: string
+      description: Client-generated key with 30 alphanumeric characters; spaces and hyphens are ignored.
+      example: ABCDE-FGHIJ-KLMNP-QRSTU-VWXYZ-23456
+SetupStorageNodeInput:
+  type: object
+  required:
+    - path
+    - capacity_bytes
+    - enabled
+  properties:
+    path:
+      type: string
+      description: Local storage directory. An enabled directory is created if missing and must be writable.
+      example: /srv/cubycloud/storage/default
+    capacity_bytes:
+      type: integer
+      format: int64
+      description: Configured storage capacity in bytes.
+      example: 1099511627776
+    enabled:
+      type: boolean
+      description: Enabled local nodes are initialized during setup.
+      example: true
+SetupCloudConfig:
+  type: object
+  required:
+    - enabled
+    - provider
+    - node_name
+    - endpoint
+    - bucket
+    - region
+    - access_key
+    - secret_key
+  properties:
+    enabled:
+      type: boolean
+      example: false
+    provider:
+      type: string
+      example: S3_COMPATIBLE
+    node_name:
+      type: string
+      example: s3-primary
+    endpoint:
+      type: string
+      example: https://s3.example.com
+    bucket:
+      type: string
+      example: cubycloud-data
+    region:
+      type: string
+      example: us-east-1
+    access_key:
+      type: string
+      description: Cloud storage access key; provide valid credentials when cloud storage is enabled.
+      example: EXAMPLEACCESSKEY
+    secret_key:
+      type: string
+      format: password
+      description: Cloud storage secret key; provide valid credentials when cloud storage is enabled.
+      example: example-secret-key
+    capacity_cap_gb:
+      type: integer
+      format: int64
+      description: Optional capacity limit in GiB for this cloud storage node (0 or omitted for unlimited).
+      example: 100
+CompleteSetupRequest:
+  type: object
+  required:
+    - admin
+    - storage_nodes
+    - placement_strategy
+    - cloud
+  properties:
+    admin:
+      $ref: '#/components/schemas/SetupAdminInput'
+    storage_nodes:
+      type: array
+      items:
+        $ref: '#/components/schemas/SetupStorageNodeInput'
+      example:
+        - path: /srv/cubycloud/storage/default
+          capacity_bytes: 1099511627776
+          enabled: true
+    placement_strategy:
+      type: string
+      description: Storage placement strategy saved during setup.
+      example: balanced
+    cloud:
+      $ref: '#/components/schemas/SetupCloudConfig'
+CompleteSetupResponse:
+  type: object
+  required:
+    - recovery_key
+    - redirect
+  properties:
+    recovery_key:
+      type: string
+      description: The recovery key supplied for the administrator account.
+      example: ABCDE-FGHIJ-KLMNP-QRSTU-VWXYZ-23456
+    redirect:
+      type: string
+      description: Client redirect path after setup.
+      example: /drive/home

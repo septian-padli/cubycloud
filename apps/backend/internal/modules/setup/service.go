@@ -194,9 +194,16 @@ func (s *Service) CompleteSetup(ctx context.Context, req *CompleteSetupRequest) 
 	// Add cloud node if enabled
 	if req.Cloud.Enabled {
 		nodeID := ulid.Make().String()
+		nodeName := strings.TrimSpace(req.Cloud.NodeName)
+		if nodeName == "" {
+			nodeName = req.Cloud.Bucket
+		}
 		endpoint := req.Cloud.Endpoint
 		bucket := req.Cloud.Bucket
-		region := req.Cloud.Region
+		region := strings.TrimSpace(req.Cloud.Region)
+		if region == "" {
+			region = "us-east-1"
+		}
 
 		accessKeyEnc, err := storage.EncryptCredential([]byte(req.Cloud.AccessKey), keyMaterial)
 		if err != nil {
@@ -208,10 +215,14 @@ func (s *Service) CompleteSetup(ctx context.Context, req *CompleteSetupRequest) 
 			return nil, fmt.Errorf("encrypt secret key: %w", err)
 		}
 
+		var capBytes int64
+		if req.Cloud.CapacityCapGB > 0 {
+			capBytes = req.Cloud.CapacityCapGB * 1024 * 1024 * 1024
+		}
 		node := database.StorageNode{
-			ID: nodeID, Name: req.Cloud.Bucket, Type: "S3", Endpoint: &endpoint,
+			ID: nodeID, Name: nodeName, Type: "S3", Endpoint: &endpoint,
 			Bucket: &bucket, Region: &region, AccessKeyEncrypted: accessKeyEnc,
-			SecretKeyEncrypted: secretKeyEnc, CapacityBytes: 0, Enabled: true, CreatedAt: time.Now(),
+			SecretKeyEncrypted: secretKeyEnc, CapacityBytes: capBytes, Enabled: true, CreatedAt: time.Now(),
 		}
 		nodes = append(nodes, node)
 	}
@@ -326,10 +337,32 @@ func (s *Service) validate(ctx context.Context, req *CompleteSetupRequest) error
 
 	// Validate cloud credentials
 	if req.Cloud.Enabled {
+		if strings.TrimSpace(req.Cloud.NodeName) == "" {
+			return echo.NewHTTPError(400, "cloud node name is required")
+		}
+		if strings.TrimSpace(req.Cloud.Region) == "" {
+			return echo.NewHTTPError(400, "cloud region is required")
+		}
+		if strings.TrimSpace(req.Cloud.Endpoint) == "" {
+			return echo.NewHTTPError(400, "cloud endpoint is required")
+		}
+		if strings.TrimSpace(req.Cloud.Bucket) == "" {
+			return echo.NewHTTPError(400, "cloud bucket is required")
+		}
+		if strings.TrimSpace(req.Cloud.AccessKey) == "" {
+			return echo.NewHTTPError(400, "cloud access key is required")
+		}
+		if strings.TrimSpace(req.Cloud.SecretKey) == "" {
+			return echo.NewHTTPError(400, "cloud secret key is required")
+		}
+		if req.Cloud.CapacityCapGB < 0 {
+			return echo.NewHTTPError(400, "cloud capacity cap cannot be negative")
+		}
+		region := strings.TrimSpace(req.Cloud.Region)
 		if err := s.storage.ValidateCloudCredentials(
 			ctx,
 			req.Cloud.Endpoint,
-			req.Cloud.Region,
+			region,
 			req.Cloud.Bucket,
 			req.Cloud.AccessKey,
 			req.Cloud.SecretKey,

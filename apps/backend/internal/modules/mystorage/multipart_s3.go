@@ -98,6 +98,9 @@ func (c *S3MultipartClient) client(ctx context.Context, nodeID string) (*s3.Clie
 	if err != nil {
 		return nil, "", fmt.Errorf("decrypt cloud secret key: %w", err)
 	}
+	if region == "" {
+		region = "us-east-1"
+	}
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region), config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(string(access), string(secret), "")))
 	if err != nil {
 		return nil, "", err

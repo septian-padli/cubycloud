@@ -108,12 +108,12 @@ make test
 
 ## Documentation
 
+- [API Documentation & Swagger UI (OpenAPI 3.1)](docs/openapi/README.md)
 - [Architecture and runtime model](docs/architecture.md)
 - [Development setup](docs/development.md)
 - [Testing guide](docs/testing.md)
 - [Contributing](CONTRIBUTING.md)
 - [Security policy and reporting](SECURITY.md)
-
 ## Security and privacy
 
 CubyCloud runs on infrastructure you control and stores application data beneath its configured data directory. Implemented safeguards include bcrypt password hashing, HTTP-only `SameSite=Lax` session cookies, rate limiting for login and public-share unlock requests, and encryption of saved S3-compatible storage credentials.

@@ -1,0 +1,194 @@
+OrganizationItem:
+  type: object
+  required: [id, name, kind, size_bytes, parent_id, modified_at, is_starred, storage_available]
+  properties:
+    id: { type: string, example: 01JGF7Y8M0D6RH4M2N8K3VQZ1A }
+    name: { type: string, example: Annual report.pdf }
+    kind: { type: string, enum: [file, folder], example: file }
+    size_bytes: { type: integer, format: int64, minimum: 0, example: 204800 }
+    parent_id: { type: [string, 'null'], example: 01JGF7XQ8WJ6QW0GMRR4RXM2HZ }
+    modified_at: { type: string, format: date-time, example: '2026-10-25T14:30:00Z' }
+    is_starred: { type: boolean, example: false }
+    storage_available: { type: boolean, example: true }
+    created_by: { type: string, description: Present on operations that return creator information, example: alex }
+
+OrganizationFolder:
+  type: object
+  required: [id, name, parent_id]
+  properties:
+    id: { type: string, example: 01JGF7XQ8WJ6QW0GMRR4RXM2HZ }
+    name: { type: string, example: Finance }
+    parent_id: { type: [string, 'null'], example: null }
+
+OrganizationListResponse:
+  type: object
+  required: [items, breadcrumbs]
+  properties:
+    items:
+      type: array
+      items: { $ref: '#/components/schemas/OrganizationItem' }
+    breadcrumbs:
+      type: array
+      items: { $ref: '#/components/schemas/OrganizationFolder' }
+
+OrganizationFoldersResponse:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: { $ref: '#/components/schemas/OrganizationFolder' }
+
+CreateOrganizationFolderRequest:
+  type: object
+  properties:
+    name: { type: string, example: Finance }
+    parent_id: { type: [string, 'null'], example: null }
+    unique_name: { type: boolean, description: 'When true, a conflicting name is changed to a unique name instead of returning a conflict.', example: false }
+
+OrganizationNameConflict:
+  type: object
+  required: [error, suggested_name]
+  properties:
+    error: { type: string, example: name_conflict }
+    suggested_name: { type: string, example: Finance (1) }
+    existing_id: { type: string, example: 01JGF7XQ8WJ6QW0GMRR4RXM2HZ }
+    existing_kind: { type: string, enum: [file, folder], example: folder }
+
+OrganizationRenameRequest:
+  type: object
+  properties:
+    name: { type: string, example: Annual report 2026.pdf }
+    parent_id: { type: [string, 'null'], description: 'May be supplied to update the parent; null selects the root.', example: null }
+
+OrganizationMoveRequest:
+  type: object
+  properties:
+    target_parent_id: { type: [string, 'null'], description: 'Destination folder ID; null selects the organization root.', example: 01JGF7XQ8WJ6QW0GMRR4RXM2HZ }
+
+OrganizationStarResponse:
+  type: object
+  required: [id, is_starred]
+  properties:
+    id: { type: string, example: 01JGF7Y8M0D6RH4M2N8K3VQZ1A }
+    is_starred: { type: boolean, example: true }
+
+OrganizationBatchDownloadRequest:
+  type: object
+  required: [ids]
+  properties:
+    ids:
+      type: array
+      minItems: 1
+      items: { type: string }
+      example: [01JGF7Y8M0D6RH4M2N8K3VQZ1A, 01JGF80C1AB3D7YK63MJD9TJ6K]
+
+OrganizationCompressZipRequest:
+  type: object
+  required: [ids]
+  properties:
+    ids:
+      type: array
+      minItems: 1
+      items: { type: string }
+      example: [01JGF7Y8M0D6RH4M2N8K3VQZ1A, 01JGF80C1AB3D7YK63MJD9TJ6K]
+    parent_id: { type: [string, 'null'], description: Destination folder ID; null selects the root., example: null }
+    name: { type: string, description: Requested archive name., example: quarterly-archive.zip }
+
+OrganizationCompressJobAccepted:
+  type: object
+  required: [job_id, status]
+  properties:
+    job_id: { type: string, example: 01JGF83D0V2AKVGWN8W7NB9S43 }
+    status: { type: string, example: PENDING }
+
+OrganizationMultipartIntentRequest:
+  type: object
+  properties:
+    filename: { type: string, example: database-backup.tar }
+    size: { type: integer, format: int64, minimum: 0, example: 734003200 }
+    parent_id: { type: [string, 'null'], example: null }
+    unique_name: { type: boolean, example: true }
+
+OrganizationMultipartIntentResponse:
+  type: object
+  required: [placement, mode]
+  properties:
+    placement: { type: string, enum: [server, s3], example: s3 }
+    mode: { type: string, enum: [server_put, multipart], example: multipart }
+    upload_id: { type: string, example: 01JGF83D0V2AKVGWN8W7NB9S43 }
+    size_bytes: { type: integer, format: int64, example: 734003200 }
+    part_size_bytes: { type: integer, format: int64, example: 16777216 }
+    part_count: { type: integer, example: 44 }
+    parts:
+      type: array
+      items: { $ref: '#/components/schemas/OrganizationMultipartPart' }
+
+OrganizationMultipartPart:
+  type: object
+  required: [part_number, size_bytes, status]
+  properties:
+    part_number: { type: integer, format: int32, example: 1 }
+    size_bytes: { type: integer, format: int64, example: 16777216 }
+    etag: { type: string, example: '"9b2cf535f27731c974343645a3985328"' }
+    status: { type: string, enum: [pending, completed, failed], example: pending }
+
+OrganizationMultipartPartURL:
+  type: object
+  required: [part_number, url, expires_at]
+  properties:
+    part_number: { type: integer, format: int32, example: 1 }
+    url: { type: string, format: uri, example: "https://storage.example.com/upload-part?signature=redacted" }
+    expires_at: { type: string, format: date-time, example: '2026-10-25T14:45:00Z' }
+
+OrganizationMultipartState:
+  type: object
+  required: [upload_id, filename, size_bytes, part_size_bytes, part_count, status, parts]
+  properties:
+    upload_id: { type: string, example: 01JGF83D0V2AKVGWN8W7NB9S43 }
+    filename: { type: string, example: database-backup.tar }
+    size_bytes: { type: integer, format: int64, example: 734003200 }
+    part_size_bytes: { type: integer, format: int64, example: 16777216 }
+    part_count: { type: integer, format: int32, example: 44 }
+    status: { type: string, enum: [active, completed, expired, aborted], example: active }
+    expires_at: { type: string, format: date-time, example: '2026-10-26T14:30:00Z' }
+    final_item_id: { type: string, example: 01JGF9K7N3MEXZ45XPK1J1S2DX }
+    parts:
+      type: array
+      items: { $ref: '#/components/schemas/OrganizationMultipartPart' }
+
+OrganizationMultipartPartURLsRequest:
+  type: object
+  properties:
+    part_numbers:
+      type: array
+      items: { type: integer, format: int32, minimum: 1 }
+      example: [1, 2]
+
+OrganizationMultipartPartURLsResponse:
+  type: object
+  required: [parts]
+  properties:
+    parts:
+      type: array
+      items: { $ref: '#/components/schemas/OrganizationMultipartPartURL' }
+
+OrganizationMultipartCheckpointRequest:
+  type: object
+  properties:
+    parts:
+      type: array
+      items:
+        type: object
+        required: [part_number, size_bytes, status]
+        properties:
+          part_number: { type: integer, format: int32, example: 1 }
+          etag: { type: string, example: '"9b2cf535f27731c974343645a3985328"' }
+          size_bytes: { type: integer, format: int64, example: 16777216 }
+          status: { type: string, enum: [completed, failed], example: completed }
+
+TusUploadItem:
+  description: Base64-encoded JSON representation of the completed OrganizationItem, returned in the Upload-Item response header when available.
+  type: string
+  contentEncoding: base64
+  example: eyJpZCI6IjAxSkdGOV... 

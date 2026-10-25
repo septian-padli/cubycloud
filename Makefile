@@ -1,4 +1,4 @@
-.PHONY: help dev dev-backend dev-frontend build build-frontend build-backend sync-embed test test-backend test-frontend clean
+.PHONY: help dev dev-backend dev-frontend build build-frontend build-backend sync-embed test test-backend test-frontend docs-bundle docs-check clean
 
 SHELL := /bin/bash
 
@@ -22,6 +22,8 @@ help:
 	@echo "  make test-backend   Run Go backend tests"
 	@echo "  make test-frontend  Run frontend type check & linter"
 	@echo ""
+	@echo "  make docs-bundle    Bundle OpenAPI fragments into docs/openapi.yaml & backend"
+	@echo "  make docs-check     Validate OpenAPI specification and route coverage"
 	@echo "Reset & Cleanup:"
 	@echo "  make reset-setup    Reset SQLite database & processes for fresh onboarding setup"
 	@echo "  make clean          Remove build artifacts and temporary test data"
@@ -73,6 +75,16 @@ test-frontend:
 	@echo "==> Running frontend type check and unit tests..."
 	@cd apps/frontend && bun run check && bun test src
 
+
+# Bundle OpenAPI 3.1 modular specification
+docs-bundle:
+	@echo "==> Bundling OpenAPI specification..."
+	@cd apps/backend && go run ./cmd/openapi-bundler -source ../../docs/openapi -output ../../docs/openapi.yaml -backend-copy internal/modules/docs/openapi.yaml
+
+# Check OpenAPI 3.1 specification freshness and route coverage
+docs-check:
+	@echo "==> Validating OpenAPI specification and route coverage..."
+	@cd apps/backend && go test -v -run "TestOpenAPI|TestValidateIndividualYamlFiles" ./cmd/...
 # Reset setup for clean test
 reset-setup:
 	@./scripts/reset-setup.sh

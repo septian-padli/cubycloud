@@ -9,7 +9,7 @@
 	import { Label } from '$lib/components/ui/label/index.js';
 	import { Switch } from '$lib/components/ui/switch/index.js';
 	import PasswordInput from '$lib/components/password-input.svelte';
-	import { Box, CheckCircle2, Cloud, LoaderCircle, Server, XCircle } from '@lucide/svelte';
+	import { Box, CheckCircle2, Cloud, Info, LoaderCircle, Server, XCircle } from '@lucide/svelte';
 	import { cn } from '$lib/utils.js';
 	import { locale } from '$lib/locale.svelte.js';
 	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
@@ -30,7 +30,9 @@
 	);
 
 	const formReady = $derived(
-		cloud.endpoint.trim().length > 0 &&
+		cloud.nodeName.trim().length > 0 &&
+			cloud.endpoint.trim().length > 0 &&
+			cloud.region.trim().length > 0 &&
 			cloud.bucket.trim().length > 0 &&
 			cloud.accessKey.trim().length > 0 &&
 			cloud.secretKey.trim().length > 0
@@ -64,8 +66,8 @@
 		>
 		<Card.Description class="text-sm text-muted">
 			{tx(
-				'Hubungkan Cloudflare R2, AWS S3, atau penyedia S3 Compatible. Langkah ini bisa dilewati.',
-				'Connect Cloudflare R2, AWS S3, or an S3-compatible provider. This step is optional.'
+				'Hubungkan penyimpanan S3 Compatible. Langkah ini bisa dilewati.',
+				'Connect S3-compatible storage. This step is optional.'
 			)}
 		</Card.Description>
 	</Card.Header>
@@ -92,6 +94,7 @@
 		</div>
 		{#if noLocalNodes}
 			<Alert.Root>
+				<Info class="size-4 stroke-2" />
 				<Alert.Title
 					>{tx(
 						'Minimal satu penyimpanan wajib diisi',
@@ -114,7 +117,7 @@
 					<RadioGroup.Root
 						value={cloud.provider}
 						onValueChange={onProviderChange}
-						class="grid gap-3 sm:grid-cols-3"
+						class="grid gap-3"
 					>
 						{#each PROVIDER_OPTIONS as option (option.value)}
 							{@const selected = cloud.provider === option.value}
@@ -139,11 +142,7 @@
 									<p class="text-xs leading-normal text-muted">
 										{locale.language === 'id'
 											? option.description
-											: option.value === 'R2'
-												? 'Cloudflare object storage.'
-												: option.value === 'S3'
-													? 'Amazon Simple Storage Service.'
-													: 'Any S3-compatible storage provider.'}
+											: 'Any S3-compatible storage provider (MinIO, Wasabi, Backblaze B2, Cloudflare R2, AWS S3).'}
 									</p>
 								</div>
 							</label>
@@ -152,11 +151,33 @@
 				</div>
 
 				<div class="space-y-2">
+					<Label for="cloud-node-name">{tx('Nama node', 'Node name')}</Label>
+					<Input
+						id="cloud-node-name"
+						placeholder="s3-primary"
+						bind:value={cloud.nodeName}
+						oninput={() => {
+							testState = 'idle';
+						}}
+					/>
+				</div>
+				<div class="space-y-2">
 					<Label for="cloud-endpoint">{tx('Endpoint', 'Endpoint')}</Label>
 					<Input
 						id="cloud-endpoint"
 						placeholder={providerMeta.endpointPlaceholder}
 						bind:value={cloud.endpoint}
+						oninput={() => {
+							testState = 'idle';
+						}}
+					/>
+				</div>
+				<div class="space-y-2">
+					<Label for="cloud-region">{tx('Region', 'Region')}</Label>
+					<Input
+						id="cloud-region"
+						placeholder="us-east-1"
+						bind:value={cloud.region}
 						oninput={() => {
 							testState = 'idle';
 						}}
@@ -194,6 +215,27 @@
 							testState = 'idle';
 						}}
 					/>
+				</div>
+				<div class="space-y-2">
+					<Label for="cloud-cap">
+						{tx('Batas kapasitas node (GiB) (Opsional)', 'Node capacity limit (GiB) (Optional)')}
+					</Label>
+					<Input
+						id="cloud-cap"
+						type="number"
+						min={1}
+						placeholder={tx('Tanpa batas', 'Unlimited')}
+						bind:value={cloud.capacityCapGb}
+						oninput={() => {
+							testState = 'idle';
+						}}
+					/>
+					<p class="text-xs text-muted">
+						{tx(
+							'Kosongkan untuk kapasitas tanpa batas kuota.',
+							'Leave blank for unlimited capacity quota.'
+						)}
+					</p>
 				</div>
 
 				<div class="flex flex-wrap items-center gap-3">
@@ -249,8 +291,17 @@
 					<p class="text-xs font-medium text-muted">{tx('Ringkasan', 'Summary')}</p>
 					<p class="mt-1 text-sm text-main">
 						{providerMeta.label}
+						{#if cloud.nodeName.trim()}
+							· node <span class="font-medium">{cloud.nodeName.trim()}</span>
+						{/if}
 						{#if cloud.bucket.trim()}
 							· bucket <span class="font-medium">{cloud.bucket.trim()}</span>
+						{/if}
+						{#if cloud.region.trim()}
+							· region <span class="font-medium">{cloud.region.trim()}</span>
+						{/if}
+						{#if cloud.capacityCapGb && Number(cloud.capacityCapGb) > 0}
+							· <span class="font-medium">{cloud.capacityCapGb} GiB</span>
 						{/if}
 					</p>
 				</div>

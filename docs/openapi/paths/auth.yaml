@@ -1,0 +1,377 @@
+/api/v1/auth/login:
+  post:
+    operationId: login
+    summary: Log in
+    description: Authenticates with a username or email and password. The endpoint is rate-limited to 10 requests per minute. On success it sets a 24-hour `cuby_token` HttpOnly, SameSite=Lax cookie; the cookie is Secure when the request is considered secure. The token is not included in the JSON response.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/LoginRequest'
+          example:
+            identifier: admin
+            password: correct-horse-battery
+    responses:
+      '200':
+        description: Login succeeded.
+        headers:
+          Set-Cookie:
+            description: Sets the `cuby_token` cookie with Path=/, HttpOnly, SameSite=Lax, a 24-hour lifetime, and Secure when applicable.
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginResponse'
+            example:
+              user:
+                id: 01J8X2K6R5G4M3N2P1Q0ABCDEFG
+                username: admin
+                email: admin@example.com
+                display_name: System Administrator
+                role: SUPER_ADMIN
+                quota_bytes: -1
+                used_bytes: 1073741824
+              message: login successful
+      '400':
+        description: Invalid request body or missing username/email or password.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error: username/email and password are required
+      '401':
+        description: Username/email or password is invalid.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error: invalid username or password
+      '429':
+        description: Rate limit exceeded.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '500':
+        description: Token generation or usage lookup failed.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/auth/logout:
+  post:
+    operationId: logout
+    summary: Log out
+    description: Clears the `cuby_token` cookie by setting an empty value and a negative Max-Age. Authentication is not required by this route.
+    security: []
+    responses:
+      '200':
+        description: Logout succeeded and the cookie was cleared.
+        headers:
+          Set-Cookie:
+            description: Clears the `cuby_token` cookie at Path=/; it remains HttpOnly and SameSite=Lax, with Secure when applicable.
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutResponse'
+            example:
+              message: logout successful
+/api/v1/auth/reset-password:
+  post:
+    operationId: resetPassword
+    summary: Reset a password with a recovery key
+    description: Public recovery-key password reset. A successful reset consumes the submitted key and returns a newly generated recovery key. If username is omitted, the handler targets `admin`.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ResetPasswordRequest'
+          example:
+            username: admin
+            recovery_key: ABCDE-FGHIJ-KLMNP-QRSTU-VWXYZ-23456
+            new_password: new-secure-password
+    responses:
+      '200':
+        description: Password reset succeeded; store the returned replacement recovery key.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordResponse'
+            example:
+              message: password reset successful
+              new_recovery_key: ABCDE-FGHIJ-KLMNP-QRSTU-VWXYZ-23456
+      '400':
+        description: Invalid request, malformed recovery key, password shorter than 8 characters, or no recovery key configured for the account.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error: recovery key must contain 30 alphanumeric characters in six groups of five
+      '401':
+        description: Recovery key is invalid or has already been consumed.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error: invalid recovery key
+      '404':
+        description: Account username was not found.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error: user not found
+      '500':
+        description: Password reset could not be completed due to an internal error.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/auth/me:
+  get:
+    operationId: getCurrentUser
+    summary: Get the authenticated user
+    description: Returns the current user's profile and usage totals.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Current user details.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthUser'
+            example:
+              id: 01J8X2K6R5G4M3N2P1Q0ABCDEFG
+              username: admin
+              email: admin@example.com
+              display_name: System Administrator
+              role: SUPER_ADMIN
+              quota_bytes: -1
+              used_bytes: 1073741824
+      '401':
+        description: Authentication is missing or invalid.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error: unauthorized
+      '404':
+        description: Authenticated user no longer exists.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error: user not found
+      '500':
+        description: User details or usage could not be fetched.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/auth/profile:
+  patch:
+    operationId: updateCurrentUserProfile
+    summary: Update the authenticated user's profile
+    description: Updates display name and/or email. The backend DTO has no avatar field. Changing the email requires the current password; an unchanged email does not. Fields omitted from the request are left unchanged.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateProfileRequest'
+          example:
+            display_name: Alex Example
+            email: alex@example.com
+            current_password: current-secure-password
+    responses:
+      '200':
+        description: Updated profile and usage totals.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthUser'
+            example:
+              id: 01J8X2K6R5G4M3N2P1Q0ABCDEFG
+              username: admin
+              email: alex@example.com
+              display_name: Alex Example
+              role: SUPER_ADMIN
+              quota_bytes: -1
+              used_bytes: 1073741824
+      '400':
+        description: Invalid body, display name, email, or missing/incorrect current password for an email change.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '401':
+        description: Authentication is missing or invalid.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error: unauthorized
+      '404':
+        description: Authenticated user no longer exists.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '409':
+        description: Email is already in use or the account changed concurrently.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '500':
+        description: Profile update or usage lookup failed.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/auth/change-password:
+  post:
+    operationId: changePassword
+    summary: Change the authenticated user's password
+    description: Verifies the current password, requires the new password to match its confirmation, and increments the token version after a successful update.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ChangePasswordRequest'
+          example:
+            current_password: current-secure-password
+            new_password: replacement-password
+            confirm_password: replacement-password
+    responses:
+      '200':
+        description: Password changed successfully.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordChangedResponse'
+            example:
+              message: password changed successfully
+      '400':
+        description: Invalid body, incorrect current password, mismatched passwords, or new password outside the 8-character minimum and 72-byte maximum.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '401':
+        description: Authentication is missing or invalid.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error: unauthorized
+      '404':
+        description: Authenticated user no longer exists.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '409':
+        description: Account changed concurrently while the password update was being applied.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '500':
+        description: Password update failed due to an internal error.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/auth/profile/{userId}:
+  get:
+    operationId: getUserProfile
+    summary: Get a user's profile
+    description: Authenticated users can access their own profile. A SUPER_ADMIN can access any user's profile; other cross-user requests are forbidden. The handler returns the same user model as the current-user endpoint.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        description: ID of the target user.
+        schema:
+          type: string
+        example: 01J8X2K6R5G4M3N2P1Q0ABCDEFG
+    responses:
+      '200':
+        description: Target user details and usage totals.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthUser'
+            example:
+              id: 01J8X2K6R5G4M3N2P1Q0ABCDEFG
+              username: admin
+              email: admin@example.com
+              display_name: System Administrator
+              role: SUPER_ADMIN
+              quota_bytes: -1
+              used_bytes: 1073741824
+      '400':
+        description: The userId path parameter is missing.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error: userId is required
+      '401':
+        description: Authentication is missing or invalid.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error: unauthorized
+      '403':
+        description: Caller is not a SUPER_ADMIN and requested another user's profile.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error: forbidden
+      '404':
+        description: Target user was not found.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '500':
+        description: User details or usage could not be fetched.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'

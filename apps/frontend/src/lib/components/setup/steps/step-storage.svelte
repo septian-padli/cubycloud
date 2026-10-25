@@ -33,7 +33,10 @@
 				id: `node-${i}`,
 				name: n.path.split('/').pop() || n.path,
 				path: n.path,
-				kind: (n.kind === 'SSD' || n.kind === 'HDD' ? n.kind : 'HDD') as 'SSD' | 'HDD',
+				kind: (n.kind === 'SSD' || n.kind === 'HDD' || n.kind === 'UNKNOWN' ? n.kind : 'UNKNOWN') as
+					| 'SSD'
+					| 'HDD'
+					| 'UNKNOWN',
 				totalGb: Math.round(n.capacity_bytes / 1024 ** 3),
 				freeGb: Math.round(n.free_bytes / 1024 ** 3),
 				enabled: true,
@@ -106,7 +109,7 @@
 									<Badge
 										class="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-main hover:bg-secondary dark:text-app"
 									>
-										{node.kind}
+										{node.kind === 'UNKNOWN' ? tx('Tidak diketahui', 'Unknown') : node.kind}
 									</Badge>
 								</div>
 								<p class="text-xs text-muted">{node.path}</p>

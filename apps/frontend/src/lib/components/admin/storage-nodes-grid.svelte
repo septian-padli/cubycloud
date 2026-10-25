@@ -56,7 +56,7 @@
 								{#if node.kind === 'S3'}
 									<p class="truncate text-xs text-muted" title={node.endpoint}>{node.endpoint}</p>
 									<p class="truncate text-xs text-muted" title={node.bucket}>
-										{locale.language === 'id' ? 'Bucket' : 'Bucket'}: {node.bucket}
+										Bucket: {node.bucket}{node.region ? ` (${node.region})` : ''}
 									</p>
 								{:else}
 									<p class="truncate text-xs text-muted">{node.path}</p>
@@ -69,7 +69,7 @@
 									? 'bg-secondary-accent text-white hover:bg-secondary-accent dark:text-app'
 									: 'bg-secondary text-main hover:bg-secondary dark:text-app'}"
 							>
-								{node.kind}
+								{node.kind === 'UNKNOWN' ? (locale.language === 'id' ? 'Tidak diketahui' : 'Unknown') : node.kind}
 							</Badge>
 							{#if critical}
 								<Badge variant="destructive" class="rounded-full"

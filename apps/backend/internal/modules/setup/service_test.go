@@ -204,12 +204,14 @@ func TestCompleteSetup_Success_LocalAndCloud(t *testing.T) {
 		PlacementStrategy: "FILL_FIRST",
 		Cloud: CloudConfig{
 			Enabled:   true,
-			Provider:  "R2",
+			Provider:  "S3_COMPATIBLE",
+			NodeName:  "cuby-cloud",
 			Endpoint:  mockS3.URL,
 			Bucket:    "cuby",
 			Region:    "auto",
 			AccessKey: "test-key",
 			SecretKey: "test-secret",
+			CapacityCapGB: 25,
 		},
 	}
 
@@ -231,8 +233,21 @@ func TestCompleteSetup_Success_LocalAndCloud(t *testing.T) {
 	if count != 1 {
 		t.Errorf("S3 nodes = %d, want 1", count)
 	}
-}
 
+	var s3Node database.StorageNode
+	if err := db.NewSelect().Model(&s3Node).Where("type = ?", "S3").Scan(ctx); err != nil {
+		t.Fatalf("scan S3 node: %v", err)
+	}
+	if s3Node.Name != "cuby-cloud" {
+		t.Errorf("S3 node Name = %s, want cuby-cloud", s3Node.Name)
+	}
+	if s3Node.Region == nil || *s3Node.Region != "auto" {
+		t.Errorf("S3 node Region = %v, want auto", s3Node.Region)
+	}
+	if s3Node.CapacityBytes != 25*1024*1024*1024 {
+		t.Errorf("S3 node CapacityBytes = %d, want %d", s3Node.CapacityBytes, 25*1024*1024*1024)
+	}
+}
 func TestCompleteSetup_AlreadyCompleted(t *testing.T) {
 	db := setupTestDB(t)
 	defer cleanupTestDB(t, db)
@@ -513,7 +528,8 @@ func TestCompleteSetup_CloudCredentialsInvalid(t *testing.T) {
 		PlacementStrategy: "FILL_FIRST",
 		Cloud: CloudConfig{
 			Enabled:   true,
-			Provider:  "R2",
+			Provider:  "S3_COMPATIBLE",
+			NodeName:  "cuby-cloud",
 			Endpoint:  mockS3.URL,
 			Bucket:    "cuby",
 			Region:    "auto",
@@ -526,6 +542,104 @@ func TestCompleteSetup_CloudCredentialsInvalid(t *testing.T) {
 	_, err := svc.CompleteSetup(ctx, req)
 	if err == nil {
 		t.Fatal("expected error for invalid cloud credentials")
+	}
+}
+func TestCompleteSetup_CloudRequiredFields(t *testing.T) {
+	db := setupTestDB(t)
+	defer cleanupTestDB(t, db)
+
+	tempDir := createTempDir(t)
+	nodePath := filepath.Join(tempDir, "storage1")
+	os.MkdirAll(nodePath, 0755)
+
+	driver := &mockStorageDriver{}
+	guard := middleware.NewSetupGuard(false)
+	svc := NewService(db, driver, guard, tempDir)
+	ctx := context.Background()
+
+	// Test 1: NodeName is empty
+	reqNoNodeName := &CompleteSetupRequest{
+		Admin: AdminUser{
+			Username:    "admin",
+			Email:       "admin@example.com",
+			Password:    "password123",
+			RecoveryKey: testValidRecoveryKey,
+		},
+		StorageNodes: []StorageNodeInput{
+			{Path: nodePath, CapacityBytes: 500000000000, Enabled: true},
+		},
+		PlacementStrategy: "FILL_FIRST",
+		Cloud: CloudConfig{
+			Enabled:   true,
+			Provider:  "S3_COMPATIBLE",
+			NodeName:  "",
+			Endpoint:  "https://s3.example.com",
+			Bucket:    "cuby",
+			Region:    "us-east-1",
+			AccessKey: "key",
+			SecretKey: "secret",
+		},
+	}
+	_, err := svc.CompleteSetup(ctx, reqNoNodeName)
+	if err == nil || !strings.Contains(err.Error(), "cloud node name is required") {
+		t.Fatalf("expected 'cloud node name is required' error, got %v", err)
+	}
+
+	// Test 2: Region is empty
+	reqNoRegion := &CompleteSetupRequest{
+		Admin: AdminUser{
+			Username:    "admin",
+			Email:       "admin@example.com",
+			Password:    "password123",
+			RecoveryKey: testValidRecoveryKey,
+		},
+		StorageNodes: []StorageNodeInput{
+			{Path: nodePath, CapacityBytes: 500000000000, Enabled: true},
+		},
+		PlacementStrategy: "FILL_FIRST",
+		Cloud: CloudConfig{
+			Enabled:   true,
+			Provider:  "S3_COMPATIBLE",
+			NodeName:  "my-cloud",
+			Endpoint:  "https://s3.example.com",
+			Bucket:    "cuby",
+			Region:    "",
+			AccessKey: "key",
+			SecretKey: "secret",
+		},
+	}
+	_, err = svc.CompleteSetup(ctx, reqNoRegion)
+	if err == nil || !strings.Contains(err.Error(), "cloud region is required") {
+		t.Fatalf("expected 'cloud region is required' error, got %v", err)
+	}
+
+	// Test 3: Negative capacity cap
+	reqNegativeCap := &CompleteSetupRequest{
+		Admin: AdminUser{
+			Username:    "admin",
+			Email:       "admin@example.com",
+			Password:    "password123",
+			RecoveryKey: testValidRecoveryKey,
+		},
+		StorageNodes: []StorageNodeInput{
+			{Path: nodePath, CapacityBytes: 500000000000, Enabled: true},
+		},
+		PlacementStrategy: "FILL_FIRST",
+		Cloud: CloudConfig{
+			Enabled:       true,
+			Provider:      "S3_COMPATIBLE",
+			NodeName:      "my-cloud",
+			Endpoint:      "https://s3.example.com",
+			Bucket:        "cuby",
+			Region:        "us-east-1",
+			AccessKey:     "key",
+			SecretKey:     "secret",
+			CapacityCapGB: -5,
+		},
+	}
+	_, err = svc.CompleteSetup(ctx, reqNegativeCap)
+	if err == nil || !strings.Contains(err.Error(), "cloud capacity cap cannot be negative") {
+		t.Fatalf("expected 'cloud capacity cap cannot be negative' error, got %v", err)
 	}
 }
 
@@ -791,7 +905,8 @@ func TestCompleteSetup_CloudOnlyNoLocalNodes(t *testing.T) {
 		PlacementStrategy: "FILL_FIRST",
 		Cloud: CloudConfig{
 			Enabled:   true,
-			Provider:  "R2",
+			Provider:  "S3_COMPATIBLE",
+			NodeName:  "cuby-cloud",
 			Endpoint:  mockS3.URL,
 			Bucket:    "cuby",
 			Region:    "auto",
@@ -854,7 +969,8 @@ func TestCompleteSetup_EmptyStorageNodesWithCloud(t *testing.T) {
 		PlacementStrategy: "FILL_FIRST",
 		Cloud: CloudConfig{
 			Enabled:   true,
-			Provider:  "R2",
+			Provider:  "S3_COMPATIBLE",
+			NodeName:  "cuby-cloud",
 			Endpoint:  mockS3.URL,
 			Bucket:    "cuby",
 			Region:    "auto",
@@ -911,7 +1027,8 @@ func TestCompleteSetup_AllLocalNodesDisabled(t *testing.T) {
 		PlacementStrategy: "FILL_FIRST",
 		Cloud: CloudConfig{
 			Enabled:   true,
-			Provider:  "R2",
+			Provider:  "S3_COMPATIBLE",
+			NodeName:  "cuby-cloud",
 			Endpoint:  mockS3.URL,
 			Bucket:    "cuby",
 			Region:    "auto",

@@ -6,23 +6,13 @@ import (
 	"strings"
 )
 
-// DetectDiskKind returns "SSD" or "HDD" for the physical device backing path.
-// It falls back to a path-name heuristic when hardware detection is unavailable.
+// DetectDiskKind returns "SSD", "HDD", or "UNKNOWN" for the physical device backing path.
+// It returns "UNKNOWN" when hardware detection is unavailable or inconclusive.
 func DetectDiskKind(ctx context.Context, path string) string {
 	if kind, err := platformDiskKind(ctx, path); err == nil && (kind == "SSD" || kind == "HDD") {
 		return kind
 	}
-	return kindFromPathName(path)
-}
-
-// kindFromPathName is the legacy heuristic: treat paths containing
-// "ssd"/"nvme" as SSD, everything else as HDD.
-func kindFromPathName(path string) string {
-	lower := strings.ToLower(path)
-	if strings.Contains(lower, "ssd") || strings.Contains(lower, "nvme") {
-		return "SSD"
-	}
-	return "HDD"
+	return "UNKNOWN"
 }
 
 // Kernel naming has two partition styles:
