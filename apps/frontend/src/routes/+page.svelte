@@ -3,6 +3,7 @@
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import ThemeToggle from '$lib/components/theme-toggle.svelte';
+	import LanguagePicker from '$lib/components/language-picker.svelte';
 	import { ArrowRight, Cloud, HardDrive, Shield } from '@lucide/svelte';
 	import { getSetupStatus } from '$lib/api/setup';
 	import { locale } from '$lib/locale.svelte.js';
@@ -38,6 +39,7 @@
 		<p class="text-sm font-semibold">CubyCloud</p>
 		<div class="flex items-center gap-3">
 			<ThemeToggle />
+			<LanguagePicker />
 			<Badge
 				class="rounded-full bg-primary/15 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/15"
 			>

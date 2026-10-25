@@ -33,6 +33,7 @@
 			)}
 		</Card.Description>
 	</Card.Header>
+	<Card.Content class="space-y-4">
 	<div class="space-y-2">
 		<Label for="setup-username">{tx('Nama pengguna', 'Username')}</Label>
 		<Input
@@ -89,4 +90,5 @@
 			)}
 		</Alert.Description>
 	</Alert.Root>
+	</Card.Content>
 </Card.Root>

@@ -29,6 +29,7 @@
 			)}
 		</Card.Description>
 	</Card.Header>
+	<Card.Content class="space-y-4">
 	<RadioGroup.Root bind:value={strategy} class="gap-3">
 		{#each STRATEGY_OPTIONS as option (option.value)}
 			{@const selected = strategy === option.value}
@@ -73,4 +74,5 @@
 			)}
 		</Alert.Description>
 	</Alert.Root>
+	</Card.Content>
 </Card.Root>

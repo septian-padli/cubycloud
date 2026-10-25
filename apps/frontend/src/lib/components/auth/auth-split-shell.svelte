@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ThemeToggle from '$lib/components/theme-toggle.svelte';
+	import LanguagePicker from '$lib/components/language-picker.svelte';
 	import authHero from '$lib/assets/auth-hero-placeholder.svg';
 	import type { Snippet } from 'svelte';
 
@@ -32,7 +33,10 @@
 	<section class="relative flex min-h-dvh flex-col">
 		<header class="flex items-center justify-between px-6 py-4 md:px-10">
 			<a href="/" class="text-sm font-semibold text-main">CubyCloud</a>
-			<ThemeToggle />
+			<div class="flex items-center gap-3">
+				<ThemeToggle />
+				<LanguagePicker />
+			</div>
 		</header>
 
 		<div class="flex flex-1 items-center justify-center px-6 py-8 md:px-10 md:py-10">

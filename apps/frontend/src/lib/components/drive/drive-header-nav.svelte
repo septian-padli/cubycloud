@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import ThemeToggle from '$lib/components/theme-toggle.svelte';
+	import LanguagePicker from '$lib/components/language-picker.svelte';
 	import { getDriveChrome } from '$lib/drive-context.svelte.js';
 	import GlobalSearchBar from '$lib/components/drive/global-search-bar.svelte';
 	import HeaderUploadDenialDialog from '$lib/components/drive/header-upload-denial-dialog.svelte';
@@ -167,6 +168,7 @@
 		</Button>
 
 		<ThemeToggle />
+		<LanguagePicker />
 	</div>
 </header>
 

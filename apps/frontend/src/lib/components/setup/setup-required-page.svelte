@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button/index.js';
 	import ThemeToggle from '$lib/components/theme-toggle.svelte';
+	import LanguagePicker from '$lib/components/language-picker.svelte';
 	import { Settings } from '@lucide/svelte';
 	import { locale } from '$lib/locale.svelte.js';
 	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
@@ -18,7 +19,10 @@
 			class="flex w-full items-center justify-between border-b border-subtle px-6 py-4 md:px-10"
 		>
 			<a href="/" class="text-sm font-semibold text-main">CubyCloud</a>
-			<ThemeToggle />
+			<div class="flex items-center gap-3">
+				<ThemeToggle />
+				<LanguagePicker />
+			</div>
 		</header>
 
 		<main
