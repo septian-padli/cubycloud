@@ -94,7 +94,8 @@ func setupTestNodes(t *testing.T) (*database.StorageNode, *database.StorageNode,
 
 	storagePath := filepath.Join(tempDir, "storage")
 	require.NoError(t, os.MkdirAll(storagePath, 0755))
-
+	keyMaterial, err := storage.InitMasterKey(tempDir, "", "", db)
+	require.NoError(t, err)
 	driver := storage.NewStorageDriver(db, storagePath)
 	s3Backend := newMockS3Backend()
 	s3Server := httptest.NewServer(s3Backend)
@@ -103,7 +104,7 @@ func setupTestNodes(t *testing.T) (*database.StorageNode, *database.StorageNode,
 		_ = db.Close()
 	})
 
-	keyMaterial := []byte(filepath.Clean(tempDir))
+	// keyMaterial already initialized
 	accessEnc, err := storage.EncryptCredential([]byte("mock_access"), keyMaterial)
 	require.NoError(t, err)
 	secretEnc, err := storage.EncryptCredential([]byte("mock_secret"), keyMaterial)

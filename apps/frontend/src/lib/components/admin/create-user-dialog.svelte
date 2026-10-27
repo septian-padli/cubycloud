@@ -1,22 +1,30 @@
 <script lang="ts">
-	import type { AdminQuotaMode, AdminUser, DefaultQuotaPolicy } from '$lib/types/admin.js';
+	import type { AdminQuotaMode, DefaultQuotaPolicy } from '$lib/types/admin.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import * as RadioGroup from '$lib/components/ui/radio-group/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import { cn } from '$lib/utils.js';
+	import { toast } from 'svelte-sonner';
+	import { adminAPI } from '$lib/api/admin.js';
+	let invitationUrl = $state('');
+	let creating = $state(false);
+	async function copyInvitation() {
+		try { await navigator.clipboard.writeText(invitationUrl); toast.success(locale.language === 'id' ? 'Tautan disalin.' : 'Link copied.'); }
+		catch { window.prompt(locale.language === 'id' ? 'Salin tautan:' : 'Copy link:', invitationUrl); }
+	}
 	import { locale } from '$lib/locale.svelte.js';
 	type CreateQuotaChoice = 'default' | 'override_gb' | 'unlimited';
 
 	let {
 		open = $bindable(false),
 		defaultQuota,
-		onCreate
+		onCreated
 	}: {
 		open?: boolean;
 		defaultQuota: DefaultQuotaPolicy;
-		onCreate: (user: Omit<AdminUser, 'id' | 'usedGb' | 'role'> & { password?: string }) => void;
+		onCreated?: () => void;
 	} = $props();
 
 	let username = $state('');
@@ -48,17 +56,27 @@
 		}
 	});
 
-	function submit() {
-		if (!canSubmit) return;
+	async function submit() {
+		if (!canSubmit || creating) return;
+		creating = true;
 		const mode = quotaChoice as AdminQuotaMode;
-		onCreate({
-			username: username.trim(),
-			displayName: username.trim(),
-			email: email.trim(),
-			quotaMode: mode,
-			quotaGb: mode === 'override_gb' ? Number(quotaGb) : undefined
-		});
-		open = false;
+		try {
+			const result = await adminAPI.createUser({
+				username: username.trim(),
+				email: email.trim(),
+				quota_mode: mode === 'unlimited' ? 'UNLIMITED' : mode === 'override_gb' ? 'CUSTOM' : 'DEFAULT',
+				quota_gb: mode === 'override_gb' ? Number(quotaGb) : undefined
+			});
+			if (result.error || !result.data?.invitation_url) {
+				toast.error(result.error ?? (locale.language === 'id' ? 'Undangan tidak tersedia.' : 'Invitation link unavailable.'));
+				return;
+			}
+			invitationUrl = new URL(result.data.invitation_url, window.location.origin).toString();
+			onCreated?.();
+			open = false;
+		} finally {
+			creating = false;
+		}
 	}
 </script>
 
@@ -104,16 +122,8 @@
 				/>
 			</div>
 
-			<div class="rounded-xl border border-subtle bg-app p-3 text-xs leading-relaxed text-muted">
-				<p class="font-medium text-main">
-					{locale.language === 'id' ? 'Kata sandi bawaan:' : 'Default password:'}
-					<span class="font-mono font-semibold text-primary">12345678</span>
-				</p>
-				<p class="mt-1">
-					{locale.language === 'id'
-						? 'Pengguna baru dapat langsung login menggunakan kata sandi 12345678.'
-						: 'New users can sign in immediately using password 12345678.'}
-				</p>
+			<div class="rounded-xl border border-subtle bg-app p-3 text-sm leading-relaxed text-main">
+				{locale.language === 'id' ? 'Pengguna akan menerima undangan untuk mengatur kata sandi.' : 'User will receive an invitation to set a password.'}
 			</div>
 
 			<div class="grid gap-2">
@@ -193,10 +203,25 @@
 				<Button type="button" variant="secondary" onclick={() => (open = false)}
 					>{locale.language === 'id' ? 'Batal' : 'Cancel'}</Button
 				>
-				<Button type="submit" disabled={!canSubmit}
-					>{locale.language === 'id' ? 'Buat Pengguna' : 'Create user'}</Button
-				>
+				<Button type="submit" disabled={!canSubmit || creating}>
+					{creating ? (locale.language === 'id' ? 'Membuat…' : 'Creating…') : (locale.language === 'id' ? 'Buat Pengguna' : 'Create user')}
+				</Button>
 			</Dialog.Footer>
 		</form>
 	</Dialog.Content>
 </Dialog.Root>
+
+{#if invitationUrl}
+	<Dialog.Root open={!!invitationUrl} onOpenChange={(value) => { if (!value) invitationUrl = ''; }}>
+		<Dialog.Content class="bg-surface text-main sm:max-w-md">
+			<Dialog.Header>
+				<Dialog.Title>{locale.language === 'id' ? 'Undangan pengguna siap' : 'User invitation ready'}</Dialog.Title>
+				<Dialog.Description>{locale.language === 'id' ? 'Salin tautan ini sekarang. Tautan hanya dapat digunakan sekali dan berlaku 24 jam.' : 'Copy this link now. It can be used once and expires in 24 hours.'}</Dialog.Description>
+			</Dialog.Header>
+			<div class="flex flex-col gap-3">
+				<Input readonly value={invitationUrl} aria-label={locale.language === 'id' ? 'Tautan undangan' : 'Invitation link'} />
+				<Button type="button" class="min-h-11 focus-visible:outline focus-visible:outline-2" onclick={copyInvitation}>{locale.language === 'id' ? 'Salin Tautan' : 'Copy Link'}</Button>
+			</div>
+		</Dialog.Content>
+	</Dialog.Root>
+{/if}

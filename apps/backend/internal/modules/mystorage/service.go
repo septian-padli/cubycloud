@@ -567,6 +567,15 @@ func (s *Service) Upload(ctx context.Context, owner, name string, parent *string
 	if err != nil {
 		return Item{}, err
 	}
+	instanceID, err := storage.InstanceID(ctx, s.db)
+	if err != nil {
+		return Item{}, err
+	}
+	effectiveNodeID := placement.ID
+	if effectiveNodeID == "" {
+		effectiveNodeID, _ = legacyLocalStorageNodeID(ctx, s.db)
+	}
+	blobKey := storage.BuildBlobKey(instanceID, effectiveNodeID, id)
 	var storedNodeID any
 	if placement.ID != "" {
 		storedNodeID = placement.ID
@@ -595,20 +604,20 @@ func (s *Service) Upload(ctx context.Context, owner, name string, parent *string
 		if !ok {
 			return Item{}, errors.New("cloud driver unavailable")
 		}
-		if err = cloud.WriteObject(ctx, placement.ID, id, counter, -1); err != nil {
-			_ = cloud.DeleteObject(ctx, placement.ID, id)
+		if err = cloud.WriteObject(ctx, placement.ID, blobKey, counter, -1); err != nil {
+			_ = cloud.DeleteObject(ctx, placement.ID, blobKey)
 			return Item{}, err
 		}
 		cleanup = func() {
-			_ = cloud.DeleteObject(ctx, placement.ID, id)
+			_ = cloud.DeleteObject(ctx, placement.ID, blobKey)
 		}
 	} else {
-		if err = s.storage.WriteLocal(ctx, placement.Path, id, counter); err != nil {
-			_ = s.storage.DeleteLocal(ctx, placement.Path, id)
+		if err = s.storage.WriteLocal(ctx, placement.Path, blobKey, counter); err != nil {
+			_ = s.storage.DeleteLocal(ctx, placement.Path, blobKey)
 			return Item{}, err
 		}
 		cleanup = func() {
-			_ = s.storage.DeleteLocal(ctx, placement.Path, id)
+			_ = s.storage.DeleteLocal(ctx, placement.Path, blobKey)
 		}
 	}
 	size := counter.n
@@ -670,7 +679,7 @@ func (s *Service) Upload(ctx context.Context, owner, name string, parent *string
 		candidate,
 		size,
 		parent,
-		id,
+		blobKey,
 		storedNodeID,
 		now,
 	)
@@ -1612,11 +1621,15 @@ func (s *Service) UploadIntent(ctx context.Context, owner, filename string, size
 
 	uploadID := ulid.Make().String()
 	urlExpiry := 15 * time.Minute
-	putURL, err := cloud.PresignUpload(ctx, placement.ID, uploadID, urlExpiry)
+	instanceID, err := storage.InstanceID(ctx, s.db)
+	if err != nil {
+		return nil, fmt.Errorf("load storage instance ID: %w", err)
+	}
+	blobKey := storage.BuildBlobKey(instanceID, placement.ID, uploadID)
+	putURL, err := cloud.PresignUpload(ctx, placement.ID, blobKey, urlExpiry)
 	if err != nil {
 		return nil, fmt.Errorf("presign upload: %w", err)
 	}
-
 	now := time.Now().UTC()
 	expiresAt := now.Add(24 * time.Hour)
 	var parentVal any
@@ -1663,7 +1676,12 @@ func (s *Service) RenewUploadIntentURL(ctx context.Context, owner, uploadID stri
 		return nil, errors.New("cloud driver unavailable")
 	}
 	const urlExpiry = 15 * time.Minute
-	putURL, err := cloud.PresignUpload(ctx, nodeID, uploadID, urlExpiry)
+	instanceID, err := storage.InstanceID(ctx, s.db)
+	if err != nil {
+		return nil, fmt.Errorf("load storage instance ID: %w", err)
+	}
+	blobKey := storage.BuildBlobKey(instanceID, nodeID, uploadID)
+	putURL, err := cloud.PresignUpload(ctx, nodeID, blobKey, urlExpiry)
 	if err != nil {
 		return nil, fmt.Errorf("presign upload: %w", err)
 	}
@@ -1720,7 +1738,12 @@ func (s *Service) SyncCloud(ctx context.Context, owner, uploadID string) (Item, 
 		return Item{}, errNotFound
 	}
 
-	actualSize, err := cloud.HeadObject(ctx, storageNodeID, uploadID)
+	instanceID, err := storage.InstanceID(ctx, s.db)
+	if err != nil {
+		return Item{}, fmt.Errorf("load storage instance ID: %w", err)
+	}
+	blobKey := storage.BuildBlobKey(instanceID, storageNodeID, uploadID)
+	actualSize, err := cloud.HeadObject(ctx, storageNodeID, blobKey)
 	if err != nil {
 		return Item{}, fmt.Errorf("cloud object verification failed: %w", err)
 	}
@@ -1820,7 +1843,7 @@ func (s *Service) SyncCloud(ctx context.Context, owner, uploadID string) (Item, 
 		candidate,
 		sizeBytes,
 		parent,
-		uploadID,
+		blobKey,
 		storageNodeID,
 		now,
 	)
@@ -1871,18 +1894,23 @@ func (s *Service) syncedCloudItem(ctx context.Context, owner, uploadID string) (
 // Keep a blob that is still referenced by either drive; only orphan uploads
 // belong to the pending intent's cancellation/expiry cleanup.
 func (s *Service) deleteUnreferencedCloudUpload(ctx context.Context, cloud storage.CloudStorageDriver, nodeID, uploadID string) error {
+	instanceID, err := storage.InstanceID(ctx, s.db)
+	if err != nil {
+		return err
+	}
+	blobKey := storage.BuildBlobKey(instanceID, nodeID, uploadID)
 	var referenced bool
-	err := s.db.QueryRowContext(ctx, `
+	err = s.db.QueryRowContext(ctx, `
 		SELECT EXISTS(
-			SELECT 1 FROM my_storage_items WHERE disk_key=? AND storage_node_id=?
+			SELECT 1 FROM my_storage_items WHERE (disk_key=? OR disk_key=?) AND storage_node_id=?
 			UNION ALL
-			SELECT 1 FROM organization_items WHERE disk_key=? AND storage_node_id=?
+			SELECT 1 FROM organization_items WHERE (disk_key=? OR disk_key=?) AND storage_node_id=?
 		)
-	`, uploadID, nodeID, uploadID, nodeID).Scan(&referenced)
+	`, blobKey, uploadID, nodeID, blobKey, uploadID, nodeID).Scan(&referenced)
 	if err != nil || referenced {
 		return err
 	}
-	return cloud.DeleteObject(ctx, nodeID, uploadID)
+	return cloud.DeleteObject(ctx, nodeID, blobKey)
 }
 func (s *Service) CancelUploadIntent(ctx context.Context, owner, uploadID string) (bool, error) {
 	cloudUploadMu.Lock()

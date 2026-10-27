@@ -55,6 +55,17 @@ func (h *Handler) CompleteSetup(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
+
+func (h *Handler) TestCloud(c echo.Context) error {
+	var cloud CloudConfig
+	if err := c.Bind(&cloud); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+	if err := h.service.TestCloud(c.Request().Context(), cloud); err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, map[string]string{"message": "cloud connection successful"})
+}
 func (h *Handler) GetStatus(c echo.Context) error {
 	resp, err := h.service.GetSetupStatus(c.Request().Context())
 	if err != nil {
@@ -88,4 +99,5 @@ func RegisterRoutes(e *echo.Echo, db *bun.DB, storage storage.StorageDriver, set
 	
 	setupGroup := e.Group("/api/v1/setup", setupGuard.Middleware())
 	setupGroup.POST("/complete", h.CompleteSetup)
+	setupGroup.POST("/test-cloud", h.TestCloud)
 }

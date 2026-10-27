@@ -47,6 +47,7 @@ func setupTestDB(t *testing.T) *bun.DB {
 			password_hash TEXT NOT NULL,
 			recovery_key_hash TEXT,
 			role TEXT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'ACTIVE',
 			token_version INTEGER NOT NULL DEFAULT 0,
 			quota_mode TEXT NOT NULL DEFAULT 'DEFAULT',
 			quota_bytes INTEGER NOT NULL DEFAULT -1,

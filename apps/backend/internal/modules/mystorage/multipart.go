@@ -185,7 +185,12 @@ func (s *Service) MultipartIntent(ctx context.Context, owner, filename string, s
 
 	s3multipart := NewS3MultipartClient(s.db)
 	sessionID := ulid.Make().String()
-	providerUpload, err := s3multipart.CreateMultipartUpload(ctx, placement.ID, sessionID)
+	instanceID, err := storage.InstanceID(ctx, s.db)
+	if err != nil {
+		return nil, fmt.Errorf("load storage instance ID: %w", err)
+	}
+	s3Key := storage.BuildBlobKey(instanceID, placement.ID, sessionID)
+	providerUpload, err := s3multipart.CreateMultipartUpload(ctx, placement.ID, s3Key)
 	if err != nil {
 		return nil, fmt.Errorf("create multipart upload: %w", err)
 	}
@@ -199,15 +204,15 @@ func (s *Service) MultipartIntent(ctx context.Context, owner, filename string, s
 	_, err = s.db.ExecContext(ctx, `
 		INSERT INTO multipart_uploads (id, scope, owner_id, storage_node_id, s3_key, s3_upload_id, filename, size_bytes, part_size_bytes, part_count, parent_id, unique_name, expires_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, sessionID, MultipartScopeMyStorage, owner, placement.ID, sessionID, providerUpload, filename, size, partSize, partCount, parentVal, uniqueName, expiresAt)
+	`, sessionID, MultipartScopeMyStorage, owner, placement.ID, s3Key, providerUpload, filename, size, partSize, partCount, parentVal, uniqueName, expiresAt)
 	if err != nil {
-		_ = s3multipart.AbortMultipartUpload(ctx, placement.ID, sessionID, providerUpload)
+		_ = s3multipart.AbortMultipartUpload(ctx, placement.ID, s3Key, providerUpload)
 		return nil, fmt.Errorf("record multipart session: %w", err)
 	}
 	parts := planMultipartSizes(size, partSize, partCount)
 	if err = InsertMultipartParts(ctx, s.db, sessionID, parts); err != nil {
 		_, _ = s.db.ExecContext(ctx, `DELETE FROM multipart_uploads WHERE id=?`, sessionID)
-		_ = s3multipart.AbortMultipartUpload(ctx, placement.ID, sessionID, providerUpload)
+		_ = s3multipart.AbortMultipartUpload(ctx, placement.ID, s3Key, providerUpload)
 		return nil, fmt.Errorf("record multipart parts: %w", err)
 	}
 

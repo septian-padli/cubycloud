@@ -187,7 +187,7 @@ func newMultipartHarness(t *testing.T, quotaBytes int64) (*Service, *bun.DB, *fa
 	if err := os.MkdirAll(filepath.Join(dataDir, "db"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("DATA_DIR_PATH", dataDir)
+ t.Setenv("STORAGE_MASTER_KEY", "multipart-storage-key")
 	fake := newFakeS3()
 	server := httptest.NewServer(fake.handler())
 	t.Cleanup(server.Close)
@@ -198,7 +198,10 @@ func newMultipartHarness(t *testing.T, quotaBytes int64) (*Service, *bun.DB, *fa
 	}
 	t.Cleanup(func() { db.Close() })
 
-	keyMaterial := []byte(dataDir)
+	keyMaterial, err := storage.InitMasterKey(dataDir, "", "", db)
+	if err != nil {
+		t.Fatalf("init master key: %v", err)
+	}
 	access, err := storage.EncryptCredential([]byte("access"), keyMaterial)
 	if err != nil {
 		t.Fatal(err)

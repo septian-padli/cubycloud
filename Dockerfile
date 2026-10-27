@@ -1,15 +1,15 @@
 # Stage 1: Build Frontend SPA
-FROM oven/bun:1-alpine AS frontend-builder
+FROM oven/bun:1.3.14-alpine AS frontend-builder
 WORKDIR /app/frontend
 
-COPY apps/frontend/package.json apps/frontend/bun.lock* ./
-RUN bun install --frozen-lockfile || bun install
+COPY apps/frontend/package.json apps/frontend/bun.lock ./
+RUN bun install --frozen-lockfile
 
 COPY apps/frontend ./
 RUN bun run build
 
 # Stage 2: Build Go Backend Binary
-FROM golang:alpine AS backend-builder
+FROM golang:1.25.14-alpine AS backend-builder
 WORKDIR /app/backend
 
 # Install build dependencies
@@ -26,7 +26,7 @@ COPY --from=frontend-builder /app/frontend/build ./web/dist
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /cubycloud ./cmd/server/main.go
 
 # Stage 3: Final Minimal Runtime Image (< 150MB target)
-FROM alpine:3.21
+FROM alpine:3.21.9
 WORKDIR /app
 
 RUN apk add --no-cache ca-certificates tzdata \

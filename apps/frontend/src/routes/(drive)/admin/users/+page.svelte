@@ -69,7 +69,8 @@
 						quotaBytes: u.quota_bytes,
 						usedGb: u.used_gb,
 						usedBytes: u.used_bytes,
-						createdAt: u.created_at
+						createdAt: u.created_at,
+						status: u.status ?? 'ACTIVE'
 					};
 				});
 			} else if (usersRes.error) {
@@ -86,37 +87,6 @@
 		void loadData();
 	});
 
-	async function onCreate(
-		payload: Omit<AdminUser, 'id' | 'usedGb' | 'role'> & { password?: string }
-	) {
-		let mode = 'DEFAULT';
-		if (payload.quotaMode === 'unlimited') {
-			mode = 'UNLIMITED';
-		} else if (payload.quotaMode === 'override_gb' || payload.quotaMode === 'CUSTOM') {
-			mode = 'CUSTOM';
-		}
-
-		const res = await adminAPI.createUser({
-			username: payload.username,
-			email: payload.email,
-			password: payload.password,
-			quota_mode: mode,
-			quota_gb: payload.quotaGb
-		});
-
-		if (res.error) {
-			toast.error(`${tx('Gagal membuat pengguna', 'Failed to create user')}: ${res.error}`);
-			return;
-		}
-
-		toast.success(
-			tx(
-				`Pengguna “${payload.username}” berhasil dibuat.`,
-				`User “${payload.username}” created successfully.`
-			)
-		);
-		await loadData();
-	}
 
 	function onEditQuota(user: AdminUser) {
 		if (String(user.role).toLowerCase() === 'super_admin') {
@@ -198,18 +168,12 @@
 
 	async function onConfirmResetPassword(user: AdminUser) {
 		const res = await adminAPI.resetUserPassword(user.id);
-		if (res.error) {
-			toast.error(`${tx('Gagal mereset kata sandi', 'Failed to reset password')}: ${res.error}`);
-			throw new Error(res.error);
+		if (res.error || !res.data) {
+			toast.error(`${tx('Gagal mereset kata sandi', 'Failed to reset password')}: ${res.error ?? ''}`);
+			throw new Error(res.error ?? 'Reset response missing');
 		}
-
-		toast.success(
-			tx(
-				`Kata sandi “${user.username}” berhasil direset ke 12345678.`,
-				`Password for “${user.username}” was reset to 12345678 successfully.`
-			)
-		);
 		resetUserTarget = null;
+		return res.data;
 	}
 </script>
 
@@ -247,7 +211,7 @@
 	/>
 </div>
 
-<CreateUserDialog bind:open={createOpen} {defaultQuota} {onCreate} />
+	<CreateUserDialog bind:open={createOpen} {defaultQuota} onCreated={() => loadData()} />
 <EditQuotaDialog bind:open={editOpen} user={editUser} {defaultQuota} onSave={onSaveQuota} />
 <DeleteUserDialog bind:open={deleteOpen} user={deleteUserTarget} onConfirm={onConfirmDelete} />
-<ResetPasswordDialog bind:open={resetOpen} user={resetUserTarget} onConfirm={onConfirmResetPassword} />
+	<ResetPasswordDialog bind:open={resetOpen} user={resetUserTarget} onConfirm={onConfirmResetPassword} />

@@ -55,7 +55,7 @@ Never use selective reading to skip a relevant permission, quota, data-integrity
 
 ## 4. Tooling and code exploration
 
-- **Codegraph:** Use for initial structural discovery when configured and available. Prefer targeted `codegraph orient --root . --budget small`, `explore`, `search`, `deps/rdeps`, or `impact`; then inspect actual source/tests. Run `codegraph sync .` after branch changes if needed, and `doctor` when stale. Do not repeatedly index or orient for every known file. If unavailable, continue with targeted code navigation and report the limitation; never pretend it was used.
+- **Codegraph:** Use MCP `orient` when available. CLI: use supported commands such as `codegraph explore "<question>"`; check `codegraph --help` because CLI commands vary. Run one-shot commands as commands, not services. If unavailable, navigate code directly and report it.
 - **RTK:** Use repository-configured token-efficient shell wrappers where available (e.g. `rtk git diff`, `rtk go test ./...`). Cursor shell hooks are **not assumed to run in OMP**. Run a tool directly if RTK is absent or suppresses diagnostic information; keep output focused.
 - **Ponytail:** Prefer smallest **correct** change, existing abstractions, standard libraries, and installed dependencies. Avoid speculative abstraction or broad refactors. Preserve testing, security, and operational correctness.
 - See `.cursor/rules/` and `RTK.md` only for the active integration's detailed setup or troubleshooting, not as mandatory reading for every task.

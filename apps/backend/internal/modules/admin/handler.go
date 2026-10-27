@@ -28,6 +28,9 @@ func NewHandler(db *bun.DB, storage storage.StorageDriver, dataDirPath, dbPath s
 	}
 }
 
+func (h *Handler) SetConcurrencyController(ctl ConcurrencyController) {
+	h.service.SetConcurrencyController(ctl)
+}
 // GetSettings returns current system settings
 func (h *Handler) GetSettings(c echo.Context) error {
 	resp, err := h.service.GetSystemSettings(c.Request().Context())
@@ -349,27 +352,37 @@ func (h *Handler) DeleteUser(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"message": "user deleted successfully"})
 }
 
-// ResetUserPassword resets a user's password to default 12345678
+// ResetUserPassword issues a one-time password setup link.
 func (h *Handler) ResetUserPassword(c echo.Context) error {
+	targetID := c.Param("id")
+	if targetID == "" { return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": "user ID required"}) }
+	actorID, _ := c.Get("user_id").(string)
+	token, expiresAt, err := h.service.ResetUserPassword(c.Request().Context(), actorID, targetID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") { return echo.NewHTTPError(http.StatusNotFound, map[string]string{"error": "user not found"}) }
+		if strings.Contains(err.Error(), "cannot reset") || strings.Contains(err.Error(), "required") { return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": err.Error()}) }
+		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{"error": "failed to reset user password"})
+	}
+	return c.JSON(http.StatusOK, map[string]any{"reset_token": token, "reset_url": "/set-password#token=" + token, "expires_at": expiresAt, "message": "password reset link generated"})
+}
+
+// RegenerateInvitation issues a fresh setup link for a pending user.
+func (h *Handler) RegenerateInvitation(c echo.Context) error {
 	targetID := c.Param("id")
 	if targetID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": "user ID required"})
 	}
-
-	actorID, _ := c.Get("user_id").(string)
-	if err := h.service.ResetUserPassword(c.Request().Context(), actorID, targetID); err != nil {
+	token, expiresAt, err := h.service.RegenerateInvitation(c.Request().Context(), targetID)
+	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			return echo.NewHTTPError(http.StatusNotFound, map[string]string{"error": "user not found"})
 		}
-		if strings.Contains(err.Error(), "cannot reset") || strings.Contains(err.Error(), "required") {
+		if strings.Contains(err.Error(), "required") || strings.Contains(err.Error(), "not pending") {
 			return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": err.Error()})
 		}
-		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{"error": "failed to reset user password"})
+		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{"error": "failed to regenerate invitation"})
 	}
-
-	return c.JSON(http.StatusOK, map[string]string{
-		"message": "password reset to default successfully",
-	})
+	return c.JSON(http.StatusOK, map[string]any{"invitation_token": token, "invitation_url": "/set-password#token=" + token, "expires_at": expiresAt})
 }
 
 // GetStorageStats returns system-wide storage stats for super admin
@@ -408,12 +421,9 @@ func (h *Handler) GetTopStorageUsers(c echo.Context) error {
 }
 
 // RegisterRoutes registers all admin endpoints with JWT auth + Super Admin guard
-func RegisterRoutes(e *echo.Echo, db *bun.DB, storage storage.StorageDriver, dataDirPath, dbPath string, jwtAuth, superAdminGuard echo.MiddlewareFunc, queue ...*jobs.Queue) {
+func RegisterRoutes(e *echo.Echo, db *bun.DB, storage storage.StorageDriver, dataDirPath, dbPath string, jwtAuth, superAdminGuard echo.MiddlewareFunc, queue ...*jobs.Queue) *Handler {
 	handler := NewHandler(db, storage, dataDirPath, dbPath, queue...)
-	// Admin group with JWT auth + Super Admin guard
 	admin := e.Group("/api/v1/admin", jwtAuth, superAdminGuard)
-
-	// Settings
 	admin.GET("/settings", handler.GetSettings)
 	admin.PUT("/settings", handler.UpdateSettings)
 
@@ -430,6 +440,7 @@ func RegisterRoutes(e *echo.Echo, db *bun.DB, storage storage.StorageDriver, dat
 	// Users management
 	admin.GET("/users", handler.GetUsers)
 	admin.POST("/users", handler.CreateUser)
+	admin.POST("/users/:id/invitation", handler.RegenerateInvitation)
 	admin.POST("/users/:id/reset-password", handler.ResetUserPassword)
 	admin.PUT("/users/:id/quota", handler.UpdateUserQuota)
 	admin.DELETE("/users/:id", handler.DeleteUser)
@@ -440,4 +451,5 @@ func RegisterRoutes(e *echo.Echo, db *bun.DB, storage storage.StorageDriver, dat
 	admin.GET("/storage/stats", handler.GetStorageStats)
  admin.GET("/audit-logs", handler.GetAuditLogs)
 	admin.GET("/storage/top-users", handler.GetTopStorageUsers)
+	return handler
 }

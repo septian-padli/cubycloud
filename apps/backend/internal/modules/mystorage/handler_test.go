@@ -340,7 +340,7 @@ func TestUploadIntentOutlivesPresignedURLAndExpires(t *testing.T) {
 		t.Fatal(err)
 	}
 	renewed, err := service.RenewUploadIntentURL(context.Background(), "owner", intent.UploadID)
-	if err != nil || renewed.UploadID != intent.UploadID || renewed.Method != "PUT" || renewed.URL != "https://upload.example.test/"+intent.UploadID {
+	if err != nil || renewed.UploadID != intent.UploadID || renewed.Method != "PUT" || !strings.Contains(renewed.URL, intent.UploadID) {
 		t.Fatalf("renewed intent = %#v, %v", renewed, err)
 	}
 	if _, err = service.RenewUploadIntentURL(context.Background(), "other", intent.UploadID); !errors.Is(err, errNotFound) {

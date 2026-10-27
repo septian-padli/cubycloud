@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { CloudForm, CloudProvider } from '$lib/types/setup.js';
 	import { PROVIDER_OPTIONS } from '$lib/types/setup.js';
+	import { testCloudStorage } from '$lib/api/setup.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import * as Alert from '$lib/components/ui/alert/index.js';
 	import * as RadioGroup from '$lib/components/ui/radio-group/index.js';
@@ -13,7 +14,6 @@
 	import { cn } from '$lib/utils.js';
 	import { locale } from '$lib/locale.svelte.js';
 	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
-
 	let {
 		cloud = $bindable(),
 		noLocalNodes = false
@@ -24,7 +24,7 @@
 
 	type TestState = 'idle' | 'loading' | 'success' | 'error';
 	let testState = $state<TestState>('idle');
-
+	let testErrorMessage = $state<string>('');
 	const providerMeta = $derived(
 		PROVIDER_OPTIONS.find((p) => p.value === cloud.provider) ?? PROVIDER_OPTIONS[0]
 	);
@@ -47,15 +47,42 @@
 	async function testConnection() {
 		if (!formReady || testState === 'loading') return;
 		testState = 'loading';
-		await new Promise((resolve) => setTimeout(resolve, 1000));
-		// Mock UI — always succeed when fields are filled
-		testState = 'success';
+		testErrorMessage = '';
+		const capGB =
+			typeof cloud.capacityCapGb === 'number'
+				? cloud.capacityCapGb
+				: typeof cloud.capacityCapGb === 'string' && cloud.capacityCapGb.trim() !== ''
+					? Number(cloud.capacityCapGb)
+					: 0;
+		try {
+			await testCloudStorage({
+				enabled: cloud.enabled,
+				provider: cloud.provider,
+				node_name: cloud.nodeName.trim(),
+				endpoint: cloud.endpoint.trim(),
+				bucket: cloud.bucket.trim(),
+				region: cloud.region.trim(),
+				access_key: cloud.accessKey.trim(),
+				secret_key: cloud.secretKey.trim(),
+				capacity_cap_gb: Number.isFinite(capGB) ? capGB : 0
+			});
+			testState = 'success';
+		} catch (err: unknown) {
+			testState = 'error';
+			testErrorMessage =
+				err instanceof Error
+					? err.message
+					: tx(
+							'Tidak dapat menjangkau endpoint. Periksa konfigurasi dan coba lagi.',
+							'Cannot reach endpoint. Check your configuration and try again.'
+						);
+		}
 	}
-
 	function onProviderChange(value: string | undefined) {
 		if (!value) return;
 		cloud.provider = value as CloudProvider;
 		testState = 'idle';
+		testErrorMessage = '';
 	}
 </script>
 
@@ -89,6 +116,7 @@
 				onCheckedChange={(v) => {
 					cloud.enabled = v;
 					testState = 'idle';
+					testErrorMessage = '';
 				}}
 			/>
 		</div>
@@ -264,13 +292,13 @@
 				</div>
 
 				{#if testState === 'success'}
-					<Alert.Root variant="default">
-						<CheckCircle2 class="size-4 stroke-2" />
-						<Alert.Title>{tx('Koneksi berhasil', 'Connection successful')}</Alert.Title>
-						<Alert.Description>
+					<Alert.Root variant="default" class="border-emerald-500/20 bg-emerald-500/5">
+						<CheckCircle2 class="size-4 stroke-2 text-emerald-600 dark:text-emerald-400" />
+						<Alert.Title class="text-emerald-800 dark:text-emerald-200">{tx('Koneksi berhasil', 'Connection successful')}</Alert.Title>
+						<Alert.Description class="text-emerald-700 dark:text-emerald-300">
 							{tx(
-								'Mock: kredensial diterima. Backend belum dihubungkan.',
-								'Mock: credentials accepted. The backend is not connected yet.'
+								'Kredensial dan akses bucket S3 terverifikasi.',
+								'S3 credentials and bucket access verified.'
 							)}
 						</Alert.Description>
 					</Alert.Root>
@@ -279,10 +307,11 @@
 						<XCircle class="size-4 stroke-2" />
 						<Alert.Title>{tx('Koneksi gagal', 'Connection failed')}</Alert.Title>
 						<Alert.Description>
-							{tx(
-								'Tidak dapat menjangkau endpoint. Periksa kredensial dan coba lagi.',
-								'Could not reach the endpoint. Check your credentials and try again.'
-							)}
+							{testErrorMessage ||
+								tx(
+									'Tidak dapat menjangkau endpoint. Periksa kredensial dan coba lagi.',
+									'Could not reach the endpoint. Check your credentials and try again.'
+								)}
 						</Alert.Description>
 					</Alert.Root>
 				{/if}

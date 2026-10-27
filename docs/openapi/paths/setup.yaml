@@ -118,4 +118,45 @@
         content:
           application/json:
             schema:
+              error: setup failed
+/api/v1/setup/test-cloud:
+  post:
+    operationId: testSetupCloud
+    summary: Test cloud storage connection before completing setup
+    description: Validates S3-compatible cloud storage connectivity and credentials without storing them. Available only before setup has completed.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SetupCloudConfig'
+    responses:
+      '200':
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+              required:
+                - message
+            example:
+              message: cloud connection successful
+      '400':
+        description: Cloud configuration missing required fields or connection validation failed.
+        content:
+          application/json:
+            schema:
               $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error: cloud connection validation failed
+      '403':
+        description: Setup has already completed.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error: setup already completed

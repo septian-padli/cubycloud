@@ -23,6 +23,25 @@ func NewHandler(service *Service, jwtSecret string) *Handler {
 	}
 }
 
+func (h *Handler) ValidateSetupPassword(c echo.Context) error {
+	result, err := h.service.ValidateSetupPassword(c.Request().Context(), c.QueryParam("token"))
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, result)
+}
+
+func (h *Handler) SetupPassword(c echo.Context) error {
+	var req SetupPasswordRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+	}
+	if err := h.service.SetupPassword(c.Request().Context(), &req); err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, map[string]string{"message": "password setup successful"})
+}
+
 // Login handles POST /api/v1/auth/login
 func (h *Handler) Login(c echo.Context) error {
 	var req LoginRequest
@@ -273,9 +292,11 @@ func RegisterRoutes(e *echo.Echo, db *bun.DB, jwtSecret string, jwtAuth echo.Mid
 	handler := NewHandler(service, jwtSecret)
 
 	authGroup := e.Group("/api/v1/auth")
-	authGroup.POST("/login", handler.Login, middleware.RateLimiter(10, time.Minute))
+	authGroup.POST("/login", handler.Login, middleware.RateLimiterScoped("auth_login", 10, time.Minute))
 	authGroup.POST("/logout", handler.Logout)
 	authGroup.POST("/reset-password", handler.ResetPassword)
+	authGroup.GET("/setup-password/validate", handler.ValidateSetupPassword, middleware.RateLimiterScoped("auth_setup_password_validate", 10, time.Minute))
+	authGroup.POST("/setup-password", handler.SetupPassword, middleware.RateLimiterScoped("auth_setup_password", 10, time.Minute))
 	authGroup.GET("/me", handler.Me, jwtAuth)
 	authGroup.PATCH("/profile", handler.UpdateProfile, jwtAuth)
 	authGroup.POST("/change-password", handler.ChangePassword, jwtAuth)

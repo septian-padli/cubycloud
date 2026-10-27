@@ -369,3 +369,95 @@ func TestJobHandler_GetJobAPI(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 	}
 }
+
+func TestWorkerPool_DynamicConcurrencyAdjustment(t *testing.T) {
+	db, dataDir, _ := setupTestDB(t)
+	defer os.RemoveAll(dataDir)
+	defer db.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	hub := sse.NewHub()
+	queue := NewQueue(db)
+	pool := NewWorkerPool(db, queue, hub)
+	require.Equal(t, 2, pool.Concurrency())
+
+	releaseJob := make(chan struct{})
+	started := make(chan string, 10)
+
+	pool.RegisterHandler("blockable_job", func(ctx context.Context, job *database.Job, updateProgress func(int)) (any, error) {
+		started <- job.ID
+		select {
+		case <-releaseJob:
+		case <-ctx.Done():
+		}
+		return map[string]string{"status": "ok"}, nil
+	})
+
+	pool.Start(ctx)
+	defer pool.Stop()
+
+	// 1. Concurrency starts at 2: Enqueue 6 jobs
+	for i := range 6 {
+		_, err := queue.Enqueue(ctx, "blockable_job", "user-1", map[string]int{"idx": i})
+		require.NoError(t, err)
+	}
+	// Only 2 jobs should start
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for job 1")
+	}
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for job 2")
+	}
+	assert.Equal(t, 2, pool.ActiveJobs())
+
+	// Ensure no 3rd job starts yet
+	select {
+	case id := <-started:
+		t.Fatalf("unexpected 3rd job started: %s", id)
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	// 2. Dynamically increase concurrency: 2 -> 4 (no restart)
+	pool.SetConcurrency(4)
+	assert.Equal(t, 4, pool.Concurrency())
+
+	// 2 more jobs should now be picked up
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for job 3 after scaling up")
+	}
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for job 4 after scaling up")
+	}
+	assert.Equal(t, 4, pool.ActiveJobs())
+
+	// 3. Dynamically decrease concurrency: 4 -> 1
+	// The 4 currently active jobs MUST NOT be cancelled and must complete gracefully.
+	pool.SetConcurrency(1)
+	assert.Equal(t, 1, pool.Concurrency())
+	assert.Equal(t, 4, pool.ActiveJobs())
+
+	// Release all running jobs
+	close(releaseJob)
+
+	// Wait for remaining queued jobs (jobs 5 and 6) to run with new concurrency limit 1
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for job 5")
+	}
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for job 6")
+	}
+}

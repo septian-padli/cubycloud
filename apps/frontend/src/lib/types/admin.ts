@@ -15,6 +15,8 @@ export type DefaultQuotaMode = 'limited' | 'unlimited';
 
 export type AuditRetentionDays = 7 | 14 | 30 | 60 | 90;
 
+export type AdminUserStatus = 'ACTIVE' | 'PENDING_ACTIVATION';
+
 export interface AdminUser {
 	id: string;
 	username: string;
@@ -28,6 +30,7 @@ export interface AdminUser {
 	quotaBytes?: number;
 	usedBytes?: number;
 	createdAt?: string;
+	status?: AdminUserStatus;
 }
 
 export interface DefaultQuotaPolicy {

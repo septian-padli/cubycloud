@@ -42,3 +42,16 @@ type ChangePasswordRequest struct {
 	NewPassword     string `json:"new_password"`
 	ConfirmPassword string `json:"confirm_password"`
 }
+
+type SetupPasswordRequest struct {
+	Token           string `json:"token"`
+	Password        string `json:"password"`
+	ConfirmPassword string `json:"confirm_password"`
+}
+
+type SetupPasswordValidation struct {
+	Valid     bool   `json:"valid"`
+	TokenType string `json:"token_type"`
+	Username  string `json:"username"`
+	Email     string `json:"email"`
+}

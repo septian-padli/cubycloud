@@ -120,18 +120,36 @@ DetachStorageNodeResponse:
     safe_to_disconnect: {type: boolean, example: false}
 AdminUser:
   type: object
-  required: [id, username, email, role, quota_mode, quota_bytes, used_bytes, used_gb, created_at]
+  required: [id, username, email, role, status, quota_mode, quota_bytes, used_bytes, used_gb, created_at]
   properties:
     id: {type: string, example: user-123}
     username: {type: string, example: alice}
     email: {type: string, format: email, example: alice@example.com}
     role: {type: string, example: REGULAR}
+    status: {type: string, enum: [ACTIVE, PENDING_ACTIVATION], example: ACTIVE}
     quota_mode: {type: string, example: DEFAULT}
     quota_bytes: {type: integer, format: int64, description: Quota limit in bytes; -1 denotes unlimited., example: 53687091200}
     quota_gb: {type: number, format: double, example: 50}
     used_bytes: {type: integer, format: int64, example: 1073741824}
     used_gb: {type: number, format: double, example: 1}
     created_at: {type: string, format: date-time, example: '2026-01-15T10:30:00Z'}
+    invitation_token: {type: string, example: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+    invitation_url: {type: string, example: /set-password#token=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+AdminUserInvitationResponse:
+  type: object
+  required: [invitation_token, invitation_url, expires_at]
+  properties:
+    invitation_token: {type: string, example: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+    invitation_url: {type: string, example: /set-password#token=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+    expires_at: {type: string, format: date-time, example: '2026-01-16T10:30:00Z'}
+AdminUserResetPasswordResponse:
+  type: object
+  required: [reset_token, reset_url, expires_at, message]
+  properties:
+    reset_token: {type: string, example: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+    reset_url: {type: string, example: /set-password#token=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+    expires_at: {type: string, format: date-time, example: '2026-01-15T11:00:00Z'}
+    message: {type: string, example: password reset link generated}
 AdminUsersList:
   type: object
   required: [users]
@@ -145,11 +163,6 @@ CreateAdminUserRequest:
   properties:
     username: {type: string, example: alice}
     email: {type: string, format: email, example: alice@example.com}
-    password:
-      type: string
-      format: password
-      description: Optional; when omitted the backend applies its default password.
-      example: secure-password
     quota_mode: {type: string, example: DEFAULT}
     quota_gb: {type: number, format: double, example: 50}
 UpdateAdminUserQuotaRequest:

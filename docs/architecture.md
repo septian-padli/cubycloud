@@ -56,12 +56,16 @@ Application settings such as default quota and audit retention are managed throu
 
 ## Storage and capacity
 
-The storage driver supports local filesystem nodes and configured S3-compatible nodes. S3/R2 credentials are encrypted before they are persisted. Browser-to-S3 transfers use presigned requests where supported; local uploads use the backend and resumable TUS protocol.
+The storage driver supports local filesystem nodes and configured S3-compatible nodes. S3/R2 credentials are encrypted using an authenticated, versioned AES-256-GCM envelope with an isolated 256-bit master key (`$DATA_DIR_PATH/secrets/master.key` or `CUBYCLOUD_MASTER_KEY`). Browser-to-S3 transfers use presigned requests where supported; local uploads use the backend and resumable TUS protocol.
+
+All new storage blobs follow a strict hierarchical namespace:
+`cubycloud/{instance_id}/{node_id}/blobs/{blob_id}`
+where `instance_id` is a persistent random installation identifier and `node_id` is the target storage node.
 
 Physical node capacity is enforced independently from per-user My Storage quota. Organization data is not charged to an individual user's quota, but it still consumes shared node capacity. Capacity checks include active upload reservations to prevent concurrent uploads from over-allocating a node.
 
 For browser-to-S3 uploads, a presigned PUT URL lasts 15 minutes, while its pending upload intent lasts 24 hours. Finalization verifies that S3 reports exactly the requested object size before recording metadata. A failed metadata commit preserves the object and intent for retry; cancellation or expiry deletes a cloud object only when no My Storage or Organization item still references it.
-On server startup, an orphan-file reconciliation audit scans registered local filesystem and S3 nodes, removing unreferenced storage blobs while safeguarding active files, trash items, unexpired upload intents, and recent writes within a safety grace period.
+On server startup, an orphan-file reconciliation audit scans only the owned namespace (`cubycloud/{instance_id}/{node_id}/blobs/`) across registered local filesystem and S3 nodes. It safeguards active files, trash items, unexpired upload intents, multipart sessions, and ongoing background jobs. Cleanup candidates are persisted across restarts, requiring a 72-hour grace period and at least two separate validated observations before deletion. Orphan scanning defaults to a non-destructive dry-run audit mode (`CUBYCLOUD_STORAGE_CLEANUP_DRY_RUN=true`).
 Batch ZIP downloads use the existing authenticated POST endpoint. The browser submits selected IDs as form fields and handles the ZIP attachment as a native download, without collecting the response in JavaScript memory. Native downloads do not expose byte progress or reliable completion events to the page; the UI reports that the download has started, not that it has finished.
 
 ## Background job queue, Compress to ZIP, and Node Detach Migration
@@ -86,13 +90,11 @@ Asynchronous server-side operations are coordinated using a SQLite-backed transa
 - User passwords are bcrypt-hashed.
 - Authenticated sessions are carried in HTTP-only `SameSite=Lax` cookies with `Secure` enforced when `COOKIE_SECURE=true`, direct TLS is active, or reverse proxies forward `X-Forwarded-Proto: https`.
 - Login and public share-unlock endpoints have an in-memory rate limiter; its counters reset when the server restarts.
-- Storage credentials are encrypted; this does not imply that uploaded file contents are end-to-end encrypted.
+- Storage credentials are encrypted using AES-256-GCM with a fresh random nonce and authenticated envelope, backed by an isolated master key (auto-generated 0600 file or `CUBYCLOUD_MASTER_KEY` override); this does not imply that uploaded file contents are end-to-end encrypted.
 - In production mode (`ENV=production` or `APP_ENV=production`), the server enforces an explicit `JWT_SECRET`, `COOKIE_SECURE=true`, and explicit `ALLOWED_ORIGINS` (rejecting wildcards `*`), refusing startup if any are missing.
 
 See [SECURITY.md](../SECURITY.md) for disclosure guidance. No CPU, memory, latency, or image-size benchmark is published in this document.
 
 ## Build and deployment status
 
-The Dockerfile defines a multi-stage frontend/backend build and declares `/app/data` as a volume.
-
-**Current limitation:** `apps/backend/go.mod` requires Go 1.25.0, but the Dockerfile's backend build stage uses `golang:1.24-alpine`. A Docker build currently fails at `go mod download` because the builder's toolchain is too old. The Dockerfile is intentionally unchanged by this documentation task; do not treat its image as a verified installation path until the mismatch is fixed.
+The Dockerfile defines a multi-stage frontend/backend build with pinned toolchains (`oven/bun:1.3.14-alpine`, `golang:1.25.14-alpine`, and `alpine:3.21.9`) and declares `/app/data` as a volume.

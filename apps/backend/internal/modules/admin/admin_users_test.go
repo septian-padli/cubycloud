@@ -8,9 +8,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
-	"golang.org/x/crypto/bcrypt"
 )
 
 func TestAdminUsers_CreateAndUpdateQuota(t *testing.T) {
@@ -31,7 +31,6 @@ func TestAdminUsers_CreateAndUpdateQuota(t *testing.T) {
 	userDefault, err := handler.service.CreateUser(ctx, &CreateUserRequest{
 		Username:  "siti",
 		Email:     "siti@example.com",
-		Password:  "password123",
 		QuotaMode: "DEFAULT",
 	})
 	if err != nil {
@@ -53,7 +52,6 @@ func TestAdminUsers_CreateAndUpdateQuota(t *testing.T) {
 	userCustom, err := handler.service.CreateUser(ctx, &CreateUserRequest{
 		Username:  "budi",
 		Email:     "budi@example.com",
-		Password:  "password123",
 		QuotaMode: "CUSTOM",
 		QuotaGB:   &onePointFive,
 	})
@@ -73,7 +71,6 @@ func TestAdminUsers_CreateAndUpdateQuota(t *testing.T) {
 	userZero, err := handler.service.CreateUser(ctx, &CreateUserRequest{
 		Username:  "zero",
 		Email:     "zero@example.com",
-		Password:  "password123",
 		QuotaMode: "CUSTOM",
 		QuotaGB:   &zero,
 	})
@@ -88,7 +85,6 @@ func TestAdminUsers_CreateAndUpdateQuota(t *testing.T) {
 	userUnlimited, err := handler.service.CreateUser(ctx, &CreateUserRequest{
 		Username:  "unlimited_user",
 		Email:     "unlimited@example.com",
-		Password:  "password123",
 		QuotaMode: "UNLIMITED",
 	})
 	if err != nil {
@@ -192,7 +188,6 @@ func TestAdminUsers_ValidationAndHTTPHandlers(t *testing.T) {
 	body1, _ := json.Marshal(CreateUserRequest{
 		Username: "dupuser",
 		Email:    "dup1@example.com",
-		Password: "password123",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/users", bytes.NewReader(body1))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -209,7 +204,6 @@ func TestAdminUsers_ValidationAndHTTPHandlers(t *testing.T) {
 	bodyDup, _ := json.Marshal(CreateUserRequest{
 		Username: "DUPUSER",
 		Email:    "dup2@example.com",
-		Password: "password123",
 	})
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/admin/users", bytes.NewReader(bodyDup))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -306,7 +300,6 @@ func TestAdminUsers_DeleteUser_CompleteFlow(t *testing.T) {
 	user, err := handler.service.CreateUser(ctx, &CreateUserRequest{
 		Username: "charlie",
 		Email:    "charlie@company.com",
-		Password: "password123",
 	})
 	if err != nil {
 		t.Fatalf("create user: %v", err)
@@ -408,110 +401,25 @@ func TestAdminUsers_DeleteUser_CompleteFlow(t *testing.T) {
 	}
 }
 
-func TestAdminUsers_DefaultPasswordAndResetPassword(t *testing.T) {
+func TestAdminUsers_ResetPasswordIssuesTokenAndDisablesPassword(t *testing.T) {
 	db, handler, _ := setupTestAdmin(t)
 	defer db.Close()
 	ctx := context.Background()
-	e := echo.New()
-
-	// 1. Create user without password -> defaults to 12345678
-	created, err := handler.service.CreateUser(ctx, &CreateUserRequest{
-		Username:  "default_pass_user",
-		Email:     "default@example.com",
-		QuotaMode: "DEFAULT",
-	})
-	if err != nil {
-		t.Fatalf("create user without password: %v", err)
-	}
-
-	var hash string
-	var tokenVersion int
-	err = db.QueryRowContext(ctx, `SELECT password_hash, token_version FROM users WHERE id = ?`, created.ID).Scan(&hash, &tokenVersion)
-	if err != nil {
-		t.Fatalf("query user: %v", err)
-	}
-	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte("12345678")); err != nil {
-		t.Fatalf("expected password hash to match 12345678, got err: %v", err)
-	}
-
-	// 2. Change password to another string to verify reset actually changes it
-	customHash, _ := bcrypt.GenerateFromPassword([]byte("custompassword999"), 10)
-	_, err = db.ExecContext(ctx, `UPDATE users SET password_hash = ? WHERE id = ?`, string(customHash), created.ID)
-	if err != nil {
-		t.Fatalf("update password: %v", err)
-	}
-
-	// 3. Reset own password should fail
-	err = handler.service.ResetUserPassword(ctx, "super-admin-id", "super-admin-id")
-	if err == nil || !strings.Contains(err.Error(), "cannot reset") {
-		t.Fatalf("expected cannot reset own password error, got %v", err)
-	}
-
-	// 4. Reset non-existent user should fail
-	err = handler.service.ResetUserPassword(ctx, "super-admin-id", "non-existent-user")
-	if err == nil || !strings.Contains(err.Error(), "user not found") {
-		t.Fatalf("expected user not found error, got %v", err)
-	}
-
-	// 5. Reset via HTTP handler - self reset returns 400
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/users/super-admin-id/reset-password", nil)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("super-admin-id")
-	c.Set("user_id", "super-admin-id")
-	err = handler.ResetUserPassword(c)
-	if err == nil {
-		t.Fatal("expected error on self reset, got nil")
-	}
-	if echoErr, ok := err.(*echo.HTTPError); ok {
-		if echoErr.Code != http.StatusBadRequest {
-			t.Errorf("status = %d, want 400", echoErr.Code)
-		}
-	}
-
-	// 6. Reset via HTTP handler - non existent returns 404
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/admin/users/missing-id/reset-password", nil)
-	rec = httptest.NewRecorder()
-	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues("missing-id")
-	c.Set("user_id", "super-admin-id")
-	err = handler.ResetUserPassword(c)
-	if err == nil {
-		t.Fatal("expected error on missing user reset, got nil")
-	}
-	if echoErr, ok := err.(*echo.HTTPError); ok {
-		if echoErr.Code != http.StatusNotFound {
-			t.Errorf("status = %d, want 404", echoErr.Code)
-		}
-	}
-
-	// 7. Reset via HTTP handler - valid other user returns 200 and resets to 12345678
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/admin/users/"+created.ID+"/reset-password", nil)
-	rec = httptest.NewRecorder()
-	c = e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(created.ID)
-	c.Set("user_id", "super-admin-id")
-	if err := handler.ResetUserPassword(c); err != nil {
-		t.Fatalf("ResetUserPassword handler failed: %v", err)
-	}
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", rec.Code)
-	}
-
-	// Verify database record has reset hash and incremented token_version
-	var newHash string
-	var newTokenVersion int
-	err = db.QueryRowContext(ctx, `SELECT password_hash, token_version FROM users WHERE id = ?`, created.ID).Scan(&newHash, &newTokenVersion)
-	if err != nil {
-		t.Fatalf("query user after reset: %v", err)
-	}
-	if err := bcrypt.CompareHashAndPassword([]byte(newHash), []byte("12345678")); err != nil {
-		t.Fatalf("expected reset password hash to match 12345678, got err: %v", err)
-	}
-	if newTokenVersion <= tokenVersion {
-		t.Errorf("token_version = %d, want > %d", newTokenVersion, tokenVersion)
-	}
+	created, err := handler.service.CreateUser(ctx, &CreateUserRequest{Username: "pending", Email: "pending@example.com", QuotaMode: "DEFAULT"})
+	if err != nil { t.Fatal(err) }
+	var passwordHash, status string
+	if err := db.QueryRowContext(ctx, `SELECT password_hash, status FROM users WHERE id = ?`, created.ID).Scan(&passwordHash, &status); err != nil { t.Fatal(err) }
+	if passwordHash != "" || status != "PENDING_ACTIVATION" { t.Fatalf("pending credentials/status = %q/%q", passwordHash, status) }
+	if created.InvitationToken == "" || created.InvitationURL != "/set-password#token="+created.InvitationToken { t.Fatal("missing invitation response") }
+	var version int
+	if err := db.QueryRowContext(ctx, `SELECT token_version FROM users WHERE id = ?`, created.ID).Scan(&version); err != nil { t.Fatal(err) }
+	token, expires, err := handler.service.ResetUserPassword(ctx, "super-admin-id", created.ID)
+	if err != nil { t.Fatal(err) }
+	if token == "" || expires.Sub(time.Now()) < 29*time.Minute { t.Fatalf("invalid reset expiration: %v", expires) }
+	if err := db.QueryRowContext(ctx, `SELECT password_hash, token_version FROM users WHERE id = ?`, created.ID).Scan(&passwordHash, &version); err != nil { t.Fatal(err) }
+	if passwordHash != "" || version != 1 { t.Fatalf("reset hash/version = %q/%d", passwordHash, version) }
+	var tokenType string
+	if err := db.QueryRowContext(ctx, `SELECT token_type FROM auth_tokens WHERE user_id = ? ORDER BY rowid DESC LIMIT 1`, created.ID).Scan(&tokenType); err != nil { t.Fatal(err) }
+	if tokenType != "PASSWORD_RESET" { t.Fatalf("token type = %q", tokenType) }
 }
+

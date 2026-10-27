@@ -375,3 +375,94 @@
           application/json:
             schema:
               $ref: '#/components/schemas/ErrorResponse'
+/api/v1/auth/setup-password/validate:
+  get:
+    operationId: validateSetupPasswordToken
+    summary: Validate invitation or password reset token
+    description: Validates an invitation or admin password reset token without consuming it.
+    security: []
+    parameters:
+      - name: token
+        in: query
+        required: true
+        description: Plaintext invitation or password reset token.
+        schema:
+          type: string
+        example: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    responses:
+      '200':
+        description: Token is valid and ready for password setup.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetupPasswordValidation'
+            example:
+              valid: true
+              token_type: INVITATION
+              username: alice
+              email: alice@example.com
+      '400':
+        description: Token is invalid, expired, or already consumed.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error: invalid, expired, or already consumed token
+      '429':
+        description: Rate limit exceeded.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '500':
+        description: Failed to validate token.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+/api/v1/auth/setup-password:
+  post:
+    operationId: setupPassword
+    summary: Set password using token
+    description: Consumes a single-use invitation or reset token atomically and sets a new password (min 15 characters, max 72 bytes).
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SetupPasswordRequest'
+          example:
+            token: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+            password: secure-password-passphrase-at-least-15-chars
+            confirm_password: secure-password-passphrase-at-least-15-chars
+    responses:
+      '200':
+        description: Password set successfully.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetupPasswordResponse'
+            example:
+              message: password set successfully
+      '400':
+        description: Token is invalid/expired/consumed or password does not meet policy requirements.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              error: password must be at least 15 characters
+      '429':
+        description: Rate limit exceeded.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '500':
+        description: Failed to set password.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'

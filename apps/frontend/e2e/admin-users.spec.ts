@@ -59,8 +59,13 @@ test('Admin Users manages user creation, quota modes (fractional, default, unlim
 	await quotaInput.fill('1.5');
 	// Submit creation
 	await page.getByRole('button', { name: /Buat Pengguna|Create user/ }).last().click();
+	await expect(page.getByRole('heading', { name: /Undangan pengguna siap|User invitation ready/ })).toBeVisible();
+	const inviteInput = page.getByLabel(/Tautan undangan|Invitation link/);
+	const inviteUrl = await inviteInput.inputValue();
+	const inviteToken = new URL(inviteUrl).hash.replace('#token=', '');
+	await page.keyboard.press('Escape');
+	await expect(page.getByRole('heading', { name: /Undangan pengguna siap|User invitation ready/ })).not.toBeVisible();
 	await expect(page.getByRole('heading', { name: /Buat Pengguna|Create user/ })).not.toBeVisible();
-
 	// 4. Verify user appears in table with 1.5 GiB
 	const userRow = page.locator('tr').filter({ hasText: newUsername });
 	await expect(userRow).toBeVisible();
@@ -94,8 +99,17 @@ test('Admin Users manages user creation, quota modes (fractional, default, unlim
 	// 7. Upload a file as tester_quota in a separate request context so admin cookie is preserved
 	const baseURL = new URL(page.url()).origin;
 	const userApi = await request.newContext({ baseURL });
+	// Complete password setup via invitation token first
+	const setupRes = await userApi.post('/api/v1/auth/setup-password', {
+		data: {
+			token: inviteToken,
+			password: 'ValidPassword12345!',
+			confirm_password: 'ValidPassword12345!'
+		}
+	});
+	expect(setupRes.ok()).toBeTruthy();
 	const userLogin = await userApi.post('/api/v1/auth/login', {
-		data: { identifier: newUsername, password: '12345678' }
+		data: { identifier: newUsername, password: 'ValidPassword12345!' }
 	});
 	expect(userLogin.ok()).toBeTruthy();
 	const uploadRes = await userApi.post('/api/v1/drive/my-storage/upload?filename=dummy.bin', {
@@ -181,7 +195,7 @@ test('Admin Users manages user creation, quota modes (fractional, default, unlim
 	// Verify deleted user cannot log in
 	const deletedLoginContext = await request.newContext({ baseURL });
 	const deletedLoginRes = await deletedLoginContext.post('/api/v1/auth/login', {
-		data: { identifier: newUsername, password: '12345678' }
+		data: { identifier: newUsername, password: 'ValidPassword12345!' }
 	});
 	expect(deletedLoginRes.status()).toBe(401);
 	await deletedLoginContext.dispose();
@@ -211,8 +225,13 @@ test('Delete User enforces exact email typing, blocks paste, purges personal sto
 	await page.getByLabel(/Nama pengguna|Username/).fill('alice_del');
 	await page.getByLabel('Email').fill('alice_del@example.test');
 	await page.getByRole('button', { name: /Buat Pengguna|Create user/ }).last().click();
+	await expect(page.getByRole('heading', { name: /Undangan pengguna siap|User invitation ready/ })).toBeVisible();
+	const aliceInviteInput = page.getByLabel(/Tautan undangan|Invitation link/);
+	const aliceInviteUrl = await aliceInviteInput.inputValue();
+	const aliceToken = new URL(aliceInviteUrl).hash.replace('#token=', '');
+	await page.keyboard.press('Escape');
+	await expect(page.getByRole('heading', { name: /Undangan pengguna siap|User invitation ready/ })).not.toBeVisible();
 	await expect(page.getByRole('heading', { name: /Buat Pengguna|Create user/ })).not.toBeVisible();
-
 	const aliceRow = page.locator('tr').filter({ hasText: 'alice_del' });
 	await expect(aliceRow).toBeVisible();
 
@@ -221,8 +240,16 @@ test('Delete User enforces exact email typing, blocks paste, purges personal sto
 	// - 1 trashed personal file
 	// - 1 organization shared file
 	const aliceApi = await request.newContext({ baseURL });
+	const aliceSetup = await aliceApi.post('/api/v1/auth/setup-password', {
+		data: {
+			token: aliceToken,
+			password: 'AliceSecurePassword123!',
+			confirm_password: 'AliceSecurePassword123!'
+		}
+	});
+	expect(aliceSetup.ok()).toBeTruthy();
 	const aliceLogin = await aliceApi.post('/api/v1/auth/login', {
-		data: { identifier: 'alice_del', password: '12345678' }
+		data: { identifier: 'alice_del', password: 'AliceSecurePassword123!' }
 	});
 	expect(aliceLogin.ok()).toBeTruthy();
 
@@ -307,7 +334,7 @@ test('Delete User enforces exact email typing, blocks paste, purges personal sto
 	// 8. Verify deleted user cannot log in
 	const verifyContext = await request.newContext({ baseURL });
 	const reLogin = await verifyContext.post('/api/v1/auth/login', {
-		data: { identifier: 'alice_del', password: '12345678' }
+		data: { identifier: 'alice_del', password: 'AliceSecurePassword123!' }
 	});
 	expect(reLogin.status()).toBe(401);
 
@@ -326,41 +353,44 @@ test('Delete User enforces exact email typing, blocks paste, purges personal sto
 	await verifyContext.dispose();
 });
 
-test('Superadmin can reset another user password with confirmation dialog to default 12345678', async ({ page }) => {
+test('Superadmin can reset another user password with single-use link and session revocation', async ({ page }) => {
 	await ensureAdminLoggedIn(page);
 	const baseURL = new URL(page.url()).origin;
 
-	// 1. Create a user via Admin UI without entering password
+	// 1. Create a user via Admin UI
 	await page.goto('/admin/users');
 	await page.getByRole('button', { name: /Buat Pengguna|Create User/ }).click();
 	const targetUsername = 'bob_reset';
 	await page.getByLabel(/Nama pengguna|Username/).fill(targetUsername);
 	await page.getByLabel('Email').fill('bob_reset@example.test');
-	await expect(page.getByText('12345678', { exact: true })).toBeVisible();
 	await page.getByRole('button', { name: /Buat Pengguna|Create user/ }).last().click();
-	await expect(page.getByRole('heading', { name: /Buat Pengguna|Create user/ })).not.toBeVisible();
+	await expect(page.getByRole('heading', { name: /Undangan pengguna siap|User invitation ready/ })).toBeVisible();
+	const bobInviteInput = page.getByLabel(/Tautan undangan|Invitation link/);
+	const bobInviteUrl = await bobInviteInput.inputValue();
+	const bobToken = new URL(bobInviteUrl).hash.replace('#token=', '');
+	await page.keyboard.press('Escape');
+	await expect(page.getByRole('heading', { name: /Undangan pengguna siap|User invitation ready/ })).not.toBeVisible();
 
 	const bobRow = page.locator('tr').filter({ hasText: targetUsername });
 	await expect(bobRow).toBeVisible();
 
-	// 2. User bob logs in with default password 12345678
+	// 2. User bob sets password and logs in
 	const bobContext = await request.newContext({ baseURL });
+	const bobSetup = await bobContext.post('/api/v1/auth/setup-password', {
+		data: {
+			token: bobToken,
+			password: 'InitialPassword12345!',
+			confirm_password: 'InitialPassword12345!'
+		}
+	});
+	expect(bobSetup.ok()).toBeTruthy();
+
 	const bobLogin1 = await bobContext.post('/api/v1/auth/login', {
-		data: { identifier: targetUsername, password: '12345678' }
+		data: { identifier: targetUsername, password: 'InitialPassword12345!' }
 	});
 	expect(bobLogin1.ok()).toBeTruthy();
 
-	// 3. User bob changes password to a new password
-	const changeRes = await bobContext.post('/api/v1/auth/change-password', {
-		data: {
-			current_password: '12345678',
-			new_password: 'NewSecretPass999!',
-			confirm_password: 'NewSecretPass999!'
-		}
-	});
-	expect(changeRes.ok()).toBeTruthy();
-
-	// 4. Admin opens Reset Kata Sandi dialog for bob
+	// 3. Admin opens Reset Kata Sandi dialog for bob
 	await bobRow.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${targetUsername}`) }).click();
 	const resetItem = page.getByRole('menuitem', { name: /Reset Kata Sandi|Reset password/ });
 	await expect(resetItem).toBeVisible();
@@ -368,7 +398,6 @@ test('Superadmin can reset another user password with confirmation dialog to def
 
 	const resetDialog = page.getByRole('dialog', { name: /Reset Kata Sandi|Reset Password/ });
 	await expect(resetDialog).toBeVisible();
-	await expect(resetDialog.getByText('12345678', { exact: true })).toBeVisible();
 
 	// Cancel test
 	await resetDialog.getByRole('button', { name: /Batal|Cancel/ }).click();
@@ -380,15 +409,33 @@ test('Superadmin can reset another user password with confirmation dialog to def
 	await expect(resetDialog).toBeVisible();
 	await resetDialog.getByRole('button', { name: /Reset Kata Sandi|Reset Password/ }).click();
 	await expect(resetDialog).not.toBeVisible();
-	// 5. Verify bob cannot log in with changed password anymore
-	const oldPassLogin = await bobContext.post('/api/v1/auth/login', {
-		data: { identifier: targetUsername, password: 'NewSecretPass999!' }
-	});
-	expect(oldPassLogin.status()).toBe(401);
 
-	// 6. Verify bob can log in with default password 12345678
+	// Success dialog displays reset one-time link
+	await expect(page.getByRole('heading', { name: /Tautan reset siap|Reset link ready/ })).toBeVisible();
+	const resetInput = page.getByLabel(/Tautan reset kata sandi|Password reset link/);
+	const resetLink = await resetInput.inputValue();
+	const resetToken = new URL(resetLink).hash.replace('#token=', '');
+	await page.keyboard.press('Escape');
+
+	// 4. Verify bob's previous session is revoked and old password cannot log in
+	const oldPassLogin = await bobContext.post('/api/v1/auth/login', {
+		data: { identifier: targetUsername, password: 'InitialPassword12345!' }
+	});
+	expect(oldPassLogin.status()).toBe(403);
+
+	// 5. Complete password reset via new token
+	const resetSubmit = await bobContext.post('/api/v1/auth/setup-password', {
+		data: {
+			token: resetToken,
+			password: 'BrandNewPassword9999!',
+			confirm_password: 'BrandNewPassword9999!'
+		}
+	});
+	expect(resetSubmit.ok()).toBeTruthy();
+
+	// 6. Verify bob can log in with brand new password
 	const newPassLogin = await bobContext.post('/api/v1/auth/login', {
-		data: { identifier: targetUsername, password: '12345678' }
+		data: { identifier: targetUsername, password: 'BrandNewPassword9999!' }
 	});
 	expect(newPassLogin.ok()).toBeTruthy();
 	await bobContext.dispose();

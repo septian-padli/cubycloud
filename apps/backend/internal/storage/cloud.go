@@ -47,26 +47,34 @@ func (d *nodeDriver) ListObjects(ctx context.Context, nodeID, prefix string) ([]
 }
 
 type nodeDriver struct {
- *LocalDriver
- db *bun.DB
- keyMaterial []byte
+	*LocalDriver
+	db *bun.DB
+	keyMaterial []byte
+	keyErr error
 }
 
 func newNodeDriver(db *bun.DB, path string) StorageDriver {
- km := []byte(filepath.Dir(path))
-	if envDir := os.Getenv("DATA_DIR_PATH"); envDir != "" {
-		km = []byte(filepath.Clean(envDir))
-	}
- return &nodeDriver{LocalDriver: NewLocalDriver(path), db: db, keyMaterial: km}
+	dataDir := filepath.Dir(path)
+	key, err := InitMasterKey(dataDir, os.Getenv("CUBYCLOUD_MASTER_KEY"), os.Getenv("CUBYCLOUD_MASTER_KEY_FILE"), db)
+	return &nodeDriver{LocalDriver: NewLocalDriver(path), db: db, keyMaterial: key, keyErr: err}
 }
 
 func (d *nodeDriver) client(ctx context.Context, nodeID string) (*s3.Client, string, error) {
+	if d.keyErr != nil {
+		return nil, "", d.keyErr
+	}
  var endpoint, region, bucket string
  var accessEncrypted, secretEncrypted []byte
  err := d.db.QueryRowContext(ctx, `SELECT COALESCE(endpoint,''),COALESCE(region,''),COALESCE(bucket,''),access_key_encrypted,secret_key_encrypted FROM storage_nodes WHERE id=? AND type='S3'`, nodeID).Scan(&endpoint,&region,&bucket,&accessEncrypted,&secretEncrypted)
  if err != nil { return nil,"",err }
- access,err := DecryptCredential(accessEncrypted,d.keyMaterial); if err != nil { return nil,"",fmt.Errorf("decrypt cloud access key: %w",err) }
- secret,err := DecryptCredential(secretEncrypted,d.keyMaterial); if err != nil { return nil,"",fmt.Errorf("decrypt cloud secret key: %w",err) }
+	access, err := DecryptCredential(accessEncrypted, d.keyMaterial)
+	if err != nil {
+		return nil, "", fmt.Errorf("decrypt cloud credentials")
+	}
+	secret, err := DecryptCredential(secretEncrypted, d.keyMaterial)
+	if err != nil {
+		return nil, "", fmt.Errorf("decrypt cloud credentials")
+	}
  if region == "" { region = "us-east-1" }
  cfg,err := config.LoadDefaultConfig(ctx,config.WithRegion(region),config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(string(access),string(secret),"")))
  if err != nil { return nil,"",err }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -150,6 +151,18 @@ func (s *Service) CompleteSetup(ctx context.Context, req *CompleteSetupRequest) 
 	}
 	recoveryKeyHash := hashRecoveryKey(recoveryKey)
 
+	var keyMaterial []byte
+	if req.Cloud.Enabled {
+		if key, err := storage.GetMasterKey(); err == nil {
+			keyMaterial = key
+		} else {
+			keyMaterial, err = storage.InitMasterKey(s.dataDirPath, os.Getenv("CUBYCLOUD_MASTER_KEY"), os.Getenv("CUBYCLOUD_MASTER_KEY_FILE"), s.db)
+			if err != nil {
+				return nil, fmt.Errorf("initialize credential encryption: %w", err)
+			}
+		}
+	}
+
 	// Transaction
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -178,8 +191,6 @@ func (s *Service) CompleteSetup(ctx context.Context, req *CompleteSetupRequest) 
 
 	// Create storage nodes (enabled only)
 	var nodes []database.StorageNode
-	keyMaterial := []byte(s.dataDirPath)
-
 	for _, n := range req.StorageNodes {
 		if !n.Enabled {
 			continue
@@ -207,12 +218,12 @@ func (s *Service) CompleteSetup(ctx context.Context, req *CompleteSetupRequest) 
 
 		accessKeyEnc, err := storage.EncryptCredential([]byte(req.Cloud.AccessKey), keyMaterial)
 		if err != nil {
-			return nil, fmt.Errorf("encrypt access key: %w", err)
+			return nil, errors.New("encrypt cloud credentials")
 		}
 
 		secretKeyEnc, err := storage.EncryptCredential([]byte(req.Cloud.SecretKey), keyMaterial)
 		if err != nil {
-			return nil, fmt.Errorf("encrypt secret key: %w", err)
+			return nil, errors.New("encrypt cloud credentials")
 		}
 
 		var capBytes int64
@@ -278,6 +289,41 @@ func (s *Service) CompleteSetup(ctx context.Context, req *CompleteSetupRequest) 
 	}, nil
 }
 
+func (s *Service) TestCloud(ctx context.Context, cloud CloudConfig) error {
+	if !cloud.Enabled {
+		return echo.NewHTTPError(http.StatusBadRequest, "cloud storage is not enabled")
+	}
+	return s.validateCloudConfig(ctx, cloud)
+}
+
+func (s *Service) validateCloudConfig(ctx context.Context, cloud CloudConfig) error {
+	if strings.TrimSpace(cloud.NodeName) == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "cloud node name is required")
+	}
+	if strings.TrimSpace(cloud.Region) == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "cloud region is required")
+	}
+	if strings.TrimSpace(cloud.Endpoint) == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "cloud endpoint is required")
+	}
+	if strings.TrimSpace(cloud.Bucket) == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "cloud bucket is required")
+	}
+	if strings.TrimSpace(cloud.AccessKey) == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "cloud access key is required")
+	}
+	if strings.TrimSpace(cloud.SecretKey) == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "cloud secret key is required")
+	}
+	if cloud.CapacityCapGB < 0 {
+		return echo.NewHTTPError(http.StatusBadRequest, "cloud capacity cap cannot be negative")
+	}
+	if err := s.storage.ValidateCloudCredentials(ctx, cloud.Endpoint, strings.TrimSpace(cloud.Region), cloud.Bucket, cloud.AccessKey, cloud.SecretKey); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "cloud connection validation failed")
+	}
+	return nil
+}
+
 func (s *Service) validate(ctx context.Context, req *CompleteSetupRequest) error {
 	// Username unique
 	exists, err := s.repo.UsernameExists(ctx, req.Admin.Username)
@@ -337,37 +383,8 @@ func (s *Service) validate(ctx context.Context, req *CompleteSetupRequest) error
 
 	// Validate cloud credentials
 	if req.Cloud.Enabled {
-		if strings.TrimSpace(req.Cloud.NodeName) == "" {
-			return echo.NewHTTPError(400, "cloud node name is required")
-		}
-		if strings.TrimSpace(req.Cloud.Region) == "" {
-			return echo.NewHTTPError(400, "cloud region is required")
-		}
-		if strings.TrimSpace(req.Cloud.Endpoint) == "" {
-			return echo.NewHTTPError(400, "cloud endpoint is required")
-		}
-		if strings.TrimSpace(req.Cloud.Bucket) == "" {
-			return echo.NewHTTPError(400, "cloud bucket is required")
-		}
-		if strings.TrimSpace(req.Cloud.AccessKey) == "" {
-			return echo.NewHTTPError(400, "cloud access key is required")
-		}
-		if strings.TrimSpace(req.Cloud.SecretKey) == "" {
-			return echo.NewHTTPError(400, "cloud secret key is required")
-		}
-		if req.Cloud.CapacityCapGB < 0 {
-			return echo.NewHTTPError(400, "cloud capacity cap cannot be negative")
-		}
-		region := strings.TrimSpace(req.Cloud.Region)
-		if err := s.storage.ValidateCloudCredentials(
-			ctx,
-			req.Cloud.Endpoint,
-			region,
-			req.Cloud.Bucket,
-			req.Cloud.AccessKey,
-			req.Cloud.SecretKey,
-		); err != nil {
-			return echo.NewHTTPError(400, fmt.Sprintf("cloud credentials invalid: %v", err))
+		if err := s.validateCloudConfig(ctx, req.Cloud); err != nil {
+			return err
 		}
 	}
 

@@ -409,6 +409,15 @@ func (s *Service) Upload(ctx context.Context, userID, name string, parent *strin
 	if err != nil {
 		return Item{}, err
 	}
+	instanceID, err := storage.InstanceID(ctx, s.db)
+	if err != nil {
+		return Item{}, err
+	}
+	effectiveNodeID := placement.ID
+	if effectiveNodeID == "" {
+		_ = s.db.QueryRowContext(ctx, `SELECT id FROM storage_nodes WHERE type='LOCAL' ORDER BY CASE WHEN path LIKE '%/storage/default' THEN 0 ELSE 1 END, created_at ASC, id ASC LIMIT 1`).Scan(&effectiveNodeID)
+	}
+	blobKey := storage.BuildBlobKey(instanceID, effectiveNodeID, id)
 	var storedNodeID any
 	if placement.ID != "" {
 		storedNodeID = placement.ID
@@ -437,20 +446,20 @@ func (s *Service) Upload(ctx context.Context, userID, name string, parent *strin
 		if !ok {
 			return Item{}, errors.New("cloud driver unavailable")
 		}
-		if err = cloud.WriteObject(ctx, placement.ID, id, counter, -1); err != nil {
-			_ = cloud.DeleteObject(ctx, placement.ID, id)
+		if err = cloud.WriteObject(ctx, placement.ID, blobKey, counter, -1); err != nil {
+			_ = cloud.DeleteObject(ctx, placement.ID, blobKey)
 			return Item{}, err
 		}
 		cleanup = func() {
-			_ = cloud.DeleteObject(ctx, placement.ID, id)
+			_ = cloud.DeleteObject(ctx, placement.ID, blobKey)
 		}
 	} else {
-		if err = s.storage.WriteLocal(ctx, placement.Path, id, counter); err != nil {
-			_ = s.storage.DeleteLocal(ctx, placement.Path, id)
+		if err = s.storage.WriteLocal(ctx, placement.Path, blobKey, counter); err != nil {
+			_ = s.storage.DeleteLocal(ctx, placement.Path, blobKey)
 			return Item{}, err
 		}
 		cleanup = func() {
-			_ = s.storage.DeleteLocal(ctx, placement.Path, id)
+			_ = s.storage.DeleteLocal(ctx, placement.Path, blobKey)
 		}
 	}
 	size := counter.n
@@ -512,7 +521,7 @@ func (s *Service) Upload(ctx context.Context, userID, name string, parent *strin
 		candidate,
 		size,
 		parent,
-		id,
+		blobKey,
 		storedNodeID,
 		now,
 	)

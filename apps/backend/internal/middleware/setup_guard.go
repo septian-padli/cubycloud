@@ -41,7 +41,7 @@ func (g *SetupGuard) Middleware() echo.MiddlewareFunc {
 			// If setup is NOT completed:
 			if !g.IsCompleted() {
 				// Allow setup endpoints
-				if path == "/api/v1/setup/scan-nodes" || path == "/api/v1/setup/complete" {
+				if path == "/api/v1/setup/scan-nodes" || path == "/api/v1/setup/complete" || path == "/api/v1/setup/test-cloud" {
 					return next(c)
 				}
 

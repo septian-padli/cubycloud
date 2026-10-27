@@ -49,12 +49,27 @@ export interface BackendAdminUser {
 	username: string;
 	email: string;
 	role: string;
+	status?: 'ACTIVE' | 'PENDING_ACTIVATION';
 	quota_mode: string;
 	quota_bytes: number;
 	quota_gb?: number;
 	used_bytes: number;
 	used_gb: number;
 	created_at: string;
+}
+
+export interface OneTimeLinkResponse {
+	expires_at: string;
+	message?: string;
+	invitation_token?: string;
+	invitation_url?: string;
+	reset_token?: string;
+	reset_url?: string;
+}
+
+export interface CreateAdminUserResponse extends BackendAdminUser {
+	invitation_token: string;
+	invitation_url: string;
 }
 
 export interface AdminUsersListResponse {
@@ -219,11 +234,10 @@ class AdminAPI {
 	async createUser(data: {
 		username: string;
 		email: string;
-		password?: string;
 		quota_mode: string;
 		quota_gb?: number;
-	}): Promise<{ data?: BackendAdminUser; error?: string }> {
-		return this.request<BackendAdminUser>('/admin/users', {
+	}): Promise<{ data?: CreateAdminUserResponse; error?: string }> {
+		return this.request<CreateAdminUserResponse>('/admin/users', {
 			method: 'POST',
 			body: JSON.stringify(data)
 		});
@@ -252,10 +266,14 @@ class AdminAPI {
 		});
 	}
 
-	async resetUserPassword(
-		userId: string
-	): Promise<{ data?: { message: string }; error?: string }> {
-		return this.request<{ message: string }>(`/admin/users/${userId}/reset-password`, {
+	async resetUserPassword(userId: string): Promise<{ data?: OneTimeLinkResponse; error?: string }> {
+		return this.request<OneTimeLinkResponse>(`/admin/users/${encodeURIComponent(userId)}/reset-password`, {
+			method: 'POST'
+		});
+	}
+
+	async regenerateInvitation(userId: string): Promise<{ data?: OneTimeLinkResponse; error?: string }> {
+		return this.request<OneTimeLinkResponse>(`/admin/users/${encodeURIComponent(userId)}/invitation`, {
 			method: 'POST'
 		});
 	}

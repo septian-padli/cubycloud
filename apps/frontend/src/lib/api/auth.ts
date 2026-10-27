@@ -147,6 +147,19 @@ export interface ResetPasswordResponse {
 	new_recovery_key: string;
 }
 
+export interface SetupPasswordValidation {
+	valid: boolean;
+	token_type: 'INVITATION' | 'PASSWORD_RESET';
+	username: string;
+	email: string;
+}
+
+export interface SetupPasswordRequest {
+	token: string;
+	password: string;
+	confirm_password: string;
+}
+
 class AuthAPI {
 	private async request<T>(
 		endpoint: string,
@@ -216,6 +229,23 @@ class AuthAPI {
 			body: JSON.stringify(req)
 		});
 	}
+	async validateSetupPassword(
+		token: string
+	): Promise<{ data?: SetupPasswordValidation; error?: string }> {
+		return this.request<SetupPasswordValidation>(
+			`/auth/setup-password/validate?token=${encodeURIComponent(token)}`
+		);
+	}
+
+	async setupPassword(
+		req: SetupPasswordRequest
+	): Promise<{ data?: { message: string }; error?: string }> {
+		return this.request<{ message: string }>('/auth/setup-password', {
+			method: 'POST',
+			body: JSON.stringify(req)
+		});
+	}
+
 
 	async updateProfile(
 		req: UpdateProfileRequest

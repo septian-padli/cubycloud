@@ -57,15 +57,20 @@ func main() {
 	}
 	defer db.Close()
 
-	// 4. Init storage driver
+	// 4. Initialize storage master key
+	if _, err := storage.InitMasterKey(cfg.DataDirPath, cfg.MasterKey, cfg.MasterKeyFile, db); err != nil {
+		log.Fatal("Master key initialization failed:", err)
+	}
+
+	// 5. Init storage driver
 	driver := storage.NewStorageDriver(db, cfg.StoragePath)
 
-	// Reconcile orphan blobs across local disk and S3 nodes on startup
-	if orphanReport, err := storage.ReconcileOrphanBlobs(context.Background(), db, driver, 5*time.Minute); err != nil {
+	// Reconcile orphan blobs across local disk and S3 nodes on startup (dryRun by default)
+	if orphanReport, err := storage.ReconcileOrphanBlobs(context.Background(), db, driver, 72*time.Hour, cfg.StorageCleanupDryRun); err != nil {
 		log.Printf("[STARTUP_ORPHAN_AUDIT] Error reconciling orphan blobs: %v", err)
-	} else if orphanReport.LocalDeleted > 0 || orphanReport.S3Deleted > 0 {
-		log.Printf("[STARTUP_ORPHAN_AUDIT] Reconciled orphans: local (scanned=%d, deleted=%d), S3 (scanned=%d, deleted=%d)",
-			orphanReport.LocalScanned, orphanReport.LocalDeleted, orphanReport.S3Scanned, orphanReport.S3Deleted)
+	} else if orphanReport.LocalDeleted > 0 || orphanReport.S3Deleted > 0 || orphanReport.LocalScanned > 0 || orphanReport.S3Scanned > 0 {
+		log.Printf("[STARTUP_ORPHAN_AUDIT] Reconciled orphans (dryRun=%v): local (scanned=%d, deleted=%d), S3 (scanned=%d, deleted=%d)",
+			cfg.StorageCleanupDryRun, orphanReport.LocalScanned, orphanReport.LocalDeleted, orphanReport.S3Scanned, orphanReport.S3Deleted)
 	}
 
 	// 5. Init setup guard cache
@@ -85,8 +90,7 @@ func main() {
 	defer workerPool.Stop()
 
 	// 8. Build router
-	e := buildEchoRouter(cfg, db, driver, setupGuard, sseHub, jobQueue)
-
+	e := buildEchoRouter(cfg, db, driver, setupGuard, sseHub, jobQueue, workerPool)
 	// Background cron worker for 30-day trash auto-purge
 	trashPurgeJob := jobs.StartTrashPurgeJob(context.Background(), db, driver, 1*time.Hour, 30*24*time.Hour)
 	defer trashPurgeJob.Stop()
@@ -170,7 +174,7 @@ func newSPAHandler(distFS fs.FS) http.Handler {
 	})
 }
 
-func buildEchoRouter(cfg *config.Config, db *bun.DB, driver storage.StorageDriver, setupGuard *middleware.SetupGuard, sseHub *sse.Hub, jobQueue *jobsmod.Queue) *echo.Echo {
+func buildEchoRouter(cfg *config.Config, db *bun.DB, driver storage.StorageDriver, setupGuard *middleware.SetupGuard, sseHub *sse.Hub, jobQueue *jobsmod.Queue, workerPool ...*jobsmod.WorkerPool) *echo.Echo {
 	e := echo.New()
 	e.HideBanner = true
 	e.HidePort = true
@@ -204,9 +208,11 @@ func buildEchoRouter(cfg *config.Config, db *bun.DB, driver storage.StorageDrive
 	// SQLite transactional job queue & bounded worker pool
 	jobsmod.RegisterRoutes(e, jobQueue, jwtAuth)
 
-	admin.RegisterRoutes(e, db, driver, cfg.DataDirPath, dbPath, jwtAuth, adminGuard, jobQueue)
+	adminHandler := admin.RegisterRoutes(e, db, driver, cfg.DataDirPath, dbPath, jwtAuth, adminGuard, jobQueue)
+	if len(workerPool) > 0 && workerPool[0] != nil {
+		adminHandler.SetConcurrencyController(workerPool[0])
+	}
 	docs.RegisterRoutes(e, jwtAuth, adminGuard)
-
 	// Auth routes (login, logout, me, reset-password)
 	auth.RegisterRoutes(e, db, cfg.JWTSecret, jwtAuth)
 

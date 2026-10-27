@@ -3,18 +3,16 @@ package mystorage
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
+	sdkconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
+	appconfig "github.com/cubycloud/backend/internal/config"
 	"github.com/cubycloud/backend/internal/storage"
 	"github.com/uptrace/bun"
 )
@@ -26,8 +24,8 @@ import (
 // (Create/Complete/Abort/ListParts + per-part upload presigning) here. The
 // credential handling mirrors internal/storage/cloud.go nodeDriver exactly:
 // encrypted storage_nodes credentials decrypted with storage.DecryptCredential
-// and the same key material (DATA_DIR_PATH, else the directory above the SQLite
-// file). Provider secrets never leave the server; only short-lived part URLs do.
+// and the same configured key material. Provider secrets never leave the server;
+// only short-lived part URLs do.
 //
 // This file intentionally adds no new dependency: aws-sdk-go-v2/service/s3 is
 // already used by the storage package.
@@ -43,40 +41,11 @@ type ProviderPart struct {
 // exposing node credentials to callers.
 type S3MultipartClient struct {
 	db *bun.DB
-
-	keyOnce      sync.Once
-	keyMaterial  []byte
-	keyMaterialErr error
 }
 
 // NewS3MultipartClient returns a client for the multipart intent flow.
 func NewS3MultipartClient(db *bun.DB) *S3MultipartClient {
 	return &S3MultipartClient{db: db}
-}
-
-// keyForNodes resolves the credential-decrypt key material once, matching
-// internal/storage/cloud.go nodeDriver: DATA_DIR_PATH env, else the directory
-// that holds the SQLite file (the parent of ...) — the same value the driver
-// derives from its storage base path.
-func (c *S3MultipartClient) keyMaterialForNodes(ctx context.Context) ([]byte, error) {
-	c.keyOnce.Do(func() {
-		if dir := os.Getenv("DATA_DIR_PATH"); dir != "" {
-			c.keyMaterial = []byte(dir)
-			return
-		}
-		var dbFile string
-		err := c.db.QueryRowContext(ctx, `SELECT "file" FROM pragma_database_list WHERE "name"='main'`).Scan(&dbFile)
-		if err != nil {
-			c.keyMaterialErr = fmt.Errorf("resolve data dir for credentials: %w", err)
-			return
-		}
-		if dbFile == "" {
-			c.keyMaterialErr = errors.New("resolve data dir for credentials: sqlite main path unavailable")
-			return
-		}
-		c.keyMaterial = []byte(filepath.Dir(filepath.Dir(dbFile)))
-	})
-	return c.keyMaterial, c.keyMaterialErr
 }
 
 func (c *S3MultipartClient) client(ctx context.Context, nodeID string) (*s3.Client, string, error) {
@@ -86,22 +55,27 @@ func (c *S3MultipartClient) client(ctx context.Context, nodeID string) (*s3.Clie
 	if err != nil {
 		return nil, "", err
 	}
-	keyMaterial, err := c.keyMaterialForNodes(ctx)
-	if err != nil {
-		return nil, "", err
+	if _, err := storage.GetMasterKey(); err != nil {
+		dataDir := os.Getenv("DATA_DIR_PATH")
+		if dataDir == "" {
+			dataDir = appconfig.Load().DataDirPath
+		}
+		if _, err := storage.InitMasterKey(dataDir, os.Getenv("CUBYCLOUD_MASTER_KEY"), os.Getenv("CUBYCLOUD_MASTER_KEY_FILE"), c.db); err != nil {
+			return nil, "", err
+		}
 	}
-	access, err := storage.DecryptCredential(accessEncrypted, keyMaterial)
+	access, err := storage.DecryptCredential(accessEncrypted)
 	if err != nil {
-		return nil, "", fmt.Errorf("decrypt cloud access key: %w", err)
+		return nil, "", errors.New("decrypt cloud credentials")
 	}
-	secret, err := storage.DecryptCredential(secretEncrypted, keyMaterial)
+	secret, err := storage.DecryptCredential(secretEncrypted)
 	if err != nil {
-		return nil, "", fmt.Errorf("decrypt cloud secret key: %w", err)
+		return nil, "", errors.New("decrypt cloud credentials")
 	}
 	if region == "" {
 		region = "us-east-1"
 	}
-	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(region), config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(string(access), string(secret), "")))
+	cfg, err := sdkconfig.LoadDefaultConfig(ctx, sdkconfig.WithRegion(region), sdkconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(string(access), string(secret), "")))
 	if err != nil {
 		return nil, "", err
 	}

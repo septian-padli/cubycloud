@@ -13,15 +13,28 @@ type User struct {
 	Username        string    `bun:"username,notnull,unique"`
 	Email           string    `bun:"email,notnull,unique"`
 	DisplayName     string    `bun:"display_name,notnull,default:''"`
-	PasswordHash    string    `bun:"password_hash,notnull"`
-	RecoveryKeyHash *string   `bun:"recovery_key_hash"`
-	Role            string    `bun:"role,notnull"`
-	TokenVersion    int       `bun:"token_version,notnull,default:0"`
-	QuotaMode       string    `bun:"quota_mode,notnull,default:'DEFAULT'"`
-	QuotaBytes      int64     `bun:"quota_bytes,notnull,default:-1"`
-	CreatedAt       time.Time `bun:"created_at,notnull,default:current_timestamp"`
-	UpdatedAt       time.Time `bun:"updated_at,notnull,default:current_timestamp"`
-	DeletedAt       *time.Time `bun:"deleted_at"`
+ 	PasswordHash    string     `bun:"password_hash,notnull"`
+ 	RecoveryKeyHash *string    `bun:"recovery_key_hash"`
+ 	Role            string     `bun:"role,notnull"`
+ 	Status          string     `bun:"status,notnull,default:'ACTIVE'"`
+ 	TokenVersion    int        `bun:"token_version,notnull,default:0"`
+ 	QuotaMode       string     `bun:"quota_mode,notnull,default:'DEFAULT'"`
+ 	QuotaBytes      int64      `bun:"quota_bytes,notnull,default:-1"`
+ 	CreatedAt       time.Time  `bun:"created_at,notnull,default:current_timestamp"`
+ 	UpdatedAt       time.Time  `bun:"updated_at,notnull,default:current_timestamp"`
+ 	DeletedAt       *time.Time `bun:"deleted_at"`
+}
+
+type AuthToken struct {
+ 	bun.BaseModel `bun:"table:auth_tokens,alias:at"`
+
+ 	ID         string     `bun:"id,pk"`
+ 	UserID     string     `bun:"user_id,notnull"`
+ 	TokenHash  string     `bun:"token_hash,notnull,unique"`
+ 	TokenType  string     `bun:"token_type,notnull"`
+ 	ExpiresAt  time.Time  `bun:"expires_at,notnull"`
+ 	ConsumedAt *time.Time `bun:"consumed_at"`
+ 	CreatedAt  time.Time  `bun:"created_at,notnull,default:current_timestamp"`
 }
 
 type StorageNode struct {

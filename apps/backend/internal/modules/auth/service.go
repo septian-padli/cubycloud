@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"database/sql"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -46,6 +47,9 @@ func (s *Service) Login(ctx context.Context, req *LoginRequest) (*database.User,
 	}
 	if user == nil {
 		return nil, echo.NewHTTPError(401, "invalid username or password")
+	}
+	if user.Status != "ACTIVE" || user.PasswordHash == "" {
+		return nil, echo.NewHTTPError(http.StatusForbidden, "account pending activation; please activate via invitation link")
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
@@ -164,6 +168,86 @@ func (s *Service) UpdateProfile(ctx context.Context, userID string, req *UpdateP
 	}
 
 	return s.repo.GetUserByID(ctx, userID)
+}
+
+func (s *Service) ValidateSetupPassword(ctx context.Context, token string) (*SetupPasswordValidation, error) {
+	var result SetupPasswordValidation
+	err := s.db.QueryRowContext(ctx, `
+		SELECT t.token_type, u.username, u.email
+		FROM auth_tokens t JOIN users u ON u.id = t.user_id
+		WHERE t.token_hash = ? AND t.token_type IN ('INVITATION', 'PASSWORD_RESET')
+		  AND t.consumed_at IS NULL AND t.expires_at > ? AND u.deleted_at IS NULL
+	`, hashSetupToken(token), time.Now()).Scan(&result.TokenType, &result.Username, &result.Email)
+	if err == sql.ErrNoRows {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": "invalid, expired, or consumed token"})
+	}
+	if err != nil {
+		return nil, fmt.Errorf("validate setup token: %w", err)
+	}
+	result.Valid = true
+	return &result, nil
+}
+
+func (s *Service) SetupPassword(ctx context.Context, req *SetupPasswordRequest) error {
+	if req.Password != req.ConfirmPassword {
+		return echo.NewHTTPError(http.StatusBadRequest, "passwords do not match")
+	}
+	if utf8.RuneCountInString(req.Password) < 15 {
+		return echo.NewHTTPError(http.StatusBadRequest, "password must be at least 15 characters")
+	}
+	if len(req.Password) > 72 {
+		return echo.NewHTTPError(http.StatusBadRequest, "password must be at most 72 bytes")
+	}
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcryptCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+ now := time.Now()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin password setup: %w", err)
+	}
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, `
+		UPDATE users SET password_hash = ?, status = 'ACTIVE', token_version = token_version + 1, updated_at = ?
+		WHERE id = (SELECT user_id FROM auth_tokens WHERE token_hash = ? AND token_type IN ('INVITATION', 'PASSWORD_RESET')
+		  AND consumed_at IS NULL AND expires_at > ?)
+		  AND deleted_at IS NULL
+	`, string(passwordHash), now, hashSetupToken(req.Token), now)
+	if err != nil {
+		return fmt.Errorf("set password: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check password setup: %w", err)
+	}
+	if rows != 1 {
+		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": "invalid, expired, or consumed token"})
+	}
+	result, err = tx.ExecContext(ctx, `UPDATE auth_tokens SET consumed_at = ? WHERE token_hash = ? AND consumed_at IS NULL`, now, hashSetupToken(req.Token))
+	if err != nil {
+		return fmt.Errorf("consume setup token: %w", err)
+	}
+	rows, err = result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check token consumption: %w", err)
+	}
+	if rows != 1 {
+		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": "invalid, expired, or consumed token"})
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit password setup: %w", err)
+	}
+	return nil
+}
+
+func hashSetupToken(token string) string {
+	decoded, err := hex.DecodeString(token)
+	if err != nil || len(decoded) != 32 {
+		return ""
+	}
+	hash := sha256.Sum256(decoded)
+	return hex.EncodeToString(hash[:])
 }
 
 // ChangePassword updates user password and increments token_version

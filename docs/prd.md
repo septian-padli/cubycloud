@@ -213,9 +213,9 @@ Single image/binary; Go serves embedded static SvelteKit SPA, HTTP API, and back
 
 ### 4.9 User management (`/admin/users`)
 
-- **Super Admin only.** View username, email, role, effective quota, usage and status. Create regular users with default quota or explicitly specified override; user creation sets default password `12345678` without password input in the form.
+- **Super Admin only.** View username, email, role, effective quota, usage and status (Active vs Pending Activation). Create regular users with default quota or explicitly specified override; user creation provisions an account in `PENDING_ACTIVATION` state without any default password, returning a single-use 24-hour invitation link with Copy Link functionality.
 - Edit personal quota to a GB value or Unlimited and support **Reset to Default** as product-defined. Super Admin's personal quota remains Unlimited.
-- Reset user password to default `12345678` via confirmation modal dialog. Super Admin cannot reset their own password (enforced on UI and API).
+- Reset user password via confirmation modal dialog into a secure single-use 30-minute password reset link, immediately revoking all active sessions and disabling password login until new password completion. Super Admin cannot reset their own password (enforced on UI and API). Support regenerating invitations for pending users.
 - Separate user administration from self-service Account Profile, and enforce ownership/roles server-side.
 
 ### 4.10 Logical quota engine

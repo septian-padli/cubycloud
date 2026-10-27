@@ -11,15 +11,18 @@ import (
 )
 
 type Config struct {
-	Port           string
-	DataDirPath    string
-	JWTSecret      string
-	DBPath         string
-	StoragePath    string
-	TempTUSPath    string
-	IsProduction   bool
-	CookieSecure   bool
-	AllowedOrigins []string
+	Port                string
+	DataDirPath         string
+	JWTSecret           string
+	DBPath              string
+	StoragePath         string
+	TempTUSPath         string
+	IsProduction        bool
+	CookieSecure        bool
+	AllowedOrigins      []string
+	MasterKey           string
+	MasterKeyFile       string
+	StorageCleanupDryRun bool
 }
 
 func Load() *Config {
@@ -97,16 +100,28 @@ func LoadConfig() (*Config, error) {
 		}
 	}
 
+	masterKey := os.Getenv("CUBYCLOUD_MASTER_KEY")
+	masterKeyFile := os.Getenv("CUBYCLOUD_MASTER_KEY_FILE")
+	cleanupDryRun := true
+	if val := strings.TrimSpace(os.Getenv("CUBYCLOUD_STORAGE_CLEANUP_DRY_RUN")); val != "" {
+		cleanupDryRun = !strings.EqualFold(val, "false")
+	} else if val := strings.TrimSpace(os.Getenv("CUBYCLOUD_STORAGE_CLEANUP_ENABLED")); strings.EqualFold(val, "true") {
+		cleanupDryRun = false
+	}
+
 	return &Config{
-		Port:           port,
-		DataDirPath:    dataDir,
-		JWTSecret:      jwtSecret,
-		DBPath:         filepath.Join(dataDir, "db", "cubycloud.db"),
-		StoragePath:    filepath.Join(dataDir, "storage"),
-		TempTUSPath:    filepath.Join(dataDir, "temp", "tus"),
-		IsProduction:   isProduction,
-		CookieSecure:   cookieSecure,
-		AllowedOrigins: allowedOrigins,
+		Port:                port,
+		DataDirPath:         dataDir,
+		JWTSecret:           jwtSecret,
+		DBPath:              filepath.Join(dataDir, "db", "cubycloud.db"),
+		StoragePath:         filepath.Join(dataDir, "storage"),
+		TempTUSPath:         filepath.Join(dataDir, "temp", "tus"),
+		IsProduction:        isProduction,
+		CookieSecure:        cookieSecure,
+		AllowedOrigins:      allowedOrigins,
+		MasterKey:           masterKey,
+		MasterKeyFile:       masterKeyFile,
+		StorageCleanupDryRun: cleanupDryRun,
 	}, nil
 }
 

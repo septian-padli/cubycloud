@@ -96,3 +96,29 @@ func TestWriteLocalMkdirAll(t *testing.T) {
 		t.Fatal("nested file not created")
 	}
 }
+
+func TestLocalNamespaceKey(t *testing.T) {
+	root := t.TempDir()
+	d := NewLocalDriver(root)
+	ctx := context.Background()
+	key := BuildBlobKey("instance", "node", "blob")
+	content := []byte("namespaced")
+	if err := d.WriteLocal(ctx, "", key, bytes.NewReader(content)); err != nil {
+		t.Fatal(err)
+	}
+	r, err := d.ReadLocal(ctx, "", key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := io.ReadAll(r)
+	_ = r.Close()
+	if err != nil || !bytes.Equal(got, content) {
+		t.Fatalf("read namespaced blob = %q, %v", got, err)
+	}
+	if err := d.DeleteLocal(ctx, "", key); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(key))); !os.IsNotExist(err) {
+		t.Fatalf("namespaced blob remains: %v", err)
+	}
+}

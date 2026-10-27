@@ -5,6 +5,14 @@
 	import { KeyRound, LoaderCircle } from '@lucide/svelte';
 	import { locale } from '$lib/locale.svelte.js';
 
+	import { toast } from 'svelte-sonner';
+	import { Input } from '$lib/components/ui/input/index.js';
+	import type { OneTimeLinkResponse } from '$lib/api/admin.js';
+	let resetUrl = $state('');
+	async function copyResetLink() {
+		try { await navigator.clipboard.writeText(resetUrl); toast.success(locale.language === 'id' ? 'Tautan disalin.' : 'Link copied.'); }
+		catch { window.prompt(locale.language === 'id' ? 'Salin tautan:' : 'Copy link:', resetUrl); }
+	}
 	let {
 		open = $bindable(false),
 		user,
@@ -12,7 +20,7 @@
 	}: {
 		open?: boolean;
 		user: AdminUser | null;
-		onConfirm: (user: AdminUser) => Promise<void> | void;
+		onConfirm: (user: AdminUser) => Promise<OneTimeLinkResponse | void> | OneTimeLinkResponse | void;
 	} = $props();
 
 	let loading = $state(false);
@@ -27,8 +35,11 @@
 		if (!user || loading) return;
 		loading = true;
 		try {
-			await onConfirm(user);
-			open = false;
+			const result = await onConfirm(user);
+			if (result?.reset_url) {
+				resetUrl = new URL(result.reset_url, window.location.origin).toString();
+				open = false;
+			} else open = false;
 		} finally {
 			loading = false;
 		}
@@ -52,19 +63,9 @@
 		</Dialog.Header>
 
 		{#if user}
-			<div class="flex flex-col gap-3 py-2">
-				<div class="rounded-xl border border-subtle bg-app p-3.5 text-xs leading-relaxed text-muted">
-					<p class="font-medium text-main">
-						{locale.language === 'id' ? 'Kata sandi baru:' : 'New password:'}
-						<span class="font-mono font-semibold text-primary">12345678</span>
-					</p>
-					<p class="mt-1">
-						{locale.language === 'id'
-							? 'Kata sandi akun akan segera diubah menjadi 12345678 dan sesi aktif pengguna ini akan dihentikan.'
-							: 'The account password will immediately be changed to 12345678 and any active sessions for this user will be invalidated.'}
-					</p>
-				</div>
-			</div>
+			<p class="rounded-lg border border-amber-700 bg-amber-50 p-3 text-sm font-medium text-amber-950">
+				{locale.language === 'id' ? 'Reset akan mencabut semua sesi aktif pengguna. Kata sandi lama tidak dapat digunakan sampai kata sandi baru diatur.' : 'Reset will revoke all of this user’s active sessions. Their old password will not work until a new password is set.'}
+			</p>
 		{/if}
 
 		<Dialog.Footer class="gap-2 sm:gap-0">
@@ -91,3 +92,19 @@
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
+
+{#if resetUrl}
+	<Dialog.Root open={!!resetUrl} onOpenChange={(value) => { if (!value) resetUrl = ''; }}>
+		<Dialog.Content class="bg-surface text-main sm:max-w-md">
+			<Dialog.Header>
+				<Dialog.Title>{locale.language === 'id' ? 'Tautan reset siap' : 'Reset link ready'}</Dialog.Title>
+				<Dialog.Description>{locale.language === 'id' ? 'Tautan hanya dapat digunakan sekali dan berlaku 30 menit.' : 'This one-time link expires in 30 minutes.'}</Dialog.Description>
+			</Dialog.Header>
+			<div class="flex flex-col gap-3">
+				<Input readonly value={resetUrl} aria-label={locale.language === 'id' ? 'Tautan reset kata sandi' : 'Password reset link'} />
+				<Button type="button" class="min-h-11 focus-visible:outline focus-visible:outline-2" onclick={copyResetLink}>{locale.language === 'id' ? 'Salin Tautan' : 'Copy Link'}</Button>
+			</div>
+		</Dialog.Content>
+	</Dialog.Root>
+{/if}
+

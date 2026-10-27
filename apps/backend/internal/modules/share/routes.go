@@ -41,7 +41,7 @@ func RegisterRoutes(e *echo.Echo, db *bun.DB, driver storage.StorageDriver, jwtA
 	// 4. Public share links (Public / optional JWT)
 	publicGroup := e.Group("/api/v1/s")
 	publicGroup.GET("/:token", ph.GetPublicShare)
-	publicGroup.POST("/:token/unlock", ph.UnlockPublicShare, middleware.RateLimiter(10, time.Minute))
+	publicGroup.POST("/:token/unlock", ph.UnlockPublicShare, middleware.RateLimiterScoped("share_unlock", 10, time.Minute))
 	publicGroup.GET("/:token/download", ph.DownloadPublicFile)
 	publicGroup.GET("/:token/download-zip", ph.DownloadPublicZip)
 

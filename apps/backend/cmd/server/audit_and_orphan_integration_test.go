@@ -28,10 +28,12 @@ type testS3Driver struct {
 	deletedKeys []string
 }
 
-func (d *testS3Driver) ListObjects(_ context.Context, _ string, _ string) ([]string, error) {
+func (d *testS3Driver) ListObjects(_ context.Context, _ string, prefix string) ([]string, error) {
 	keys := make([]string, 0, len(d.s3Objects))
 	for k := range d.s3Objects {
-		keys = append(keys, k)
+		if strings.HasPrefix(k, prefix) {
+			keys = append(keys, k)
+		}
 	}
 	return keys, nil
 }
@@ -70,20 +72,27 @@ func TestStartupOrphanBlobReconciliation_LocalAndS3(t *testing.T) {
 	localNodePath := filepath.Join(dataDir, "local_storage")
 	require.NoError(t, os.MkdirAll(localNodePath, 0o755))
 
-	// Create test files on local node
+	instanceID, err := storage.InstanceID(ctx, db)
+	require.NoError(t, err)
+
+	localBlobPrefix := filepath.Join(localNodePath, "cubycloud", instanceID, "local-node-1", "blobs")
+	require.NoError(t, os.MkdirAll(localBlobPrefix, 0o755))
+
+	// File outside owned namespace (must NEVER be deleted)
+	outsidePath := filepath.Join(localNodePath, "outside.bin")
+	require.NoError(t, os.WriteFile(outsidePath, []byte("outside content"), 0o600))
+	oldTime := time.Now().Add(-100 * time.Hour)
+	require.NoError(t, os.Chtimes(outsidePath, oldTime, oldTime))
+
+	// Create test files within local owned namespace:
 	// 1. active file (referenced in my_storage_items)
 	// 2. trashed file (referenced in my_storage_items with deleted_at)
-	// 3. fresh file (modified recently, protected by grace period)
-	// 4. genuine orphan file (no reference, old modtime)
-	for _, name := range []string{"active.bin", "trash.bin", "fresh.bin", "orphan.bin"} {
-		path := filepath.Join(localNodePath, name)
+	// 3. genuine orphan file (no reference, old modtime)
+	for _, name := range []string{"active.bin", "trash.bin", "orphan.bin"} {
+		path := filepath.Join(localBlobPrefix, name)
 		require.NoError(t, os.WriteFile(path, []byte("content"), 0o600))
-		if name != "fresh.bin" {
-			oldTime := time.Now().Add(-1 * time.Hour)
-			require.NoError(t, os.Chtimes(path, oldTime, oldTime))
-		}
+		require.NoError(t, os.Chtimes(path, oldTime, oldTime))
 	}
-
 	// Register storage nodes in SQLite
 	_, err = db.ExecContext(ctx, `INSERT INTO storage_nodes(id, name, type, path, capacity_bytes, enabled)
 		VALUES('local-node-1', 'Local Node', 'LOCAL', ?, 1073741824, 1)`, localNodePath)
@@ -98,14 +107,21 @@ func TestStartupOrphanBlobReconciliation_LocalAndS3(t *testing.T) {
 		VALUES('user-1', 'tester', 'tester@test.local', 'hash', 'REGULAR')`)
 	require.NoError(t, err)
 
+	activeKey := storage.BuildBlobKey(instanceID, "local-node-1", "active.bin")
+	trashKey := storage.BuildBlobKey(instanceID, "local-node-1", "trash.bin")
+	s3RefKey := storage.BuildBlobKey(instanceID, "s3-node-1", "s3-referenced.bin")
+	s3PendingKey := storage.BuildBlobKey(instanceID, "s3-node-1", "s3-pending-active")
+	s3Orphan1Key := storage.BuildBlobKey(instanceID, "s3-node-1", "s3-orphan-1.bin")
+	s3Orphan2Key := storage.BuildBlobKey(instanceID, "s3-node-1", "s3-orphan-2.bin")
+
 	// Reference active and trashed files in SQLite
 	_, err = db.ExecContext(ctx, `INSERT INTO my_storage_items(id, owner_id, name, kind, disk_key, storage_node_id, deleted_at)
-		VALUES('item-active', 'user-1', 'active.bin', 'file', 'active.bin', 'local-node-1', NULL)`)
+		VALUES('item-active', 'user-1', 'active.bin', 'file', ?, 'local-node-1', NULL)`, activeKey)
 	require.NoError(t, err)
 
 	trashTime := time.Now().Add(-2 * time.Hour)
 	_, err = db.ExecContext(ctx, `INSERT INTO my_storage_items(id, owner_id, name, kind, disk_key, storage_node_id, deleted_at)
-		VALUES('item-trash', 'user-1', 'trash.bin', 'file', 'trash.bin', 'local-node-1', ?)`, trashTime)
+		VALUES('item-trash', 'user-1', 'trash.bin', 'file', ?, 'local-node-1', ?)`, trashKey, trashTime)
 	require.NoError(t, err)
 
 	// Active and unexpired pending cloud upload for S3
@@ -115,7 +131,7 @@ func TestStartupOrphanBlobReconciliation_LocalAndS3(t *testing.T) {
 
 	// S3 referenced file in organization
 	_, err = db.ExecContext(ctx, `INSERT INTO organization_items(id, created_by, name, kind, disk_key, storage_node_id)
-		VALUES('org-s3-item', 'user-1', 'org_s3.bin', 'file', 's3-referenced.bin', 's3-node-1')`)
+		VALUES('org-s3-item', 'user-1', 'org_s3.bin', 'file', ?, 's3-node-1')`, s3RefKey)
 	require.NoError(t, err)
 
 	// Setup S3 test driver with objects:
@@ -123,38 +139,59 @@ func TestStartupOrphanBlobReconciliation_LocalAndS3(t *testing.T) {
 	// - s3-pending-active (pending upload intent)
 	// - s3-orphan-1.bin (genuine orphan)
 	// - s3-orphan-2.bin (genuine orphan)
+	// - outside-bucket-file.bin (outside owned namespace, must NEVER be touched)
 	// - .system_metadata (ignored system prefix)
 	s3Objects := map[string]bool{
-		"s3-referenced.bin": true,
-		"s3-pending-active": true,
-		"s3-orphan-1.bin":   true,
-		"s3-orphan-2.bin":   true,
-		".system_metadata":  true,
+		s3RefKey:                 true,
+		s3PendingKey:             true,
+		s3Orphan1Key:             true,
+		s3Orphan2Key:             true,
+		"unrelated/outside.bin":  true,
+		".system_metadata":       true,
 	}
 
+	// Setup S3 test driver with objects:
+	// - s3-referenced.bin (referenced)
+	// - s3-pending-active (pending upload intent)
+	// - s3-orphan-1.bin (genuine orphan)
+	// - s3-orphan-2.bin (genuine orphan)
+	// - .system_metadata (ignored system prefix)
 	driver := &testS3Driver{
 		StorageDriver: storage.NewLocalDriver(dataDir),
 		s3Objects:     s3Objects,
 	}
 
-	// Execute startup reconciliation with a 5-minute grace period
-	report, err := storage.ReconcileOrphanBlobs(ctx, db, driver, 5*time.Minute)
+
+	// Observation 1: default dryRun mode audits candidates
+	report1, err := storage.ReconcileOrphanBlobs(ctx, db, driver, 1*time.Hour, true)
 	require.NoError(t, err)
-	assert.Empty(t, report.Errors)
+	assert.Empty(t, report1.Errors)
+	assert.Equal(t, 0, report1.LocalDeleted, "dry run should not delete")
+	assert.Equal(t, 0, report1.S3Deleted, "dry run should not delete")
+
+	// Advance candidate observation time past grace period
+	_, err = db.ExecContext(ctx, `UPDATE orphan_candidates SET first_seen_at=datetime('now', '-2 hours')`)
+	require.NoError(t, err)
+
+	// Observation 2: deletion enabled (dryRun=false)
+	report2, err := storage.ReconcileOrphanBlobs(ctx, db, driver, 1*time.Hour, false)
+	require.NoError(t, err)
+	assert.Empty(t, report2.Errors)
 
 	// Verify local results
-	assert.Equal(t, 1, report.LocalDeleted, "only orphan.bin should be deleted locally")
-	assert.NoFileExists(t, filepath.Join(localNodePath, "orphan.bin"))
-	assert.FileExists(t, filepath.Join(localNodePath, "active.bin"), "active file must be preserved")
-	assert.FileExists(t, filepath.Join(localNodePath, "trash.bin"), "trashed file must be preserved until purge")
-	assert.FileExists(t, filepath.Join(localNodePath, "fresh.bin"), "recently created file must be protected by grace period")
+	assert.Equal(t, 1, report2.LocalDeleted, "only orphan.bin should be deleted locally")
+	assert.NoFileExists(t, filepath.Join(localBlobPrefix, "orphan.bin"))
+	assert.FileExists(t, filepath.Join(localBlobPrefix, "active.bin"), "active file must be preserved")
+	assert.FileExists(t, filepath.Join(localBlobPrefix, "trash.bin"), "trashed file must be preserved until purge")
+	assert.FileExists(t, outsidePath, "unnamespaced outside file must NEVER be touched")
 
 	// Verify S3 results
-	assert.Equal(t, 2, report.S3Deleted, "both s3-orphan-1 and s3-orphan-2 should be deleted")
-	assert.Contains(t, driver.deletedKeys, "s3-orphan-1.bin")
-	assert.Contains(t, driver.deletedKeys, "s3-orphan-2.bin")
-	assert.True(t, driver.s3Objects["s3-referenced.bin"], "referenced S3 object must be preserved")
-	assert.True(t, driver.s3Objects["s3-pending-active"], "active pending S3 upload must be preserved")
+	assert.Equal(t, 2, report2.S3Deleted, "both s3-orphan-1 and s3-orphan-2 should be deleted")
+	assert.Contains(t, driver.deletedKeys, s3Orphan1Key)
+	assert.Contains(t, driver.deletedKeys, s3Orphan2Key)
+	assert.True(t, driver.s3Objects[s3RefKey], "referenced S3 object must be preserved")
+	assert.True(t, driver.s3Objects[s3PendingKey], "active pending S3 upload must be preserved")
+	assert.True(t, driver.s3Objects["unrelated/outside.bin"], "outside object must NEVER be touched")
 	assert.True(t, driver.s3Objects[".system_metadata"], "system dot-files must be ignored")
 }
 

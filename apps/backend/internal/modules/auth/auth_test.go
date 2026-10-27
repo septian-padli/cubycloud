@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -232,6 +233,179 @@ func TestLogout(t *testing.T) {
 		t.Errorf("expected cuby_token cookie to be expired on logout")
 	}
 }
+func seedSetupToken(t *testing.T, tempDir, userID, tokenType string, expiresAt time.Time, consumed bool) string {
+	t.Helper()
+	db, err := database.Connect(tempDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	plainToken, tokenHash, tokenID, err := database.GenerateAuthToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var consumedAt any
+	if consumed {
+		consumedAt = time.Now()
+	}
+	_, err = db.ExecContext(context.Background(), `
+		INSERT INTO auth_tokens (id, user_id, token_hash, token_type, expires_at, consumed_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, tokenID, userID, tokenHash, tokenType, expiresAt, consumedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return plainToken
+}
+
+func setupPasswordHelper(t *testing.T, e *echo.Echo, token, password string) *httptest.ResponseRecorder {
+	t.Helper()
+	body, err := json.Marshal(auth.SetupPasswordRequest{Token: token, Password: password, ConfirmPassword: password})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/setup-password", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestSetupPassword_InvitationActivationAndLogin(t *testing.T) {
+	e, tempDir := setupTestDB(t)
+	defer os.RemoveAll(tempDir)
+	db, err := database.Connect(tempDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var userID string
+	if err := db.QueryRowContext(context.Background(), "SELECT id FROM users WHERE username = ?", "admin").Scan(&userID); err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	_, err = db.ExecContext(context.Background(), "UPDATE users SET status = 'PENDING_ACTIVATION', password_hash = '' WHERE id = ?", userID)
+	db.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	loginBody, _ := json.Marshal(auth.LoginRequest{Identifier: "admin", Password: "password123"})
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(loginBody))
+	loginReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	loginRec := httptest.NewRecorder()
+	e.ServeHTTP(loginRec, loginReq)
+	if loginRec.Code != http.StatusForbidden {
+		t.Fatalf("pending login status = %d, want 403: %s", loginRec.Code, loginRec.Body.String())
+	}
+
+	token := seedSetupToken(t, tempDir, userID, "INVITATION", time.Now().Add(time.Hour), false)
+	if rec := setupPasswordHelper(t, e, token, "short"); rec.Code != http.StatusBadRequest {
+		t.Fatalf("short password status = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+	rec := setupPasswordHelper(t, e, token, "correct horse battery")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("invitation setup status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	loginBody, _ = json.Marshal(auth.LoginRequest{Identifier: "admin", Password: "correct horse battery"})
+	loginReq = httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(loginBody))
+	loginReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	loginRec = httptest.NewRecorder()
+	e.ServeHTTP(loginRec, loginReq)
+	if loginRec.Code != http.StatusOK {
+		t.Fatalf("activated login status = %d, want 200: %s", loginRec.Code, loginRec.Body.String())
+	}
+}
+
+func TestSetupPassword_RejectsExpiredRevokedAndReplayedTokens(t *testing.T) {
+	e, tempDir := setupTestDB(t)
+	defer os.RemoveAll(tempDir)
+	db, err := database.Connect(tempDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var userID string
+	if err := db.QueryRowContext(context.Background(), "SELECT id FROM users WHERE username = ?", "admin").Scan(&userID); err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	db.Close()
+	for _, tc := range []struct {
+		name      string
+		expiresAt time.Time
+		consumed  bool
+	}{
+		{name: "expired", expiresAt: time.Now().Add(-time.Minute)},
+		{name: "revoked", expiresAt: time.Now().Add(time.Hour), consumed: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			token := seedSetupToken(t, tempDir, userID, "INVITATION", tc.expiresAt, tc.consumed)
+			if rec := setupPasswordHelper(t, e, token, "correct horse battery"); rec.Code != http.StatusBadRequest {
+				t.Fatalf("%s token status = %d, want 400: %s", tc.name, rec.Code, rec.Body.String())
+			}
+		})
+	}
+	token := seedSetupToken(t, tempDir, userID, "PASSWORD_RESET", time.Now().Add(time.Hour), false)
+	if rec := setupPasswordHelper(t, e, token, "correct horse battery"); rec.Code != http.StatusOK {
+		t.Fatalf("reset-token setup status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if rec := setupPasswordHelper(t, e, token, "another correct password"); rec.Code != http.StatusBadRequest {
+		t.Fatalf("replayed token status = %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestSetupPassword_ConcurrentRedemptionAndSessionInvalidation(t *testing.T) {
+	e, tempDir := setupTestDB(t)
+	defer os.RemoveAll(tempDir)
+	oldCookie, _ := loginHelper(t, e, "admin", "password123")
+	db, err := database.Connect(tempDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var userID string
+	if err := db.QueryRowContext(context.Background(), "SELECT id FROM users WHERE username = ?", "admin").Scan(&userID); err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	db.Close()
+	token := seedSetupToken(t, tempDir, userID, "PASSWORD_RESET", time.Now().Add(time.Hour), false)
+	start := make(chan struct{})
+	results := make(chan int, 2)
+	var wg sync.WaitGroup
+	for _, password := range []string{"first secure password", "second secure password"} {
+		wg.Add(1)
+		go func(password string) {
+			defer wg.Done()
+			<-start
+			results <- setupPasswordHelper(t, e, token, password).Code
+		}(password)
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+	successes, failures := 0, 0
+	for status := range results {
+		switch status {
+		case http.StatusOK:
+			successes++
+		case http.StatusBadRequest:
+			failures++
+		default:
+			t.Fatalf("unexpected concurrent setup status %d", status)
+		}
+	}
+	if successes != 1 || failures != 1 {
+		t.Fatalf("got %d successful redemptions and %d rejections, want one each", successes, failures)
+	}
+	meReq := httptest.NewRequest(http.MethodGet, "/api/v1/auth/me", nil)
+	meReq.AddCookie(oldCookie)
+	meRec := httptest.NewRecorder()
+	e.ServeHTTP(meRec, meReq)
+	if meRec.Code != http.StatusUnauthorized {
+		t.Fatalf("old session after password setup status = %d, want 401: %s", meRec.Code, meRec.Body.String())
+	}
+}
+
 func TestResetPasswordRotatesAndConsumesRecoveryKey(t *testing.T) {
 	e, tempDir := setupTestDB(t)
 	defer os.RemoveAll(tempDir)

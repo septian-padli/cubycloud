@@ -235,9 +235,42 @@ func TestUpdateSettingsHandler(t *testing.T) {
 		t.Errorf("unexpected settings response: %+v", resp)
 	}
 }
+
+type mockConcurrencyController struct {
+	concurrency int
+}
+
+func (m *mockConcurrencyController) SetConcurrency(limit int) {
+	m.concurrency = limit
+}
+
+func TestUpdateSettingsHandler_DynamicConcurrencyController(t *testing.T) {
+	db, handler, _ := setupTestAdmin(t)
+	defer db.Close()
+
+	mockCtl := &mockConcurrencyController{concurrency: 2}
+	handler.SetConcurrencyController(mockCtl)
+
+	e := echo.New()
+	body := `{"worker_concurrency":4}`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/settings", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := handler.UpdateSettings(c); err != nil {
+		t.Fatalf("UpdateSettings failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+	if mockCtl.concurrency != 4 {
+		t.Errorf("expected mock controller concurrency 4, got %d", mockCtl.concurrency)
+	}
+}
+
 func TestStorageNodeNamesAndUsage(t *testing.T) {
 	db, handler, dbPath := setupTestAdmin(t)
-	defer db.Close()
 	ctx := context.Background()
 
 	localPath := t.TempDir()

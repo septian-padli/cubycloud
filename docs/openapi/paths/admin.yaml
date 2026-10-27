@@ -202,7 +202,7 @@
   post:
     operationId: provisionAdminUser
     summary: Provision a user
-    description: Creates a regular user. If password is omitted, the backend applies its default. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    description: Creates a regular user in PENDING_ACTIVATION state and returns a single-use invitation link. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
     security:
       - CookieAuth: []
       - BearerAuth: []
@@ -211,7 +211,7 @@
       content:
         application/json:
           schema: {$ref: '#/components/schemas/CreateAdminUserRequest'}
-          example: {username: alice, email: alice@example.com, password: example-password, quota_mode: DEFAULT, quota_gb: 50}
+          example: {username: alice, email: alice@example.com, quota_mode: DEFAULT, quota_gb: 50}
     responses:
       '201': {description: User created, content: {application/json: {schema: {$ref: '#/components/schemas/AdminUser'}}}}
       '400': {description: Invalid user data, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
@@ -265,18 +265,35 @@
       '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
       '404': {description: User not found, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
       '500': {description: Failed to update quota, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
-/api/v1/admin/users/{id}/reset-password:
+/api/v1/admin/users/{id}/invitation:
   post:
-    operationId: resetAdminUserPassword
-    summary: Reset a user's password
-    description: Resets the user's password to the default value 12345678. The authenticated super administrator cannot reset their own password. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    operationId: regenerateAdminUserInvitation
+    summary: Regenerate user invitation link
+    description: Regenerates a single-use invitation link for a user awaiting activation and revokes previously issued invitation tokens. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
     security:
       - CookieAuth: []
       - BearerAuth: []
     parameters:
       - {name: id, in: path, required: true, description: User ID, schema: {type: string}, example: user-123}
     responses:
-      '200': {description: Password reset, content: {application/json: {schema: {$ref: '#/components/schemas/AdminMessageResponse'}, example: {message: password reset to default successfully}}}}
+      '200': {description: Fresh invitation link generated, content: {application/json: {schema: {$ref: '#/components/schemas/AdminUserInvitationResponse'}}}}
+      '400': {description: User already active or invalid request, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: User not found, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to regenerate invitation link, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+/api/v1/admin/users/{id}/reset-password:
+  post:
+    operationId: resetAdminUserPassword
+    summary: Reset a user's password
+    description: Immediately revokes all active sessions for the user, disables password login, and generates a one-time 30-minute password reset link. The authenticated super administrator cannot reset their own password. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - {name: id, in: path, required: true, description: User ID, schema: {type: string}, example: user-123}
+    responses:
+      '200': {description: Password reset link generated, content: {application/json: {schema: {$ref: '#/components/schemas/AdminUserResetPasswordResponse'}}}}
       '400': {description: Password reset rejected, including attempts to reset the actor's own account, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
       '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
       '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}

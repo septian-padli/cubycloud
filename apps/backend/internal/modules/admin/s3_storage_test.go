@@ -2,6 +2,7 @@ package admin_test
 
 import (
 	"bytes"
+	"encoding/base64"
 	"context"
 	"fmt"
 	"io"
@@ -40,6 +41,9 @@ func TestS3NodeLifecycleAndRestartPersistence(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 	storagePath := filepath.Join(tempDir, "storage")
+	t.Setenv("DATA_DIR_PATH", tempDir)
+	masterKey := bytes.Repeat([]byte{0x5a}, 32)
+	t.Setenv("CUBYCLOUD_MASTER_KEY", base64.StdEncoding.EncodeToString(masterKey))
 	require.NoError(t, os.MkdirAll(storagePath, 0755))
 	require.NoError(t, os.MkdirAll(filepath.Join(tempDir, "db"), 0755))
 	// 1. Initial Start: Open database and storage driver

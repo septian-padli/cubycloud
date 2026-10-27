@@ -116,6 +116,14 @@ const SETUP_ERROR_MESSAGES: Record<string, [string, string]> = {
 	'failed to scan storage nodes': [
 		'Gagal memindai node penyimpanan.',
 		'Failed to scan storage nodes.'
+	],
+	'cloud connection validation failed': [
+		'Uji koneksi cloud gagal. Periksa endpoint, kredensial, atau bucket Anda.',
+		'Cloud connection test failed. Check your endpoint, credentials, or bucket.'
+	],
+	'cloud storage is not enabled': [
+		'Penyimpanan cloud belum diaktifkan.',
+		'Cloud storage is not enabled.'
 	]
 };
 
@@ -279,6 +287,46 @@ export async function completeSetup(req: CompleteSetupRequest): Promise<Complete
 							: `Request failed (HTTP ${res.status})`;
 		const message = rawMessage ? localizeSetupError(rawMessage) : fallback;
 		throw { ...(body ?? {}), status: res.status, message };
+	}
+	return res.json();
+}
+
+export interface TestCloudResponse {
+	message: string;
+}
+
+export interface TestCloudRequest {
+	enabled: boolean;
+	provider: CloudProvider;
+	node_name: string;
+	endpoint: string;
+	bucket: string;
+	region: string;
+	access_key: string;
+	secret_key: string;
+	capacity_cap_gb?: number;
+}
+
+export async function testCloudStorage(req: TestCloudRequest): Promise<TestCloudResponse> {
+	const res = await fetch(`${API_BASE}/setup/test-cloud`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(req)
+	});
+	if (!res.ok) {
+		const body = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+		const rawMessage =
+			typeof body?.message === 'string'
+				? body.message
+				: typeof body?.error === 'string'
+					? body.error
+					: undefined;
+		const fallback =
+			locale.language === 'id'
+				? 'Gagal menguji koneksi penyimpanan cloud.'
+				: 'Failed to test cloud storage connection.';
+		const message = rawMessage ? localizeSetupError(rawMessage) : fallback;
+		throw new Error(message);
 	}
 	return res.json();
 }

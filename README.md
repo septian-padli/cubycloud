@@ -72,10 +72,19 @@ bun run dev --host 127.0.0.1 --port 5188
 
 Open [http://localhost:5188/setup](http://localhost:5188/setup), create the first administrator, and complete the setup wizard. Save the recovery key somewhere safe. Application data is written under the `DATA_DIR_PATH` you selected; keep that directory backed up.
 
-### Container build status
+### Container build
 
-> **The Docker image does not currently build from this checkout.** The backend module requires Go 1.25.0, while `Dockerfile` uses `golang:1.24-alpine`. A local `docker build` was attempted and fails at `go mod download` with `go.mod requires go >= 1.25.0`. The Docker instructions are intentionally not presented as a working installation until that version mismatch is resolved.
+The multi-stage `Dockerfile` uses pinned versions for all stages (`oven/bun:1.3.14-alpine`, `golang:1.25.14-alpine`, and `alpine:3.21.9`). To build and run the container locally:
 
+```bash
+docker build -t cubycloud .
+docker run -d --name cubycloud -p 8383:8383 \
+  -e JWT_SECRET=your-random-32-byte-secret \
+  -e COOKIE_SECURE=true \
+  -e ALLOWED_ORIGINS=http://localhost:8383 \
+  -v $(pwd)/data:/app/data \
+  cubycloud
+```
 ## System requirements
 
 - **Source development:** Go 1.25 or newer and Bun 1.x. Air is only needed for the `make dev` convenience script.
@@ -94,7 +103,7 @@ Open [http://localhost:5188/setup](http://localhost:5188/setup), create the firs
 | Object storage | S3-compatible services through the AWS SDK for Go v2     |
 | Packaging      | Static frontend assets embedded into the Go server build |
 
-The intended production package is a single Go service serving both the API and the built frontend. The current Docker build limitation is documented above; the stack description is not a claim that the image currently builds.
+The intended production package is a single Go service serving both the API and the built frontend embedded in the binary.
 
 ## Development and testing
 

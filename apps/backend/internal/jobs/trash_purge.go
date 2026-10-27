@@ -90,15 +90,19 @@ func (r *TrashPurgeRunner) cleanupExpiredTransferSessions(ctx context.Context) {
 	if err := organization.CleanupExpiredTusUploads(); err != nil {
 		log.Printf("[TUS_CLEANUP_JOB] Error cleaning Organization uploads: %v", err)
 	}
-	if removed, err := r.service.CleanupExpiredMultipartSessions(ctx); err != nil {
-		log.Printf("[MULTIPART_CLEANUP_JOB] Error cleaning My Storage sessions: %v", err)
-	} else if removed > 0 {
-		log.Printf("[MULTIPART_CLEANUP_JOB] Removed %d My Storage sessions", removed)
+	if r.service != nil {
+		if removed, err := r.service.CleanupExpiredMultipartSessions(ctx); err != nil {
+			log.Printf("[MULTIPART_CLEANUP_JOB] Error cleaning My Storage sessions: %v", err)
+		} else if removed > 0 {
+			log.Printf("[MULTIPART_CLEANUP_JOB] Removed %d My Storage sessions", removed)
+		}
 	}
-	if removed, err := r.organization.CleanupExpiredMultipartSessions(ctx); err != nil {
-		log.Printf("[MULTIPART_CLEANUP_JOB] Error cleaning Organization sessions: %v", err)
-	} else if removed > 0 {
-		log.Printf("[MULTIPART_CLEANUP_JOB] Removed %d Organization sessions", removed)
+	if r.organization != nil {
+		if removed, err := r.organization.CleanupExpiredMultipartSessions(ctx); err != nil {
+			log.Printf("[MULTIPART_CLEANUP_JOB] Error cleaning Organization sessions: %v", err)
+		} else if removed > 0 {
+			log.Printf("[MULTIPART_CLEANUP_JOB] Removed %d Organization sessions", removed)
+		}
 	}
 }
 

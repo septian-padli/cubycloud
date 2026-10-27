@@ -263,7 +263,11 @@ func (h *CompressHandler) Execute(ctx context.Context, job *database.Job, update
 	}
 
 	// 7. Store archive blob physically to destination node
-	diskKey := ulid.Make().String()
+	instanceID, err := storage.InstanceID(ctx, h.db)
+	if err != nil {
+		return nil, fmt.Errorf("load storage instance ID: %w", err)
+	}
+	diskKey := storage.BuildBlobKey(instanceID, placement.ID, ulid.Make().String())
 	readZip, err := os.Open(tempPath)
 	if err != nil {
 		return nil, fmt.Errorf("open temp zip: %w", err)

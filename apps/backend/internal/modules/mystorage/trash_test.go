@@ -293,7 +293,7 @@ func TestTrashPurgeItemAndPurgeAll(t *testing.T) {
 	// f2 disk key should have been deleted physically
 	foundF2Key := false
 	for _, k := range driver.deletedKeys {
-		if k == f2.ID {
+		if k == f2.ID || strings.HasSuffix(k, f2.ID) {
 			foundF2Key = true
 		}
 	}

@@ -154,3 +154,56 @@ PasswordChangedResponse:
     message:
       type: string
       example: password changed successfully
+SetupPasswordValidation:
+  type: object
+  required:
+    - valid
+    - token_type
+    - username
+    - email
+  properties:
+    valid:
+      type: boolean
+      example: true
+    token_type:
+      type: string
+      enum: [INVITATION, PASSWORD_RESET]
+      example: INVITATION
+    username:
+      type: string
+      example: alice
+    email:
+      type: string
+      format: email
+      example: alice@example.com
+SetupPasswordRequest:
+  type: object
+  required:
+    - token
+    - password
+    - confirm_password
+  properties:
+    token:
+      type: string
+      description: Plaintext invitation or reset token.
+      example: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    password:
+      type: string
+      format: password
+      minLength: 15
+      maxLength: 72
+      description: New user password (minimum 15 characters, maximum 72 bytes).
+      example: secure-passphrase-at-least-15-characters
+    confirm_password:
+      type: string
+      format: password
+      description: Confirmation password matching password.
+      example: secure-passphrase-at-least-15-characters
+SetupPasswordResponse:
+  type: object
+  required:
+    - message
+  properties:
+    message:
+      type: string
+      example: password set successfully

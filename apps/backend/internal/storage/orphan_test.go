@@ -14,6 +14,7 @@ import (
 type orphanTestDriver struct {
 	StorageDriver
 	cloudObjects []string
+	listPrefix   string
 	deletedLocal []string
 	deletedS3    []string
 }
@@ -23,7 +24,8 @@ func (d *orphanTestDriver) DeleteLocal(_ context.Context, nodePath, filename str
 	return os.Remove(filepath.Join(nodePath, filename))
 }
 
-func (d *orphanTestDriver) ListObjects(context.Context, string, string) ([]string, error) {
+func (d *orphanTestDriver) ListObjects(_ context.Context, _, prefix string) ([]string, error) {
+	d.listPrefix = prefix
 	return d.cloudObjects, nil
 }
 
@@ -52,7 +54,7 @@ func (d *orphanTestDriver) PresignDownload(context.Context, string, string, stri
 	return "", nil
 }
 
-func TestReconcileOrphanBlobs(t *testing.T) {
+func TestReconcileOrphanBlobsDryRunAndConfinedNamespace(t *testing.T) {
 	ctx := context.Background()
 	dataDir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dataDir, "db"), 0o755); err != nil {
@@ -63,23 +65,89 @@ func TestReconcileOrphanBlobs(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-
-	localPath := filepath.Join(dataDir, "local")
-	if err := os.MkdirAll(localPath, 0o755); err != nil {
+	instanceID, err := InstanceID(ctx, db)
+	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"orphan", "active", "trashed", "fresh"} {
-		if err := os.WriteFile(filepath.Join(localPath, name), []byte(name), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		if name != "fresh" {
-			old := time.Now().Add(-time.Hour)
-			if err := os.Chtimes(filepath.Join(localPath, name), old, old); err != nil {
-				t.Fatal(err)
-			}
-		}
+
+	localPath := filepath.Join(dataDir, "local")
+	ownedKey := BuildBlobKey(instanceID, "local", "blob")
+	owned := filepath.Join(localPath, filepath.FromSlash(ownedKey))
+	if err := os.MkdirAll(filepath.Dir(owned), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(owned, []byte("orphan"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(localPath, "unowned")
+	if err := os.WriteFile(outside, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
 	}
 	if _, err := db.ExecContext(ctx, `INSERT INTO storage_nodes(id,name,type,path,capacity_bytes,enabled) VALUES('local','Local','LOCAL',?,1000,1)`, localPath); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO storage_nodes(id,name,type,bucket,capacity_bytes,enabled) VALUES('cloud','Cloud','S3','bucket',1000,1)`); err != nil {
+		t.Fatal(err)
+	}
+	cloudOrphan := BuildBlobKey(instanceID, "cloud", "orphan")
+	driver := &orphanTestDriver{StorageDriver: NewLocalDriver(dataDir), cloudObjects: []string{cloudOrphan}}
+
+	// The default mode reports and records candidates, but never deletes.
+	if _, err := ReconcileOrphanBlobs(ctx, db, driver, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if len(driver.deletedLocal) != 0 || len(driver.deletedS3) != 0 {
+		t.Fatalf("default mode deleted local=%v s3=%v", driver.deletedLocal, driver.deletedS3)
+	}
+	if want := "cubycloud/" + instanceID + "/cloud/blobs/"; driver.listPrefix != want {
+		t.Fatalf("S3 prefix = %q, want %q", driver.listPrefix, want)
+	}
+	if _, err := os.Stat(outside); err != nil {
+		t.Fatalf("outside file changed: %v", err)
+	}
+	var candidates int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM orphan_candidates`).Scan(&candidates); err != nil || candidates != 2 {
+		t.Fatalf("candidate count = %d, %v; want both owned orphans", candidates, err)
+	}
+
+	// A single observation and recent first_seen_at are insufficient for deletion.
+	if _, err := ReconcileOrphanBlobs(ctx, db, driver, time.Hour, false); err != nil {
+		t.Fatal(err)
+	}
+	if len(driver.deletedLocal) != 0 || len(driver.deletedS3) != 0 {
+		t.Fatalf("deleted before grace: local=%v s3=%v", driver.deletedLocal, driver.deletedS3)
+	}
+	old := time.Now().UTC().Add(-2 * time.Hour)
+	if _, err := db.ExecContext(ctx, `UPDATE orphan_candidates SET first_seen_at=?,last_seen_at=?,observation_count=1`, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReconcileOrphanBlobs(ctx, db, driver, time.Hour, false); err != nil {
+		t.Fatal(err)
+	}
+	if len(driver.deletedLocal) != 1 || driver.deletedLocal[0] != owned {
+		t.Fatalf("deleted local = %v, want only owned path %q", driver.deletedLocal, owned)
+	}
+	if len(driver.deletedS3) != 1 || driver.deletedS3[0] != cloudOrphan {
+		t.Fatalf("deleted S3 = %v, want only %q", driver.deletedS3, cloudOrphan)
+	}
+	if _, err := os.Stat(outside); err != nil {
+		t.Fatalf("outside file changed: %v", err)
+	}
+}
+
+func TestReconcileOrphanBlobsProtectsActiveUploadsAndJobs(t *testing.T) {
+	ctx := context.Background()
+	dataDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dataDir, "db"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	db, err := database.Connect(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	instanceID, err := InstanceID(ctx, db)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.ExecContext(ctx, `INSERT INTO storage_nodes(id,name,type,bucket,capacity_bytes,enabled) VALUES('cloud','Cloud','S3','bucket',1000,1)`); err != nil {
@@ -88,37 +156,31 @@ func TestReconcileOrphanBlobs(t *testing.T) {
 	if _, err := db.ExecContext(ctx, `INSERT INTO users(id,username,email,password_hash,role) VALUES('user','user','user@example.test','hash','REGULAR')`); err != nil {
 		t.Fatal(err)
 	}
-	for _, item := range []struct {
-		id, key string
-		deleted bool
-	}{{"active", "active", false}, {"trashed", "trashed", true}} {
-		var deleted any
-		if item.deleted {
-			deleted = time.Now()
-		}
-		if _, err := db.ExecContext(ctx, `INSERT INTO my_storage_items(id,owner_id,name,kind,disk_key,deleted_at) VALUES(?, 'user', ?, 'file', ?, ?)`, item.id, item.id, item.key, deleted); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO pending_cloud_uploads(id,owner_id,storage_node_id,filename,size_bytes,expires_at) VALUES('pending-key','user','cloud','pending',0,datetime('now','+1 hour'))`); err != nil {
+	activeItem := BuildBlobKey(instanceID, "cloud", "active")
+	if _, err := db.ExecContext(ctx, `INSERT INTO my_storage_items(id,owner_id,name,kind,disk_key,storage_node_id) VALUES('item','user','item','file',?,'cloud')`, activeItem); err != nil {
 		t.Fatal(err)
 	}
-
-	driver := &orphanTestDriver{StorageDriver: NewLocalDriver(dataDir), cloudObjects: []string{"cloud-orphan", "active", "trashed", "pending-key", ".system"}}
-	report, err := ReconcileOrphanBlobs(ctx, db, driver, time.Minute)
-	if err != nil {
+	if _, err := db.ExecContext(ctx, `INSERT INTO pending_cloud_uploads(id,owner_id,storage_node_id,filename,size_bytes,expires_at) VALUES('pending','user','cloud','pending',0,datetime('now','+1 hour'))`); err != nil {
 		t.Fatal(err)
 	}
-	if len(driver.deletedLocal) != 1 || filepath.Base(driver.deletedLocal[0]) != "orphan" {
-		t.Fatalf("deleted local = %v, want only orphan", driver.deletedLocal)
+	pendingKey := BuildBlobKey(instanceID, "cloud", "pending")
+	if _, err := db.ExecContext(ctx, `INSERT INTO multipart_uploads(id,scope,owner_id,storage_node_id,s3_key,s3_upload_id,filename,size_bytes,part_size_bytes,part_count,expires_at) VALUES('multi','my-storage','user','cloud',?,'provider','multi',0,1,1,datetime('now','+1 hour'))`, BuildBlobKey(instanceID, "cloud", "multipart")); err != nil {
+		t.Fatal(err)
 	}
-	if len(driver.deletedS3) != 1 || driver.deletedS3[0] != "cloud-orphan" {
-		t.Fatalf("deleted S3 = %v, want only cloud-orphan", driver.deletedS3)
+	driver := &orphanTestDriver{StorageDriver: NewLocalDriver(dataDir), cloudObjects: []string{activeItem, pendingKey, BuildBlobKey(instanceID, "cloud", "multipart"), BuildBlobKey(instanceID, "cloud", "orphan")}}
+	if _, err := ReconcileOrphanBlobs(ctx, db, driver, time.Hour, false); err != nil {
+		t.Fatal(err)
 	}
-	if report.LocalDeleted != 1 || report.S3Deleted != 1 {
-		t.Fatalf("deleted counts local=%d S3=%d, want 1 each", report.LocalDeleted, report.S3Deleted)
+	if len(driver.deletedS3) != 0 {
+		t.Fatalf("deleted with fresh candidates: %v", driver.deletedS3)
 	}
-	if _, err := os.Stat(filepath.Join(localPath, "fresh")); err != nil {
-		t.Fatalf("fresh file should survive grace period: %v", err)
+	if _, err := db.ExecContext(ctx, `INSERT INTO jobs(id,type,status,user_id,payload) VALUES('migration','node_migration','PROCESSING','user','{}')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReconcileOrphanBlobs(ctx, db, driver, time.Hour, false); err == nil {
+		t.Fatal("expected active migration to fail closed")
+	}
+	if len(driver.deletedS3) != 0 {
+		t.Fatalf("deleted while migration active: %v", driver.deletedS3)
 	}
 }

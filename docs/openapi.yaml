@@ -145,6 +145,12 @@ components:
                 id:
                     example: user-123
                     type: string
+                invitation_token:
+                    example: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                    type: string
+                invitation_url:
+                    example: /set-password#token=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                    type: string
                 quota_bytes:
                     description: Quota limit in bytes; -1 denotes unlimited.
                     example: 53687091200
@@ -159,6 +165,12 @@ components:
                     type: string
                 role:
                     example: REGULAR
+                    type: string
+                status:
+                    enum:
+                        - ACTIVE
+                        - PENDING_ACTIVATION
+                    example: ACTIVE
                     type: string
                 used_bytes:
                     example: 1073741824
@@ -176,11 +188,50 @@ components:
                 - username
                 - email
                 - role
+                - status
                 - quota_mode
                 - quota_bytes
                 - used_bytes
                 - used_gb
                 - created_at
+            type: object
+        AdminUserInvitationResponse:
+            properties:
+                expires_at:
+                    example: "2026-01-16T10:30:00Z"
+                    format: date-time
+                    type: string
+                invitation_token:
+                    example: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                    type: string
+                invitation_url:
+                    example: /set-password#token=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                    type: string
+            required:
+                - invitation_token
+                - invitation_url
+                - expires_at
+            type: object
+        AdminUserResetPasswordResponse:
+            properties:
+                expires_at:
+                    example: "2026-01-15T11:00:00Z"
+                    format: date-time
+                    type: string
+                message:
+                    example: password reset link generated
+                    type: string
+                reset_token:
+                    example: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                    type: string
+                reset_url:
+                    example: /set-password#token=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                    type: string
+            required:
+                - reset_token
+                - reset_url
+                - expires_at
+                - message
             type: object
         AdminUsersList:
             properties:
@@ -419,11 +470,6 @@ components:
                 email:
                     example: alice@example.com
                     format: email
-                    type: string
-                password:
-                    description: Optional; when omitted the backend applies its default password.
-                    example: secure-password
-                    format: password
                     type: string
                 quota_gb:
                     example: 50
@@ -1812,6 +1858,61 @@ components:
                 - region
                 - access_key
                 - secret_key
+            type: object
+        SetupPasswordRequest:
+            properties:
+                confirm_password:
+                    description: Confirmation password matching password.
+                    example: secure-passphrase-at-least-15-characters
+                    format: password
+                    type: string
+                password:
+                    description: New user password (minimum 15 characters, maximum 72 bytes).
+                    example: secure-passphrase-at-least-15-characters
+                    format: password
+                    maxLength: 72
+                    minLength: 15
+                    type: string
+                token:
+                    description: Plaintext invitation or reset token.
+                    example: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                    type: string
+            required:
+                - token
+                - password
+                - confirm_password
+            type: object
+        SetupPasswordResponse:
+            properties:
+                message:
+                    example: password set successfully
+                    type: string
+            required:
+                - message
+            type: object
+        SetupPasswordValidation:
+            properties:
+                email:
+                    example: alice@example.com
+                    format: email
+                    type: string
+                token_type:
+                    enum:
+                        - INVITATION
+                        - PASSWORD_RESET
+                    example: INVITATION
+                    type: string
+                username:
+                    example: alice
+                    type: string
+                valid:
+                    example: true
+                    type: boolean
+            required:
+                - valid
+                - token_type
+                - username
+                - email
             type: object
         SetupStatusResponse:
             properties:
@@ -3326,14 +3427,13 @@ paths:
                 - BearerAuth: []
             summary: List users
         post:
-            description: Creates a regular user. If password is omitted, the backend applies its default. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+            description: Creates a regular user in PENDING_ACTIVATION state and returns a single-use invitation link. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
             operationId: provisionAdminUser
             requestBody:
                 content:
                     application/json:
                         example:
                             email: alice@example.com
-                            password: example-password
                             quota_gb: 50
                             quota_mode: DEFAULT
                             username: alice
@@ -3444,6 +3544,59 @@ paths:
                 - CookieAuth: []
                 - BearerAuth: []
             summary: Delete a user
+    /api/v1/admin/users/{id}/invitation:
+        post:
+            description: Regenerates a single-use invitation link for a user awaiting activation and revokes previously issued invitation tokens. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+            operationId: regenerateAdminUserInvitation
+            parameters:
+                - description: User ID
+                  example: user-123
+                  in: path
+                  name: id
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/AdminUserInvitationResponse'
+                    description: Fresh invitation link generated
+                "400":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: User already active or invalid request
+                "401":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Authentication required
+                "403":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: SUPER_ADMIN role required
+                "404":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: User not found
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Failed to regenerate invitation link
+            security:
+                - CookieAuth: []
+                - BearerAuth: []
+            summary: Regenerate user invitation link
     /api/v1/admin/users/{id}/quota:
         put:
             description: Updates a user's quota configuration; quota_bytes in responses is expressed in bytes. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
@@ -3508,7 +3661,7 @@ paths:
             summary: Update user quota
     /api/v1/admin/users/{id}/reset-password:
         post:
-            description: Resets the user's password to the default value 12345678. The authenticated super administrator cannot reset their own password. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+            description: Immediately revokes all active sessions for the user, disables password login, and generates a one-time 30-minute password reset link. The authenticated super administrator cannot reset their own password. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
             operationId: resetAdminUserPassword
             parameters:
                 - description: User ID
@@ -3522,11 +3675,9 @@ paths:
                 "200":
                     content:
                         application/json:
-                            example:
-                                message: password reset to default successfully
                             schema:
-                                $ref: '#/components/schemas/AdminMessageResponse'
-                    description: Password reset
+                                $ref: '#/components/schemas/AdminUserResetPasswordResponse'
+                    description: Password reset link generated
                 "400":
                     content:
                         application/json:
@@ -3939,6 +4090,97 @@ paths:
                     description: Password reset could not be completed due to an internal error.
             security: []
             summary: Reset a password with a recovery key
+    /api/v1/auth/setup-password:
+        post:
+            description: Consumes a single-use invitation or reset token atomically and sets a new password (min 15 characters, max 72 bytes).
+            operationId: setupPassword
+            requestBody:
+                content:
+                    application/json:
+                        example:
+                            confirm_password: secure-password-passphrase-at-least-15-chars
+                            password: secure-password-passphrase-at-least-15-chars
+                            token: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                        schema:
+                            $ref: '#/components/schemas/SetupPasswordRequest'
+                required: true
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            example:
+                                message: password set successfully
+                            schema:
+                                $ref: '#/components/schemas/SetupPasswordResponse'
+                    description: Password set successfully.
+                "400":
+                    content:
+                        application/json:
+                            example:
+                                error: password must be at least 15 characters
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Token is invalid/expired/consumed or password does not meet policy requirements.
+                "429":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Rate limit exceeded.
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Failed to set password.
+            security: []
+            summary: Set password using token
+    /api/v1/auth/setup-password/validate:
+        get:
+            description: Validates an invitation or admin password reset token without consuming it.
+            operationId: validateSetupPasswordToken
+            parameters:
+                - description: Plaintext invitation or password reset token.
+                  example: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+                  in: query
+                  name: token
+                  required: true
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            example:
+                                email: alice@example.com
+                                token_type: INVITATION
+                                username: alice
+                                valid: true
+                            schema:
+                                $ref: '#/components/schemas/SetupPasswordValidation'
+                    description: Token is valid and ready for password setup.
+                "400":
+                    content:
+                        application/json:
+                            example:
+                                error: invalid, expired, or already consumed token
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Token is invalid, expired, or already consumed.
+                "429":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Rate limit exceeded.
+                "500":
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Failed to validate token.
+            security: []
+            summary: Validate invitation or password reset token
     /api/v1/drive/access:
         post:
             operationId: recordDriveItemAccess
@@ -8388,7 +8630,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ErrorResponse'
+                                error: setup failed
                     description: Setup initialization, storage configuration, or token generation failed.
             security: []
             summary: Complete initial setup
@@ -8443,6 +8685,47 @@ paths:
                     description: Setup status could not be retrieved.
             security: []
             summary: Get initial setup status
+    /api/v1/setup/test-cloud:
+        post:
+            description: Validates S3-compatible cloud storage connectivity and credentials without storing them. Available only before setup has completed.
+            operationId: testSetupCloud
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SetupCloudConfig'
+                required: true
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            example:
+                                message: cloud connection successful
+                            schema:
+                                properties:
+                                    message:
+                                        type: string
+                                required:
+                                    - message
+                                type: object
+                "400":
+                    content:
+                        application/json:
+                            example:
+                                error: cloud connection validation failed
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Cloud configuration missing required fields or connection validation failed.
+                "403":
+                    content:
+                        application/json:
+                            example:
+                                error: setup already completed
+                            schema:
+                                $ref: '#/components/schemas/ErrorResponse'
+                    description: Setup has already completed.
+            security: []
+            summary: Test cloud storage connection before completing setup
     /api/v1/share/users:
         get:
             description: Searches users for the share autocomplete, excluding the authenticated user. An empty query returns up to 20 users.
