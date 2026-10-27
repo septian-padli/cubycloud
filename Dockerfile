@@ -19,9 +19,9 @@ COPY apps/backend/go.mod apps/backend/go.sum* ./
 RUN go mod download
 
 COPY apps/backend ./
-# Sync frontend build artifacts into backend web/dist
+# Clean any host dist artifacts and sync fresh frontend build into backend web/dist
+RUN rm -rf ./web/dist
 COPY --from=frontend-builder /app/frontend/build ./web/dist
-
 # Build statically linked binary (CGO-free)
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /cubycloud ./cmd/server/main.go
 

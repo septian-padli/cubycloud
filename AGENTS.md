@@ -4,17 +4,17 @@
 
 ## 1. Source of truth and precedence
 
-| Concern | Canonical source |
-| --- | --- |
-| Product scope, permissions, behavior, acceptance criteria | `docs/prd.md` |
-| Architecture, system boundaries, infrastructure | `docs/architecture.md` |
-| Frontend routes, page actions, URL state | `apps/frontend/SITEMAP.md` |
-| Visual design and components | `apps/frontend/DESIGN.md` |
-| Frontend implementation conventions | `apps/frontend/AGENTS.md` |
-| Go/SQLite/storage implementation conventions | `apps/backend/AGENTS.md` |
-| Global agent workflow and constraints | This file |
-| Agent mindset, non-binding decision principles | `SOUL.md` (read selectively, if relevant) |
-| Git permission and documentation placement details | `.cursor/WORKFLOW_RULES.md` (read selectively) |
+| Concern                                                   | Canonical source                               |
+| --------------------------------------------------------- | ---------------------------------------------- |
+| Product scope, permissions, behavior, acceptance criteria | `docs/prd.md`                                  |
+| Architecture, system boundaries, infrastructure           | `docs/architecture.md`                         |
+| Frontend routes, page actions, URL state                  | `apps/frontend/SITEMAP.md`                     |
+| Visual design and components                              | `apps/frontend/DESIGN.md`                      |
+| Frontend implementation conventions                       | `apps/frontend/AGENTS.md`                      |
+| Go/SQLite/storage implementation conventions              | `apps/backend/AGENTS.md`                       |
+| Global agent workflow and constraints                     | This file                                      |
+| Agent mindset, non-binding decision principles            | `SOUL.md` (read selectively, if relevant)      |
+| Git permission and documentation placement details        | `.cursor/WORKFLOW_RULES.md` (read selectively) |
 
 A newer, explicit user decision for the active task takes precedence over older documentation. Do not silently overwrite an established contract or treat outdated dates and targets as evidence of delivered functionality. When sources genuinely conflict, flag the specific contradiction and its consequences; request a decision **only if** the task cannot safely proceed. Record accepted decisions in the owning document. Implementation alone is not a substitute for an approved product decision.
 
@@ -33,13 +33,13 @@ Never use selective reading to skip a relevant permission, quota, data-integrity
 
 ### Typical task scopes
 
-| Task | Initial reading |
-| --- | --- |
-| Frontend-only | Frontend `AGENTS.md`, affected SITEMAP/DESIGN/PRD sections |
-| Backend-only | Backend `AGENTS.md`, affected PRD/architecture sections |
+| Task                          | Initial reading                                                                 |
+| ----------------------------- | ------------------------------------------------------------------------------- |
+| Frontend-only                 | Frontend `AGENTS.md`, affected SITEMAP/DESIGN/PRD sections                      |
+| Backend-only                  | Backend `AGENTS.md`, affected PRD/architecture sections                         |
 | Cross-project API or security | Both scoped `AGENTS.md`; related PRD, architecture, route, and source contracts |
-| Documentation-only | Owning document's affected sections plus referenced contracts |
-| Deployment/storage | Architecture, affected PRD sections, build/storage sources and tests |
+| Documentation-only            | Owning document's affected sections plus referenced contracts                   |
+| Deployment/storage            | Architecture, affected PRD sections, build/storage sources and tests            |
 
 `README.md`, `SOUL.md`, `RTK.md`, `.cursor/WORKFLOW_RULES.md`, `CONTRIBUTING.md`, and other reference files are **not universal full-read prerequisites**. Read them when the task or a specific applicable rule calls for them. Any instructions actually auto-loaded by the active agent runtime still apply.
 
@@ -55,7 +55,7 @@ Never use selective reading to skip a relevant permission, quota, data-integrity
 
 ## 4. Tooling and code exploration
 
-- **Codegraph:** Use MCP `orient` when available. CLI: use supported commands such as `codegraph explore "<question>"`; check `codegraph --help` because CLI commands vary. Run one-shot commands as commands, not services. If unavailable, navigate code directly and report it.
+- **Codegraph:** Use MCP when available. CLI: use supported commands such as `codegraph explore "<question>"`; check `codegraph --help` because CLI commands vary. Run one-shot commands as commands, not services. If unavailable, navigate code directly and report it.
 - **RTK:** Use repository-configured token-efficient shell wrappers where available (e.g. `rtk git diff`, `rtk go test ./...`). Cursor shell hooks are **not assumed to run in OMP**. Run a tool directly if RTK is absent or suppresses diagnostic information; keep output focused.
 - **Ponytail:** Prefer smallest **correct** change, existing abstractions, standard libraries, and installed dependencies. Avoid speculative abstraction or broad refactors. Preserve testing, security, and operational correctness.
 - See `.cursor/rules/` and `RTK.md` only for the active integration's detailed setup or troubleshooting, not as mandatory reading for every task.
@@ -86,6 +86,7 @@ For independently scoped work, use **native OMP subagents** when they materially
 **Git safety rule:** Do not commit, push, force-push, reset destructively, delete branches/worktrees, or publish without specific authorization. Implement, verify, and report first. The detailed workflow is in `.cursor/WORKFLOW_RULES.md` and need not be read in full for every task.
 
 <!-- CODEGRAPH_START -->
+
 ## CodeGraph
 
 In repositories indexed by CodeGraph (a `.codegraph/` directory exists at the repo root), reach for it BEFORE grep/find or reading files when you need to understand or locate code:

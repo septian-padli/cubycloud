@@ -402,13 +402,13 @@
               username: alice
               email: alice@example.com
       '400':
-        description: Token is invalid, expired, or already consumed.
+        description: Token is invalid, expired, or consumed.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ErrorResponse'
             example:
-              error: invalid, expired, or already consumed token
+              error: invalid, expired, or consumed token
       '429':
         description: Rate limit exceeded.
         content:
@@ -439,13 +439,13 @@
             confirm_password: secure-password-passphrase-at-least-15-chars
     responses:
       '200':
-        description: Password set successfully.
+        description: Password setup successful.
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/SetupPasswordResponse'
             example:
-              message: password set successfully
+              message: password setup successful
       '400':
         description: Token is invalid/expired/consumed or password does not meet policy requirements.
         content:

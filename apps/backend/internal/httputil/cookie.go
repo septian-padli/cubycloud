@@ -10,12 +10,13 @@ import (
 
 // IsSecureRequest returns true if the incoming request should be treated as secure
 // for cookie generation and transport security. It evaluates:
-// 1. Explicit COOKIE_SECURE=true environment variable
+// 1. Explicit COOKIE_SECURE environment variable (forces true or false)
 // 2. Direct TLS connection (r.TLS != nil)
-// 3. Reverse proxy header (X-Forwarded-Proto: https, handling comma-separated chains)
+// 3. Reverse proxy header (X-Forwarded-Proto: https) ONLY when TRUST_PROXY=true
 func IsSecureRequest(r *http.Request) bool {
-	if strings.EqualFold(os.Getenv("COOKIE_SECURE"), "true") {
-		return true
+	rawCookieSecure := strings.TrimSpace(os.Getenv("COOKIE_SECURE"))
+	if rawCookieSecure != "" {
+		return strings.EqualFold(rawCookieSecure, "true")
 	}
 	if r == nil {
 		return false
@@ -23,13 +24,15 @@ func IsSecureRequest(r *http.Request) bool {
 	if r.TLS != nil {
 		return true
 	}
-	proto := r.Header.Get("X-Forwarded-Proto")
-	if proto != "" {
-		if idx := strings.Index(proto, ","); idx != -1 {
-			proto = proto[:idx]
-		}
-		if strings.EqualFold(strings.TrimSpace(proto), "https") {
-			return true
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("TRUST_PROXY")), "true") {
+		proto := r.Header.Get("X-Forwarded-Proto")
+		if proto != "" {
+			if idx := strings.Index(proto, ","); idx != -1 {
+				proto = proto[:idx]
+			}
+			if strings.EqualFold(strings.TrimSpace(proto), "https") {
+				return true
+			}
 		}
 	}
 	return false
@@ -38,7 +41,8 @@ func IsSecureRequest(r *http.Request) bool {
 // IsSecureCookie returns true if a cookie set on the given Echo context should have Secure: true.
 func IsSecureCookie(c echo.Context) bool {
 	if c == nil {
-		return strings.EqualFold(os.Getenv("COOKIE_SECURE"), "true")
+		rawCookieSecure := strings.TrimSpace(os.Getenv("COOKIE_SECURE"))
+		return strings.EqualFold(rawCookieSecure, "true")
 	}
 	return IsSecureRequest(c.Request())
 }

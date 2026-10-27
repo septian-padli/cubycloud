@@ -144,7 +144,8 @@ func TestLogin_CookieSecure(t *testing.T) {
 		Password:   "password123",
 	})
 
-	t.Run("with X-Forwarded-Proto https", func(t *testing.T) {
+	t.Run("with X-Forwarded-Proto https and TRUST_PROXY=true", func(t *testing.T) {
+		t.Setenv("TRUST_PROXY", "true")
 		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(loginBody))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 		req.Header.Set("X-Forwarded-Proto", "https")

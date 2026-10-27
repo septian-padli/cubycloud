@@ -2,7 +2,11 @@ package config
 
 import (
 	"bufio"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
+	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -19,6 +23,7 @@ type Config struct {
 	TempTUSPath         string
 	IsProduction        bool
 	CookieSecure        bool
+	TrustProxy          bool
 	AllowedOrigins      []string
 	MasterKey           string
 	MasterKeyFile       string
@@ -59,20 +64,16 @@ func LoadConfig() (*Config, error) {
 	// Determine JWTSecret:
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
-		if isProduction {
-			return nil, errors.New("JWT_SECRET required in production environment")
+		resolvedSecret, err := loadOrCreateJWTSecret(dataDir)
+		if err != nil {
+			return nil, err
 		}
-		jwtSecret = "cubycloud-dev-secret-change-in-production"
-		log.Println("[WARN] JWT_SECRET not set. Using default development secret. DO NOT use in production!")
+		jwtSecret = resolvedSecret
 	}
 
 	cookieSecureRaw := strings.TrimSpace(os.Getenv("COOKIE_SECURE"))
-	if isProduction {
-		if !strings.EqualFold(cookieSecureRaw, "true") {
-			return nil, errors.New("COOKIE_SECURE=true required in production environment")
-		}
-	}
 	cookieSecure := strings.EqualFold(cookieSecureRaw, "true")
+	trustProxy := strings.EqualFold(strings.TrimSpace(os.Getenv("TRUST_PROXY")), "true")
 
 	originsRaw := strings.TrimSpace(os.Getenv("ALLOWED_ORIGINS"))
 	var allowedOrigins []string
@@ -86,20 +87,16 @@ func LoadConfig() (*Config, error) {
 	}
 
 	if isProduction {
-		if len(allowedOrigins) == 0 {
-			return nil, errors.New("ALLOWED_ORIGINS required in production environment")
-		}
 		for _, origin := range allowedOrigins {
 			if origin == "*" {
 				return nil, errors.New("ALLOWED_ORIGINS cannot contain wildcard '*' in production environment")
 			}
 		}
 	} else {
-		if len(allowedOrigins) == 0 {
+		if len(originsRaw) == 0 {
 			allowedOrigins = []string{"*"}
 		}
 	}
-
 	masterKey := os.Getenv("CUBYCLOUD_MASTER_KEY")
 	masterKeyFile := os.Getenv("CUBYCLOUD_MASTER_KEY_FILE")
 	cleanupDryRun := true
@@ -118,6 +115,7 @@ func LoadConfig() (*Config, error) {
 		TempTUSPath:         filepath.Join(dataDir, "temp", "tus"),
 		IsProduction:        isProduction,
 		CookieSecure:        cookieSecure,
+		TrustProxy:          trustProxy,
 		AllowedOrigins:      allowedOrigins,
 		MasterKey:           masterKey,
 		MasterKeyFile:       masterKeyFile,
@@ -215,4 +213,71 @@ func isDirWritable(path string) bool {
 	}
 	_ = os.Remove(testFile)
 	return true
+}
+
+func loadOrCreateJWTSecret(dataDir string) (string, error) {
+	secretPath := filepath.Join(dataDir, "secrets", "jwt.key")
+	raw, err := os.ReadFile(secretPath)
+	if err == nil {
+		secret := strings.TrimSpace(string(raw))
+		if len(secret) < 32 {
+			return "", errors.New("persisted JWT secret in secrets/jwt.key is invalid (must be at least 32 characters)")
+		}
+		return secret, nil
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("read JWT secret file: %w", err)
+	}
+
+	// File does not exist. Check if an existing database exists.
+	dbPath := filepath.Join(dataDir, "db", "cubycloud.db")
+	if fi, statErr := os.Stat(dbPath); statErr == nil && fi.Size() > 0 {
+		return "", errors.New("JWT secret is missing while existing database is present; restore secrets/jwt.key or provide JWT_SECRET environment variable")
+	}
+
+	// Clean install: generate random 32-byte secret (hex encoded = 64 characters)
+	buf := make([]byte, 32)
+	if _, randErr := io.ReadFull(rand.Reader, buf); randErr != nil {
+		return "", fmt.Errorf("generate random JWT secret: %w", randErr)
+	}
+	newSecret := hex.EncodeToString(buf)
+
+	secretsDir := filepath.Dir(secretPath)
+	if err := os.MkdirAll(secretsDir, 0700); err != nil {
+		return "", fmt.Errorf("create secrets directory: %w", err)
+	}
+	_ = os.Chmod(secretsDir, 0700)
+
+	tmp, err := os.CreateTemp(secretsDir, ".jwt-secret-*")
+	if err != nil {
+		return "", fmt.Errorf("create temporary JWT secret file: %w", err)
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+
+	_ = tmp.Chmod(0600)
+	if _, err := tmp.WriteString(newSecret + "\n"); err != nil {
+		_ = tmp.Close()
+		return "", fmt.Errorf("write temporary JWT secret: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return "", fmt.Errorf("sync temporary JWT secret: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return "", fmt.Errorf("close temporary JWT secret: %w", err)
+	}
+
+	if err := os.Link(tmpName, secretPath); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			existing, rErr := os.ReadFile(secretPath)
+			if rErr == nil && len(strings.TrimSpace(string(existing))) >= 32 {
+				return strings.TrimSpace(string(existing)), nil
+			}
+		}
+		return "", fmt.Errorf("persist JWT secret: %w", err)
+	}
+
+	log.Printf("[INFO] Auto-generated and persisted new JWT secret to %s", secretPath)
+	return newSecret, nil
 }

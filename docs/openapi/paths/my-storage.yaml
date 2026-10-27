@@ -334,16 +334,16 @@
     operationId: toggleMyStorageItemStarPost
     summary: Toggle item star
     security: [{ CookieAuth: [], BearerAuth: [] }]
-    responses: { '200': { description: Updated star state., content: { application/json: { schema: { $ref: '#/components/schemas/StarResponse' } } } }, '404': { description: Item not found. } }
+    responses: { '200': { description: Updated star state., content: { application/json: { schema: { $ref: '#/components/schemas/StarResponse' } } } }, '404': { description: Item not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } } }
   put:
     operationId: toggleMyStorageItemStarPut
     summary: Toggle item star
     security: [{ CookieAuth: [], BearerAuth: [] }]
-    responses: { '200': { description: Updated star state., content: { application/json: { schema: { $ref: '#/components/schemas/StarResponse' } } } }, '404': { description: Item not found. } }
+    responses: { '200': { description: Updated star state., content: { application/json: { schema: { $ref: '#/components/schemas/StarResponse' } } } }, '404': { description: Item not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } } }
 
 /api/v1/drive/my-storage/starred:
   get:
     operationId: listMyStorageStarredItems
     summary: List starred items
     security: [{ CookieAuth: [], BearerAuth: [] }]
-    responses: { '200': { description: Starred item list., content: { application/json: { schema: { $ref: '#/components/schemas/ItemListResponse' } } } } }
+    responses: { '200': { description: Starred item list., content: { application/json: { schema: { $ref: '#/components/schemas/ItemListResponse' } } } }, '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } } }

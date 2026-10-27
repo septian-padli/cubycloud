@@ -182,10 +182,12 @@ func buildEchoRouter(cfg *config.Config, db *bun.DB, driver storage.StorageDrive
 	// Middleware
 	e.Use(echomw.Logger())
 	e.Use(echomw.Recover())
-	e.Use(echomw.CORSWithConfig(echomw.CORSConfig{
-		AllowOrigins: cfg.AllowedOrigins,
-		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
-	}))
+	if len(cfg.AllowedOrigins) > 0 {
+		e.Use(echomw.CORSWithConfig(echomw.CORSConfig{
+			AllowOrigins: cfg.AllowedOrigins,
+			AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
+		}))
+	}
 	e.Use(middleware.AuditLog(db))
 	e.GET("/health", func(c echo.Context) error {
 		if storage.AllConfiguredNodesAvailable(c.Request().Context(), db, driver) {

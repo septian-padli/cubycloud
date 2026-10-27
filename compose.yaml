@@ -1,0 +1,21 @@
+services:
+  cubycloud:
+    image: ghcr.io/septian-padli/cubycloud:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cubycloud
+    restart: unless-stopped
+    ports:
+      - "8383:8383"
+    volumes:
+      - cubycloud_data:/app/data
+    environment:
+      - ENV=production
+      # Opsional: Buka komentar di bawah jika menggunakan Reverse Proxy HTTPS (Nginx, Caddy, Cloudflare, Traefik)
+      # - TRUST_PROXY=true
+      # - COOKIE_SECURE=true
+      # - ALLOWED_ORIGINS=https://drive.domainanda.com
+
+volumes:
+  cubycloud_data:

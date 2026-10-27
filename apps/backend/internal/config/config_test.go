@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -52,55 +53,88 @@ func TestConfigLoad_CustomOriginsAndCookie(t *testing.T) {
 }
 
 func TestConfigLoad_ProductionValidation(t *testing.T) {
-	t.Run("fails when JWT_SECRET missing in production", func(t *testing.T) {
+	t.Run("auto-generates and persists JWT_SECRET in production on clean install", func(t *testing.T) {
+		tmpDir := t.TempDir()
 		t.Setenv("ENV", "production")
+		t.Setenv("DATA_DIR_PATH", tmpDir)
 		t.Setenv("JWT_SECRET", "")
-		t.Setenv("COOKIE_SECURE", "true")
-		t.Setenv("ALLOWED_ORIGINS", "https://app.example.com")
+
+		cfg, err := LoadConfig()
+		assert.NoError(t, err)
+		assert.NotEmpty(t, cfg.JWTSecret)
+		assert.GreaterOrEqual(t, len(cfg.JWTSecret), 32)
+
+		secretFile := filepath.Join(tmpDir, "secrets", "jwt.key")
+		raw, err := os.ReadFile(secretFile)
+		assert.NoError(t, err)
+		assert.Equal(t, cfg.JWTSecret, strings.TrimSpace(string(raw)))
+
+		// Second load reuses the exact same secret
+		cfg2, err := LoadConfig()
+		assert.NoError(t, err)
+		assert.Equal(t, cfg.JWTSecret, cfg2.JWTSecret)
+	})
+
+	t.Run("fails when JWT_SECRET missing while existing database is present", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Setenv("ENV", "production")
+		t.Setenv("DATA_DIR_PATH", tmpDir)
+		t.Setenv("JWT_SECRET", "")
+
+		// Simulate existing DB without secret file
+		dbDir := filepath.Join(tmpDir, "db")
+		assert.NoError(t, os.MkdirAll(dbDir, 0755))
+		assert.NoError(t, os.WriteFile(filepath.Join(dbDir, "cubycloud.db"), []byte("sqlite-data"), 0644))
 
 		_, err := LoadConfig()
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "JWT_SECRET required")
-
-		assert.Panics(t, func() {
-			_ = Load()
-		})
+		assert.Contains(t, err.Error(), "JWT secret is missing while existing database is present")
 	})
 
-	t.Run("fails when COOKIE_SECURE is missing or false in production", func(t *testing.T) {
+	t.Run("fails when persisted JWT secret is corrupted or too short", func(t *testing.T) {
+		tmpDir := t.TempDir()
 		t.Setenv("ENV", "production")
-		t.Setenv("JWT_SECRET", "strong-prod-secret")
+		t.Setenv("DATA_DIR_PATH", tmpDir)
+		t.Setenv("JWT_SECRET", "")
+
+		secretsDir := filepath.Join(tmpDir, "secrets")
+		assert.NoError(t, os.MkdirAll(secretsDir, 0700))
+		assert.NoError(t, os.WriteFile(filepath.Join(secretsDir, "jwt.key"), []byte("too-short"), 0600))
+
+		_, err := LoadConfig()
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "persisted JWT secret in secrets/jwt.key is invalid")
+	})
+
+	t.Run("succeeds when COOKIE_SECURE is missing or false in production", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Setenv("ENV", "production")
+		t.Setenv("DATA_DIR_PATH", tmpDir)
+		t.Setenv("JWT_SECRET", "strong-prod-secret-minimum-32-chars-long")
 		t.Setenv("COOKIE_SECURE", "false")
-		t.Setenv("ALLOWED_ORIGINS", "https://app.example.com")
 
-		_, err := LoadConfig()
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "COOKIE_SECURE=true required")
-
-		assert.Panics(t, func() {
-			_ = Load()
-		})
+		cfg, err := LoadConfig()
+		assert.NoError(t, err)
+		assert.False(t, cfg.CookieSecure)
 	})
 
-	t.Run("fails when ALLOWED_ORIGINS is missing in production", func(t *testing.T) {
+	t.Run("succeeds when ALLOWED_ORIGINS is missing in production with empty slice", func(t *testing.T) {
+		tmpDir := t.TempDir()
 		t.Setenv("ENV", "production")
-		t.Setenv("JWT_SECRET", "strong-prod-secret")
-		t.Setenv("COOKIE_SECURE", "true")
+		t.Setenv("DATA_DIR_PATH", tmpDir)
+		t.Setenv("JWT_SECRET", "strong-prod-secret-minimum-32-chars-long")
 		t.Setenv("ALLOWED_ORIGINS", "")
 
-		_, err := LoadConfig()
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "ALLOWED_ORIGINS required")
-
-		assert.Panics(t, func() {
-			_ = Load()
-		})
+		cfg, err := LoadConfig()
+		assert.NoError(t, err)
+		assert.Empty(t, cfg.AllowedOrigins)
 	})
 
 	t.Run("fails when ALLOWED_ORIGINS contains wildcard in production", func(t *testing.T) {
+		tmpDir := t.TempDir()
 		t.Setenv("ENV", "production")
-		t.Setenv("JWT_SECRET", "strong-prod-secret")
-		t.Setenv("COOKIE_SECURE", "true")
+		t.Setenv("DATA_DIR_PATH", tmpDir)
+		t.Setenv("JWT_SECRET", "strong-prod-secret-minimum-32-chars-long")
 		t.Setenv("ALLOWED_ORIGINS", "https://app.example.com, *")
 
 		_, err := LoadConfig()
@@ -112,16 +146,20 @@ func TestConfigLoad_ProductionValidation(t *testing.T) {
 		})
 	})
 
-	t.Run("succeeds with valid production env", func(t *testing.T) {
+	t.Run("succeeds with valid production env and trust proxy", func(t *testing.T) {
+		tmpDir := t.TempDir()
 		t.Setenv("ENV", "production")
-		t.Setenv("JWT_SECRET", "strong-prod-secret")
+		t.Setenv("DATA_DIR_PATH", tmpDir)
+		t.Setenv("JWT_SECRET", "strong-prod-secret-minimum-32-chars-long")
 		t.Setenv("COOKIE_SECURE", "true")
+		t.Setenv("TRUST_PROXY", "true")
 		t.Setenv("ALLOWED_ORIGINS", "https://app.example.com, https://drive.example.com")
 
 		cfg, err := LoadConfig()
 		assert.NoError(t, err)
 		assert.True(t, cfg.IsProduction)
 		assert.True(t, cfg.CookieSecure)
+		assert.True(t, cfg.TrustProxy)
 		assert.Equal(t, []string{"https://app.example.com", "https://drive.example.com"}, cfg.AllowedOrigins)
 	})
 }

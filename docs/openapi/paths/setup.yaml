@@ -118,6 +118,8 @@
         content:
           application/json:
             schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
               error: setup failed
 /api/v1/setup/test-cloud:
   post:
@@ -133,6 +135,7 @@
             $ref: '#/components/schemas/SetupCloudConfig'
     responses:
       '200':
+        description: Cloud connection test succeeded.
         content:
           application/json:
             schema:

@@ -47,6 +47,43 @@ The screenshots were captured from the running application using synthetic local
 
 ## Quick start
 
+### Docker Compose (recommended)
+
+CubyCloud runs as a single self-contained container with embedded frontend and backend. No manual `.env` or secret generation is needed for a standard installation.
+
+1. Download `compose.yaml`:
+   ```bash
+   curl -O https://raw.githubusercontent.com/septian-padli/cubycloud/main/compose.yaml
+   ```
+2. Start the container:
+   ```bash
+   docker compose up -d
+   ```
+3. Open [http://localhost:8383/setup](http://localhost:8383/setup) in your browser, complete the setup wizard, and save your recovery key.
+
+#### Docker Volume & Storage Configuration
+
+- **Named volume (default):** `cubycloud_data:/app/data` stores the SQLite database (`db/cubycloud.db`), auto-generated secrets (`secrets/jwt.key`, `secrets/master.key`), and local file storage (`storage/default`).
+- **Host bind mount:** To store data directly in a host directory, replace `cubycloud_data:/app/data` with `./data:/app/data` in `compose.yaml`. Ensure the host directory is writable.
+- **Secondary storage disks:** To add another local disk, mount it inside the storage directory, e.g. `- /mnt/storage-hdd:/app/data/storage/hdd`. The setup wizard and admin storage scanner will automatically detect it.
+
+#### Reverse Proxy & HTTPS
+
+When deploying behind a reverse proxy (Nginx, Caddy, Cloudflare, Traefik) terminating HTTPS:
+1. Set `TRUST_PROXY=true` in `compose.yaml` under `environment`.
+2. Ensure your reverse proxy forwards `X-Forwarded-Proto: https` and `X-Forwarded-For`.
+3. If accessing across separate domains or external frontends, specify `ALLOWED_ORIGINS=https://drive.example.com`.
+
+#### Backup and Restore
+
+All state is contained within `/app/data`. To back up CubyCloud, copy or snapshot the entire `/app/data` volume or directory while the service is stopped or using SQLite WAL-safe backup:
+- `db/cubycloud.db` — database tables and metadata
+- `secrets/jwt.key` — session authentication key
+- `secrets/master.key` — master encryption key for encrypted cloud storage credentials
+- `storage/` — all locally stored files
+
+To restore, place these files back into `/app/data` before starting the container.
+
 ### Run from source
 
 Requirements: **Go 1.25 or newer**, **Bun 1.x**, and OpenSSL to generate a random development secret. Run the backend and frontend in separate terminals from a local checkout.
@@ -57,7 +94,6 @@ Requirements: **Go 1.25 or newer**, **Bun 1.x**, and OpenSSL to generate a rando
 cd apps/backend
 PORT=8383 \
 DATA_DIR_PATH="$HOME/cubycloud-data" \
-JWT_SECRET="$(openssl rand -hex 32)" \
 go run ./cmd/server/main.go
 ```
 
@@ -70,21 +106,7 @@ VITE_API_PROXY_TARGET=http://localhost:8383 \
 bun run dev --host 127.0.0.1 --port 5188
 ```
 
-Open [http://localhost:5188/setup](http://localhost:5188/setup), create the first administrator, and complete the setup wizard. Save the recovery key somewhere safe. Application data is written under the `DATA_DIR_PATH` you selected; keep that directory backed up.
-
-### Container build
-
-The multi-stage `Dockerfile` uses pinned versions for all stages (`oven/bun:1.3.14-alpine`, `golang:1.25.14-alpine`, and `alpine:3.21.9`). To build and run the container locally:
-
-```bash
-docker build -t cubycloud .
-docker run -d --name cubycloud -p 8383:8383 \
-  -e JWT_SECRET=your-random-32-byte-secret \
-  -e COOKIE_SECURE=true \
-  -e ALLOWED_ORIGINS=http://localhost:8383 \
-  -v $(pwd)/data:/app/data \
-  cubycloud
-```
+Open [http://localhost:5188/setup](http://localhost:5188/setup), create the first administrator, and complete the setup wizard.
 ## System requirements
 
 - **Source development:** Go 1.25 or newer and Bun 1.x. Air is only needed for the `make dev` convenience script.

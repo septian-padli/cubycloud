@@ -206,4 +206,4 @@ SetupPasswordResponse:
   properties:
     message:
       type: string
-      example: password set successfully
+      example: password setup successful
