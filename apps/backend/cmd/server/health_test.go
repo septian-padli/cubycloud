@@ -58,10 +58,9 @@ func TestHealthEndpoint(t *testing.T) {
 
 	mockDriver := &healthTestDriver{}
 	e := buildEchoRouter(cfg, db, mockDriver, setupGuard, sseHub, jobQueue)
-
-	// 1. When healthy -> 200 OK
-	{
-		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	// 1. When healthy -> 200 OK for /health and /api/health
+	for _, path := range []string{"/health", "/api/health"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
 		rec := httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 
@@ -74,13 +73,31 @@ func TestHealthEndpoint(t *testing.T) {
 	// 2. When storage node is unavailable -> 503 Service Unavailable
 	{
 		mockDriver.unavailableNodeID = "node-1"
-		req := httptest.NewRequest(http.MethodGet, "/health", nil)
-		rec := httptest.NewRecorder()
-		e.ServeHTTP(rec, req)
+		for _, path := range []string{"/health", "/api/health"} {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
 
-		require.Equal(t, http.StatusServiceUnavailable, rec.Code)
-		var body map[string]string
-		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
-		require.Equal(t, "unavailable", body["status"])
+			require.Equal(t, http.StatusServiceUnavailable, rec.Code)
+			var body map[string]string
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+			require.Equal(t, "unavailable", body["status"])
+		}
+		mockDriver.unavailableNodeID = ""
+	}
+
+	// 3. When database connection fails / closes -> 503 Service Unavailable
+	{
+		require.NoError(t, db.Close())
+		for _, path := range []string{"/health", "/api/health"} {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			require.Equal(t, http.StatusServiceUnavailable, rec.Code)
+			var body map[string]string
+			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+			require.Equal(t, "unavailable", body["status"])
+		}
 	}
 }

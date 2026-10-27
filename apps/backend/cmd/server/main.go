@@ -189,12 +189,17 @@ func buildEchoRouter(cfg *config.Config, db *bun.DB, driver storage.StorageDrive
 		}))
 	}
 	e.Use(middleware.AuditLog(db))
-	e.GET("/health", func(c echo.Context) error {
-		if storage.AllConfiguredNodesAvailable(c.Request().Context(), db, driver) {
-			return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	healthHandler := func(c echo.Context) error {
+		if err := db.PingContext(c.Request().Context()); err != nil {
+			return c.JSON(http.StatusServiceUnavailable, map[string]string{"status": "unavailable"})
 		}
-		return c.JSON(http.StatusServiceUnavailable, map[string]string{"status": "unavailable"})
-	})
+		if !storage.AllConfiguredNodesAvailable(c.Request().Context(), db, driver) {
+			return c.JSON(http.StatusServiceUnavailable, map[string]string{"status": "unavailable"})
+		}
+		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	}
+	e.GET("/health", healthHandler)
+	e.GET("/api/health", healthHandler)
 
 	// Routes
 	setup.RegisterRoutes(e, db, driver, setupGuard, cfg.DataDirPath, cfg.JWTSecret)

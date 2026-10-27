@@ -23,6 +23,31 @@
             example:
               status: unavailable
 
+
+/api/health:
+  get:
+    operationId: getApiHealth
+    tags: [Core]
+    summary: Check service and database readiness
+    description: Returns `ok` when SQLite database and all configured storage nodes are available; otherwise returns `unavailable` with HTTP 503.
+    security: []
+    responses:
+      '200':
+        description: SQLite and all configured nodes are available.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HealthResponse'
+            example:
+              status: ok
+      '503':
+        description: SQLite or one or more configured nodes are unavailable.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HealthResponse'
+            example:
+              status: unavailable
 /api/v1/events:
   get:
     operationId: streamEvents

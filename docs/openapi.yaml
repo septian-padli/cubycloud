@@ -2761,6 +2761,31 @@ paths:
             summary: Download the OpenAPI specification
             tags:
                 - Documentation
+    /api/health:
+        get:
+            description: Returns `ok` when SQLite database and all configured storage nodes are available; otherwise returns `unavailable` with HTTP 503.
+            operationId: getApiHealth
+            responses:
+                "200":
+                    content:
+                        application/json:
+                            example:
+                                status: ok
+                            schema:
+                                $ref: '#/components/schemas/HealthResponse'
+                    description: SQLite and all configured nodes are available.
+                "503":
+                    content:
+                        application/json:
+                            example:
+                                status: unavailable
+                            schema:
+                                $ref: '#/components/schemas/HealthResponse'
+                    description: SQLite or one or more configured nodes are unavailable.
+            security: []
+            summary: Check service and database readiness
+            tags:
+                - Core
     /api/v1/admin/audit-logs:
         get:
             description: Returns audit logs ordered by creation time descending. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.

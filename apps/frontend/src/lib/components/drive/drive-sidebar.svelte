@@ -85,6 +85,13 @@
 					sideOffset={8}
 					class="w-[calc(16rem-1.5rem)] p-1.5"
 				>
+					<div class="border-t border-subtle px-3 py-2 text-xs text-muted">
+						<p>Copyright (C) 2026 CubyCloud contributors.</p>
+						<p>You may convey this work under AGPL-3.0-or-later. No warranty.</p>
+						<a class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" href="https://github.com/septian-padli/cubycloud/blob/main/LICENSE" target="_blank" rel="noreferrer">License</a>
+						<span aria-hidden="true"> · </span>
+						<a class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" href="https://github.com/septian-padli/cubycloud" target="_blank" rel="noreferrer">Source</a>
+					</div>
 					<DropdownMenu.Item
 						variant="destructive"
 						class="w-full cursor-pointer gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-danger hover:bg-danger/10 hover:text-danger focus:bg-danger/10 focus:text-danger data-[highlighted]:bg-danger/10 data-[highlighted]:text-danger [&_svg]:text-danger"

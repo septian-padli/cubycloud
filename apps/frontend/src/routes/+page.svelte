@@ -34,7 +34,7 @@
 
 <div class="flex min-h-dvh flex-col bg-app text-main">
 	<header
-		class="mx-auto flex w-full max-w-5xl items-center justify-between border-b border-subtle px-6 py-4 md:px-10"
+		class="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-3 border-b border-subtle px-6 py-4 md:px-10"
 	>
 		<p class="text-sm font-semibold">CubyCloud</p>
 		<div class="flex items-center gap-3">
@@ -134,7 +134,12 @@
 			<p class="text-lg leading-snug font-semibold">
 				{tx('Berkas Anda. Server Anda. Aturan Anda.', 'Your files. Your server. Your rules.')}
 			</p>
-			<p class="text-xs text-app/70">© {new Date().getFullYear()} CubyCloud</p>
+			<p class="text-xs text-app/70">
+				Copyright (C) 2026 CubyCloud contributors. You may convey this work under AGPL-3.0-or-later. No warranty.
+				<a class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" href="https://github.com/septian-padli/cubycloud/blob/main/LICENSE" target="_blank" rel="noreferrer">License</a>
+				·
+				<a class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" href="https://github.com/septian-padli/cubycloud" target="_blank" rel="noreferrer">Source</a>
+			</p>
 		</div>
 	</section>
 </div>

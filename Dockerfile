@@ -1,5 +1,5 @@
 # Stage 1: Build Frontend SPA
-FROM oven/bun:1.3.14-alpine AS frontend-builder
+FROM --platform=$BUILDPLATFORM oven/bun:1.3.14-alpine AS frontend-builder
 WORKDIR /app/frontend
 
 COPY apps/frontend/package.json apps/frontend/bun.lock ./
@@ -9,7 +9,9 @@ COPY apps/frontend ./
 RUN bun run build
 
 # Stage 2: Build Go Backend Binary
-FROM golang:1.25.14-alpine AS backend-builder
+FROM --platform=$BUILDPLATFORM golang:1.25.14-alpine AS backend-builder
+ARG TARGETOS
+ARG TARGETARCH
 WORKDIR /app/backend
 
 # Install build dependencies
@@ -23,10 +25,15 @@ COPY apps/backend ./
 RUN rm -rf ./web/dist
 COPY --from=frontend-builder /app/frontend/build ./web/dist
 # Build statically linked binary (CGO-free)
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /cubycloud ./cmd/server/main.go
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -ldflags="-s -w" -o /cubycloud ./cmd/server/main.go
 
 # Stage 3: Final Minimal Runtime Image (< 150MB target)
 FROM alpine:3.21.9
+LABEL org.opencontainers.image.title="CubyCloud"
+LABEL org.opencontainers.image.description="Self-hosted cloud storage orchestrator"
+LABEL org.opencontainers.image.source="https://github.com/septian-padli/cubycloud"
+LABEL org.opencontainers.image.licenses="AGPL-3.0"
+
 WORKDIR /app
 
 RUN apk add --no-cache ca-certificates tzdata \

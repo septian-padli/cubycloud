@@ -20,4 +20,4 @@ Thank you for considering a contribution to CubyCloud.
 
 Describe the problem, the user-visible change, and the checks you ran. Call out database migrations, configuration changes, and known limitations explicitly. Do not bundle unrelated formatting or generated artifacts.
 
-The repository currently has no license file. A project license has not been selected; contributors should be aware that reuse and redistribution terms are not yet defined.
+Contributions are accepted under the project's GNU Affero General Public License v3.0 or any later version. By submitting a contribution, you agree to license it under those terms. See [LICENSE](LICENSE).
