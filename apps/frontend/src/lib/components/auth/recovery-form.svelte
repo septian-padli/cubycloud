@@ -149,7 +149,9 @@
 					aria-invalid={passwordEmpty || passwordTooShort}
 				/>
 				{#if passwordEmpty}
-					<p class="text-xs text-danger">{tx('Kata sandi wajib diisi.', 'Password is required.')}</p>
+					<p class="text-xs text-danger">
+						{tx('Kata sandi wajib diisi.', 'Password is required.')}
+					</p>
 				{:else if passwordTooShort}
 					<p class="text-xs text-danger">
 						{tx('Kata sandi minimal 8 karakter.', 'Password must be at least 8 characters.')}

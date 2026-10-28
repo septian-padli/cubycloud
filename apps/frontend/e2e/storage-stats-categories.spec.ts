@@ -281,9 +281,10 @@ test.describe('Storage Stats Category Breakdown & Quota Bar', () => {
 			{ name: 'Trash', quotaShare: 25 / 1024, barShare: 0.125 }
 		];
 		for (const segment of limitedSegments) {
-			const button = segment.name === 'Trash'
-				? regTrack.getByRole('button', { name: /^(Trash|Sampah):/ })
-				: regTrack.locator(`button[aria-label^="${segment.name}:"]`);
+			const button =
+				segment.name === 'Trash'
+					? regTrack.getByRole('button', { name: /^(Trash|Sampah):/ })
+					: regTrack.locator(`button[aria-label^="${segment.name}:"]`);
 			await expect(button).toBeVisible();
 			const box = await button.boundingBox();
 			expect(box).not.toBeNull();

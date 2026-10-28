@@ -35,7 +35,9 @@
 	function copyRecoveryKey() {
 		navigator.clipboard.writeText(recoveryKey).then(
 			() =>
-				toast.success(tx('Kunci pemulihan disalin ke papan klip', 'Recovery key copied to clipboard')),
+				toast.success(
+					tx('Kunci pemulihan disalin ke papan klip', 'Recovery key copied to clipboard')
+				),
 			() => toast.error(tx('Gagal menyalin kunci pemulihan', 'Failed to copy recovery key'))
 		);
 	}

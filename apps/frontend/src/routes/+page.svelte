@@ -121,7 +121,9 @@
 						<Cloud class="size-4 stroke-2" />
 					</div>
 					<p class="text-xs font-medium text-muted">{tx('Penyimpanan', 'Storage')}</p>
-					<p class="mt-1 text-sm font-medium">{tx('Disk lokal + S3 / R2', 'Local disk + S3 / R2')}</p>
+					<p class="mt-1 text-sm font-medium">
+						{tx('Disk lokal + S3 / R2', 'Local disk + S3 / R2')}
+					</p>
 				</article>
 			</div>
 		</section>
@@ -135,10 +137,21 @@
 				{tx('Berkas Anda. Server Anda. Aturan Anda.', 'Your files. Your server. Your rules.')}
 			</p>
 			<p class="text-xs text-app/70">
-				Copyright (C) 2026 CubyCloud contributors. You may convey this work under AGPL-3.0-or-later. No warranty.
-				<a class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" href="https://github.com/septian-padli/cubycloud/blob/main/LICENSE" target="_blank" rel="noreferrer">License</a>
+				Copyright (C) 2026 CubyCloud contributors. You may convey this work under AGPL-3.0-or-later.
+				No warranty.
+				<a
+					class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+					href="https://github.com/septian-padli/cubycloud/blob/main/LICENSE"
+					target="_blank"
+					rel="noreferrer">License</a
+				>
 				·
-				<a class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" href="https://github.com/septian-padli/cubycloud" target="_blank" rel="noreferrer">Source</a>
+				<a
+					class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+					href="https://github.com/septian-padli/cubycloud"
+					target="_blank"
+					rel="noreferrer">Source</a
+				>
 			</p>
 		</div>
 	</section>

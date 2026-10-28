@@ -22,11 +22,7 @@
 
 	<!-- Desktop image panel -->
 	<aside class="relative hidden overflow-hidden md:block">
-		<img
-			src={authHero}
-			alt=""
-			class="absolute inset-0 h-full w-full object-cover object-center"
-		/>
+		<img src={authHero} alt="" class="absolute inset-0 h-full w-full object-cover object-center" />
 	</aside>
 
 	<!-- Form panel -->
@@ -43,12 +39,22 @@
 				{@render children()}
 			</div>
 		</div>
- 		<p class="px-6 pb-4 text-xs text-muted md:px-10">
-			Copyright (C) 2026 CubyCloud contributors. You may convey this work under AGPL-3.0-or-later. No warranty.
- 			<a class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" href="https://github.com/septian-padli/cubycloud/blob/main/LICENSE" target="_blank" rel="noreferrer">License</a>
- 			·
- 			<a class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" href="https://github.com/septian-padli/cubycloud" target="_blank" rel="noreferrer">Source</a>
- 		</p>
- 	</section>
- </div>
-
+		<p class="px-6 pb-4 text-xs text-muted md:px-10">
+			Copyright (C) 2026 CubyCloud contributors. You may convey this work under AGPL-3.0-or-later.
+			No warranty.
+			<a
+				class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+				href="https://github.com/septian-padli/cubycloud/blob/main/LICENSE"
+				target="_blank"
+				rel="noreferrer">License</a
+			>
+			·
+			<a
+				class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+				href="https://github.com/septian-padli/cubycloud"
+				target="_blank"
+				rel="noreferrer">Source</a
+			>
+		</p>
+	</section>
+</div>

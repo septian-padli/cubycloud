@@ -4,12 +4,7 @@ export type { PlacementStrategy };
 export type AdminRole = 'super_admin' | 'user' | 'SUPER_ADMIN' | 'REGULAR';
 
 export type AdminQuotaMode =
-	| 'default'
-	| 'override_gb'
-	| 'unlimited'
-	| 'DEFAULT'
-	| 'CUSTOM'
-	| 'UNLIMITED';
+	'default' | 'override_gb' | 'unlimited' | 'DEFAULT' | 'CUSTOM' | 'UNLIMITED';
 
 export type DefaultQuotaMode = 'limited' | 'unlimited';
 

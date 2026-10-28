@@ -38,7 +38,8 @@
 			: message === 'Setup awal telah selesai. Halaman setup tidak dapat diakses kembali.' ||
 				  message === 'Initial setup is complete. This setup page can no longer be accessed.'
 				? 'Initial setup is complete. The setup page can no longer be accessed.'
-				: message === 'Setup sistem belum diselesaikan. Silakan selesaikan setup terlebih dahulu.' ||
+				: message ===
+							'Setup sistem belum diselesaikan. Silakan selesaikan setup terlebih dahulu.' ||
 					  message === 'System setup is incomplete. Please complete setup first.'
 					? 'System setup is incomplete. Please complete setup first.'
 					: ({

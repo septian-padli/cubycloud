@@ -2,7 +2,17 @@
 	import type { ExplorerVariant, FileEntry } from '$lib/types/drive.js';
 	import type { Snippet } from 'svelte';
 	import * as ContextMenu from '$lib/components/ui/context-menu/index.js';
-	import { Archive, Copy, Download, Eye, FolderInput, Pencil, Share2, Star, Trash2 } from '@lucide/svelte';
+	import {
+		Archive,
+		Copy,
+		Download,
+		Eye,
+		FolderInput,
+		Pencil,
+		Share2,
+		Star,
+		Trash2
+	} from '@lucide/svelte';
 	import { cn } from '$lib/utils.js';
 	import { locale } from '$lib/locale.svelte.js';
 

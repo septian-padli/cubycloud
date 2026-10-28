@@ -76,7 +76,9 @@ test('Admin Settings manages settings, validation, unsaved changes warnings, and
 	await ensureAdminLoggedIn(page);
 	// 1. Navigate to /admin/settings
 	await page.goto('/admin/settings');
-	await expect(page.getByRole('heading', { name: /Pengaturan Admin|Admin Settings/i })).toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: /Pengaturan Admin|Admin Settings/i })
+	).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Node penyimpanan' })).toBeVisible();
 	await expect(page.getByText('Pengaturan sistem')).toBeVisible();
 
@@ -181,7 +183,11 @@ test('Admin Settings manages settings, validation, unsaved changes warnings, and
 		data: { default_quota: { mode: 'limited', gb: 100 }, worker_concurrency: 2 }
 	});
 	expect(download.suggestedFilename()).toContain('.db');
-	await expect(page.getByText(/Backup (?:basis data|DB) berhasil diunduh|Database backup downloaded successfully/i)).toBeVisible();
+	await expect(
+		page.getByText(
+			/Backup (?:basis data|DB) berhasil diunduh|Database backup downloaded successfully/i
+		)
+	).toBeVisible();
 });
 test('storage node names can be edited and persist, while local creation requires a unique name', async ({
 	page
@@ -207,7 +213,10 @@ test('storage node names can be edited and persist, while local creation require
 		return;
 	}
 	const renamed = `${firstNode.name} E2E ${Date.now()}`;
-	await page.getByRole('button', { name: /Ubah|Edit/i }).first().click();
+	await page
+		.getByRole('button', { name: /Ubah|Edit/i })
+		.first()
+		.click();
 	const editName = page.getByTestId('input-edit-node-name');
 	await editName.fill(`  ${renamed}  `);
 	await page.getByRole('button', { name: 'Simpan Perubahan' }).click();
@@ -215,7 +224,10 @@ test('storage node names can be edited and persist, while local creation require
 	await page.reload();
 	await expect(page.getByText(renamed, { exact: true })).toBeVisible();
 
-	await page.getByRole('button', { name: /Ubah|Edit/i }).first().click();
+	await page
+		.getByRole('button', { name: /Ubah|Edit/i })
+		.first()
+		.click();
 	await page.getByTestId('input-edit-node-name').fill(firstNode.name);
 	await page.getByRole('button', { name: 'Simpan Perubahan' }).click();
 	await expect(page.getByText(firstNode.name, { exact: true })).toBeVisible();
@@ -250,7 +262,9 @@ test('storage node names can be edited and persist, while local creation require
 	await expect(cloudTab).toHaveAttribute('aria-selected', 'false');
 	await expect(localName).toBeVisible();
 	await addLocal.click();
-	await expect(page.getByTestId('error-local-node-name')).toContainText(/nama|name|already exists|sudah digunakan/i);
+	await expect(page.getByTestId('error-local-node-name')).toContainText(
+		/nama|name|already exists|sudah digunakan/i
+	);
 });
 
 test('capacity warning follows per-node used bytes', async ({ page }) => {
@@ -269,7 +283,10 @@ test('capacity warning follows per-node used bytes', async ({ page }) => {
 	);
 	const belowUsageGb = Math.ceil(usedBytes / 1024 ** 3) - 1;
 
-	await page.getByRole('button', { name: /Ubah|Edit/i }).first().click();
+	await page
+		.getByRole('button', { name: /Ubah|Edit/i })
+		.first()
+		.click();
 	await page.getByTestId('input-edit-node-capacity').fill(String(belowUsageGb));
 	await expect(page.getByTestId('warning-node-capacity')).toContainText('pemakaian node');
 	await expect(page.getByRole('button', { name: 'Simpan Perubahan' })).toBeDisabled();

@@ -21,7 +21,12 @@ async function setupAndLogin(page: Page) {
 		expect(nodes.length).toBeGreaterThan(0);
 		const setup = await page.request.post('/api/v1/setup/complete', {
 			data: {
-				admin: { username: adminUsername, email: 'admin-reactive@example.test', password: adminPassword, recovery_key: recoveryKey },
+				admin: {
+					username: adminUsername,
+					email: 'admin-reactive@example.test',
+					password: adminPassword,
+					recovery_key: recoveryKey
+				},
 				storage_nodes: nodes.map((node) => ({ ...node, enabled: true })),
 				placement_strategy: 'FILL_FIRST',
 				cloud: { enabled: false }
@@ -60,7 +65,10 @@ async function setupAndLogin(page: Page) {
 	await page.waitForURL('**/drive/home');
 }
 
-test('Storage quota updates reactively without reload and syncs across tabs', async ({ page, context }) => {
+test('Storage quota updates reactively without reload and syncs across tabs', async ({
+	page,
+	context
+}) => {
 	await setupAndLogin(page);
 
 	// Create a temporary 100MB file (0.1 GiB)

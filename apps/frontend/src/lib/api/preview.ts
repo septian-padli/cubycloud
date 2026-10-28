@@ -2,7 +2,12 @@ import { locale } from '$lib/locale.svelte.js';
 export type PreviewSource = 'my-storage' | 'organization' | 'shared' | 'public';
 
 /** The download endpoints enforce permission and serve inline only for ?preview=1. */
-export function previewUrl(source: PreviewSource, id: string, token?: string, rootFile = false): string {
+export function previewUrl(
+	source: PreviewSource,
+	id: string,
+	token?: string,
+	rootFile = false
+): string {
 	if (source === 'public') {
 		if (!token)
 			throw new Error(

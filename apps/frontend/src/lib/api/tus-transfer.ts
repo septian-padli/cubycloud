@@ -93,10 +93,9 @@ const TUS_VERSION = '1.0.0';
 /** Thrown by run() only when the session resumption state is inconsistent with the provided File. */
 export class TusResumeError extends Error {
 	constructor(
-		message =
-			locale.language === 'id'
-				? 'Snapshot sesi upload tidak cocok dengan berkas yang dipilih.'
-				: 'The saved upload session does not match the selected file.'
+		message = locale.language === 'id'
+			? 'Snapshot sesi upload tidak cocok dengan berkas yang dipilih.'
+			: 'The saved upload session does not match the selected file.'
 	) {
 		super(message);
 		this.name = 'TusResumeError';

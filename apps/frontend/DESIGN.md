@@ -14,30 +14,30 @@
 
 Defined in `src/routes/layout.css` (`@layer base` root/dark CSS variables mapped with `@theme inline`). The source CSS is the implementation authority; keep it consistent with this palette.
 
-| Functional token / Tailwind utility | Light | Dark | Use |
-| --- | --- | --- | --- |
-| `--bg-app` / `bg-app` | `#F0EEE3` | `#0F130E` | Application background |
-| `--surface-card` / `bg-surface` | `#FFFFFF` | `#182017` | Cards, sidebar, file lists, dialogs |
-| `--primary` / `bg-primary` | `#606C38` | `#99AB5E` | Primary actions, active, success |
-| `--primary-accent` / `text-primary-accent` | `#283618` | `#ADCB8A` | Emphasis, headings, default folder icon |
-| `--secondary` / `bg-secondary` | `#DDA15E` | `#E1AB70` | Local-storage badge, in-progress |
-| `--secondary-accent` / `bg-secondary-accent` | `#BC6C25` | `#D78032` | Cloud-storage badge, important emphasis |
-| `--danger` / `bg-danger` | `#EC003F` | `#FF3366` | Destructive actions only |
-| `--text-main` / `text-main` | `#283618` | `#F0EEE3` | Primary text |
-| `--text-muted` / `text-muted` | `#5A6B46` | `#9CA88F` | Metadata and descriptions |
-| `--border-subtle` / `border-subtle` | `rgba(0,0,0,0.06)` | `rgba(255,255,255,0.08)` | Thin borders/dividers |
+| Functional token / Tailwind utility          | Light              | Dark                     | Use                                     |
+| -------------------------------------------- | ------------------ | ------------------------ | --------------------------------------- |
+| `--bg-app` / `bg-app`                        | `#F0EEE3`          | `#0F130E`                | Application background                  |
+| `--surface-card` / `bg-surface`              | `#FFFFFF`          | `#182017`                | Cards, sidebar, file lists, dialogs     |
+| `--primary` / `bg-primary`                   | `#606C38`          | `#99AB5E`                | Primary actions, active, success        |
+| `--primary-accent` / `text-primary-accent`   | `#283618`          | `#ADCB8A`                | Emphasis, headings, default folder icon |
+| `--secondary` / `bg-secondary`               | `#DDA15E`          | `#E1AB70`                | Local-storage badge, in-progress        |
+| `--secondary-accent` / `bg-secondary-accent` | `#BC6C25`          | `#D78032`                | Cloud-storage badge, important emphasis |
+| `--danger` / `bg-danger`                     | `#EC003F`          | `#FF3366`                | Destructive actions only                |
+| `--text-main` / `text-main`                  | `#283618`          | `#F0EEE3`                | Primary text                            |
+| `--text-muted` / `text-muted`                | `#5A6B46`          | `#9CA88F`                | Metadata and descriptions               |
+| `--border-subtle` / `border-subtle`          | `rgba(0,0,0,0.06)` | `rgba(255,255,255,0.08)` | Thin borders/dividers                   |
 
 Font mapping: `--font-sans: 'Montserrat', sans-serif`. Use `@import 'tailwindcss'` and the existing `@theme inline` token mapping, not inline per-component redefinitions.
 
 ## 3. Typography and layout
 
-| Element | Standard utilities | Size/line-height | Weight |
-| --- | --- | --- | --- |
-| Page title | `text-2xl font-bold leading-tight` | 24/28px | 700 |
-| Section heading | `text-lg font-semibold leading-snug` | 18/24px | 600 |
-| File/item title | `text-sm font-medium leading-normal` | 14/20px | 500 |
-| Body | `text-sm font-normal leading-normal` | 14/20px | 400 |
-| Metadata/badge | `text-xs font-medium leading-none` | 12/16px | 500 |
+| Element         | Standard utilities                   | Size/line-height | Weight |
+| --------------- | ------------------------------------ | ---------------- | ------ |
+| Page title      | `text-2xl font-bold leading-tight`   | 24/28px          | 700    |
+| Section heading | `text-lg font-semibold leading-snug` | 18/24px          | 600    |
+| File/item title | `text-sm font-medium leading-normal` | 14/20px          | 500    |
+| Body            | `text-sm font-normal leading-normal` | 14/20px          | 400    |
+| Metadata/badge  | `text-xs font-medium leading-none`   | 12/16px          | 500    |
 
 - Use `bg-surface` foreground panels on `bg-app`; separate rows/panels with subtle borders, never shadows.
 - **Radius:** `rounded-full` for input, buttons, filter chips, sidebar pills, switch tracks, avatars and badge pills; `rounded-xl` for dialogs, cards and concise panels.
@@ -58,14 +58,14 @@ Font mapping: `--font-sans: 'Montserrat', sans-serif`. Use `@import 'tailwindcss
 
 Use the existing shadcn-svelte primitives, particularly `$lib/components/ui/button/button.svelte` (`rounded-full shadow-none`).
 
-| Variant | Appearance / use |
-| --- | --- |
-| `default` | `bg-primary text-white hover:bg-primary/80` — upload, save, primary CTA |
-| `secondary` | `bg-surface` with `border-subtle`, hover `bg-app` — back, rescan, backup |
-| `outline` | `bg-app` with `border-subtle`, hover `bg-surface` |
-| `destructive` | `bg-danger text-white hover:bg-danger/90` — permanent delete, purge |
-| `ghost` | Transparent; contextual icons/menu |
-| `link` | Text link with underline |
+| Variant       | Appearance / use                                                         |
+| ------------- | ------------------------------------------------------------------------ |
+| `default`     | `bg-primary text-white hover:bg-primary/80` — upload, save, primary CTA  |
+| `secondary`   | `bg-surface` with `border-subtle`, hover `bg-app` — back, rescan, backup |
+| `outline`     | `bg-app` with `border-subtle`, hover `bg-surface`                        |
+| `destructive` | `bg-danger text-white hover:bg-danger/90` — permanent delete, purge      |
+| `ghost`       | Transparent; contextual icons/menu                                       |
+| `link`        | Text link with underline                                                 |
 
 - Standard button `default`: `h-9` / `px-3.5`; `icon`: `size-9`. `xs/sm/lg`: `h-6/h-8/h-10`; icon `xs/sm/lg`: `size-6/size-8/size-10` when justified.
 - Standard ⋮ action: `variant="ghost" size="icon"` and `bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white`.

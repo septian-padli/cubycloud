@@ -116,7 +116,9 @@
 					aria-invalid={passwordEmpty}
 				/>
 				{#if passwordEmpty}
-					<p class="text-xs text-danger">{tx('Kata sandi wajib diisi.', 'Password is required.')}</p>
+					<p class="text-xs text-danger">
+						{tx('Kata sandi wajib diisi.', 'Password is required.')}
+					</p>
 				{/if}
 			</div>
 

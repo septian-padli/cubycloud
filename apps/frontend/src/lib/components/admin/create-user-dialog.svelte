@@ -11,8 +11,12 @@
 	let invitationUrl = $state('');
 	let creating = $state(false);
 	async function copyInvitation() {
-		try { await navigator.clipboard.writeText(invitationUrl); toast.success(locale.language === 'id' ? 'Tautan disalin.' : 'Link copied.'); }
-		catch { window.prompt(locale.language === 'id' ? 'Salin tautan:' : 'Copy link:', invitationUrl); }
+		try {
+			await navigator.clipboard.writeText(invitationUrl);
+			toast.success(locale.language === 'id' ? 'Tautan disalin.' : 'Link copied.');
+		} catch {
+			window.prompt(locale.language === 'id' ? 'Salin tautan:' : 'Copy link:', invitationUrl);
+		}
 	}
 	import { locale } from '$lib/locale.svelte.js';
 	type CreateQuotaChoice = 'default' | 'override_gb' | 'unlimited';
@@ -64,11 +68,15 @@
 			const result = await adminAPI.createUser({
 				username: username.trim(),
 				email: email.trim(),
-				quota_mode: mode === 'unlimited' ? 'UNLIMITED' : mode === 'override_gb' ? 'CUSTOM' : 'DEFAULT',
+				quota_mode:
+					mode === 'unlimited' ? 'UNLIMITED' : mode === 'override_gb' ? 'CUSTOM' : 'DEFAULT',
 				quota_gb: mode === 'override_gb' ? Number(quotaGb) : undefined
 			});
 			if (result.error || !result.data?.invitation_url) {
-				toast.error(result.error ?? (locale.language === 'id' ? 'Undangan tidak tersedia.' : 'Invitation link unavailable.'));
+				toast.error(
+					result.error ??
+						(locale.language === 'id' ? 'Undangan tidak tersedia.' : 'Invitation link unavailable.')
+				);
 				return;
 			}
 			invitationUrl = new URL(result.data.invitation_url, window.location.origin).toString();
@@ -123,7 +131,9 @@
 			</div>
 
 			<div class="rounded-xl border border-subtle bg-app p-3 text-sm leading-relaxed text-main">
-				{locale.language === 'id' ? 'Pengguna akan menerima undangan untuk mengatur kata sandi.' : 'User will receive an invitation to set a password.'}
+				{locale.language === 'id'
+					? 'Pengguna akan menerima undangan untuk mengatur kata sandi.'
+					: 'User will receive an invitation to set a password.'}
 			</div>
 
 			<div class="grid gap-2">
@@ -168,10 +178,10 @@
 										step="any"
 										bind:value={quotaGb}
 										class="w-full pe-9"
-									aria-label={locale.language === 'id' ? 'Kuota dalam GiB' : 'Quota in GiB'}
+										aria-label={locale.language === 'id' ? 'Kuota dalam GiB' : 'Quota in GiB'}
 									/>
 									<span class="pointer-events-none absolute end-3 text-xs font-semibold text-muted">
-									GiB
+										GiB
 									</span>
 								</div>
 							{/if}
@@ -204,7 +214,13 @@
 					>{locale.language === 'id' ? 'Batal' : 'Cancel'}</Button
 				>
 				<Button type="submit" disabled={!canSubmit || creating}>
-					{creating ? (locale.language === 'id' ? 'Membuat…' : 'Creating…') : (locale.language === 'id' ? 'Buat Pengguna' : 'Create user')}
+					{creating
+						? locale.language === 'id'
+							? 'Membuat…'
+							: 'Creating…'
+						: locale.language === 'id'
+							? 'Buat Pengguna'
+							: 'Create user'}
 				</Button>
 			</Dialog.Footer>
 		</form>
@@ -212,15 +228,36 @@
 </Dialog.Root>
 
 {#if invitationUrl}
-	<Dialog.Root open={!!invitationUrl} onOpenChange={(value) => { if (!value) invitationUrl = ''; }}>
+	<Dialog.Root
+		open={!!invitationUrl}
+		onOpenChange={(value) => {
+			if (!value) invitationUrl = '';
+		}}
+	>
 		<Dialog.Content class="bg-surface text-main sm:max-w-md">
 			<Dialog.Header>
-				<Dialog.Title>{locale.language === 'id' ? 'Undangan pengguna siap' : 'User invitation ready'}</Dialog.Title>
-				<Dialog.Description>{locale.language === 'id' ? 'Salin tautan ini sekarang. Tautan hanya dapat digunakan sekali dan berlaku 24 jam.' : 'Copy this link now. It can be used once and expires in 24 hours.'}</Dialog.Description>
+				<Dialog.Title
+					>{locale.language === 'id'
+						? 'Undangan pengguna siap'
+						: 'User invitation ready'}</Dialog.Title
+				>
+				<Dialog.Description
+					>{locale.language === 'id'
+						? 'Salin tautan ini sekarang. Tautan hanya dapat digunakan sekali dan berlaku 24 jam.'
+						: 'Copy this link now. It can be used once and expires in 24 hours.'}</Dialog.Description
+				>
 			</Dialog.Header>
 			<div class="flex flex-col gap-3">
-				<Input readonly value={invitationUrl} aria-label={locale.language === 'id' ? 'Tautan undangan' : 'Invitation link'} />
-				<Button type="button" class="min-h-11 focus-visible:outline focus-visible:outline-2" onclick={copyInvitation}>{locale.language === 'id' ? 'Salin Tautan' : 'Copy Link'}</Button>
+				<Input
+					readonly
+					value={invitationUrl}
+					aria-label={locale.language === 'id' ? 'Tautan undangan' : 'Invitation link'}
+				/>
+				<Button
+					type="button"
+					class="min-h-11 focus-visible:outline focus-visible:outline-2"
+					onclick={copyInvitation}>{locale.language === 'id' ? 'Salin Tautan' : 'Copy Link'}</Button
+				>
 			</div>
 		</Dialog.Content>
 	</Dialog.Root>

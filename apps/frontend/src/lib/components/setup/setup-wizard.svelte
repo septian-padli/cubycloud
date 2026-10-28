@@ -317,10 +317,9 @@
 				id: `node-${i}`,
 				name: n.path.split('/').pop() || n.path,
 				path: n.path,
-				kind: (n.kind === 'SSD' || n.kind === 'HDD' || n.kind === 'UNKNOWN' ? n.kind : 'UNKNOWN') as
-					| 'SSD'
-					| 'HDD'
-					| 'UNKNOWN',
+				kind: (n.kind === 'SSD' || n.kind === 'HDD' || n.kind === 'UNKNOWN'
+					? n.kind
+					: 'UNKNOWN') as 'SSD' | 'HDD' | 'UNKNOWN',
 				totalGb: Math.round(n.capacity_bytes / 1024 ** 3),
 				freeGb: Math.round(n.free_bytes / 1024 ** 3),
 				enabled: true,

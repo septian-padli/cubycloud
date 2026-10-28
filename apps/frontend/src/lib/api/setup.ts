@@ -58,8 +58,14 @@ const SETUP_ERROR_MESSAGES: Record<string, [string, string]> = {
 	'cloud region is required': ['Region cloud wajib diisi.', 'Cloud region is required.'],
 	'cloud endpoint is required': ['Endpoint cloud wajib diisi.', 'Cloud endpoint is required.'],
 	'cloud bucket is required': ['Nama bucket cloud wajib diisi.', 'Cloud bucket is required.'],
-	'cloud access key is required': ['Access key cloud wajib diisi.', 'Cloud access key is required.'],
-	'cloud secret key is required': ['Secret key cloud wajib diisi.', 'Cloud secret key is required.'],
+	'cloud access key is required': [
+		'Access key cloud wajib diisi.',
+		'Cloud access key is required.'
+	],
+	'cloud secret key is required': [
+		'Secret key cloud wajib diisi.',
+		'Cloud secret key is required.'
+	],
 	'username is required': ['Nama pengguna wajib diisi.', 'Username is required.'],
 	'username must be at least 3 characters': [
 		'Nama pengguna harus terdiri dari minimal 3 karakter.',
@@ -100,7 +106,7 @@ const SETUP_ERROR_MESSAGES: Record<string, [string, string]> = {
 		'Sesi Anda tidak valid atau sudah berakhir. Silakan masuk kembali.',
 		'Your session is invalid or has expired. Please sign in again.'
 	],
-	'unauthorized': [
+	unauthorized: [
 		'Sesi Anda telah berakhir. Silakan masuk kembali.',
 		'Your session has expired. Please sign in again.'
 	],
@@ -133,11 +139,7 @@ function localizeSetupError(message: string): string {
 		.match(/^code=\d+,\s*message=(.*?)(?:,\s*internal=.*)?$/i)?.[1]
 		?.trim();
 	const source = (echoMessage || message.trim()).replace(/^["']|["']$/g, '');
-	const key = source
-		.toLowerCase()
-		.replace(/[_-]+/g, ' ')
-		.replace(/\s+/g, ' ')
-		.replace(/[.]+$/, '');
+	const key = source.toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').replace(/[.]+$/, '');
 	const translated = SETUP_ERROR_MESSAGES[key];
 	if (translated) return translated[locale.language === 'id' ? 0 : 1];
 
@@ -149,18 +151,30 @@ function localizeSetupError(message: string): string {
 			)?.[1]
 			?.replace(/^["']|["']$/g, '') ??
 		source.match(/(?:\/[^,\s"'`]+|[A-Za-z]:\\[^,\s"'`]+)/)?.[0];
-	if (/(?:directory|(?:local |storage |node )?path).*(?:does not exist|doesn't exist|not found|no such file|no such directory|not a directory|is missing)/i.test(key)) {
+	if (
+		/(?:directory|(?:local |storage |node )?path).*(?:does not exist|doesn't exist|not found|no such file|no such directory|not a directory|is missing)/i.test(
+			key
+		)
+	) {
 		return locale.language === 'id'
 			? `Direktori penyimpanan tidak ditemukan atau bukan direktori${path ? `: ${path}` : '.'}`
 			: `The storage directory was not found or is not a directory${path ? `: ${path}` : '.'}`;
 	}
-	if (/(?:directory|(?:local |storage |node )?path).*(?:not writable|cannot write|permission denied|not writeable|must be writable|must be writeable)/i.test(key) ||
-		/(?:storage node|local node|node).*(?:not writable|cannot write|permission denied)/i.test(key)) {
+	if (
+		/(?:directory|(?:local |storage |node )?path).*(?:not writable|cannot write|permission denied|not writeable|must be writable|must be writeable)/i.test(
+			key
+		) ||
+		/(?:storage node|local node|node).*(?:not writable|cannot write|permission denied)/i.test(key)
+	) {
 		return locale.language === 'id'
 			? `Direktori penyimpanan tidak dapat ditulisi${path ? `: ${path}` : '.'}`
 			: `The storage directory is not writable${path ? `: ${path}` : '.'}`;
 	}
-	if (/(?:storage|local|node) path.*(?:required|invalid|empty|must be absolute|not absolute|must point)/i.test(key)) {
+	if (
+		/(?:storage|local|node) path.*(?:required|invalid|empty|must be absolute|not absolute|must point)/i.test(
+			key
+		)
+	) {
 		return locale.language === 'id'
 			? `Path node penyimpanan tidak valid atau belum lengkap${path ? `: ${path}` : '.'}`
 			: `The storage node path is invalid or incomplete${path ? `: ${path}` : '.'}`;
@@ -180,12 +194,18 @@ function localizeSetupError(message: string): string {
 			? 'Kata sandi tidak valid atau belum memenuhi persyaratan.'
 			: 'The password is invalid or does not meet the requirements.';
 	}
-	if (/recovery key.*(?:required|invalid|format|contain|character|group|must|length|30)/i.test(key)) {
+	if (
+		/recovery key.*(?:required|invalid|format|contain|character|group|must|length|30)/i.test(key)
+	) {
 		return locale.language === 'id'
 			? 'Kunci pemulihan tidak valid atau formatnya salah.'
 			: 'The recovery key is invalid or has the wrong format.';
 	}
-	if (/(?:storage node|storage nodes|node).*(?:required|invalid|empty|must|at least|missing|configured|capacity)/i.test(key)) {
+	if (
+		/(?:storage node|storage nodes|node).*(?:required|invalid|empty|must|at least|missing|configured|capacity)/i.test(
+			key
+		)
+	) {
 		return locale.language === 'id'
 			? `Konfigurasi node penyimpanan tidak valid atau belum lengkap${path ? `: ${path}` : '.'}`
 			: `The storage node configuration is invalid or incomplete${path ? `: ${path}` : '.'}`;
@@ -205,13 +225,19 @@ function localizeSetupError(message: string): string {
 			? 'Gagal memindai node penyimpanan.'
 			: 'Failed to scan storage nodes.';
 	}
-	if (/(?:cloud|s3|bucket).*(?:credential|invalid|endpoint|failed)|(?:credential|endpoint|bucket).*(?:invalid|failed)/i.test(key)) {
+	if (
+		/(?:cloud|s3|bucket).*(?:credential|invalid|endpoint|failed)|(?:credential|endpoint|bucket).*(?:invalid|failed)/i.test(
+			key
+		)
+	) {
 		return locale.language === 'id'
 			? 'Kredensial penyimpanan cloud tidak valid atau bucket/endpoint tidak dapat dijangkau.'
 			: 'Cloud storage credentials are invalid or the bucket/endpoint is unreachable.';
 	}
 	if (/invalid.*request|request.*invalid|failed to fetch|request failed|network error/i.test(key)) {
-		return locale.language === 'id' ? 'Permintaan ke server tidak valid atau gagal.' : 'The server request is invalid or failed.';
+		return locale.language === 'id'
+			? 'Permintaan ke server tidak valid atau gagal.'
+			: 'The server request is invalid or failed.';
 	}
 
 	return message;

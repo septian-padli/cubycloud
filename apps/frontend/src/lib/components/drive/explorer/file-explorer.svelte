@@ -418,7 +418,9 @@
 
 		try {
 			const res = await api.compressBatchZip(targetIds, folderId);
-			toast.info(tx('Mengompres arsip di latar belakang...', 'Compressing archive in background...'));
+			toast.info(
+				tx('Mengompres arsip di latar belakang...', 'Compressing archive in background...')
+			);
 
 			const pollInterval = setInterval(async () => {
 				try {
@@ -426,9 +428,7 @@
 					if (!resp.ok) return;
 					const job = await resp.json();
 					downloadQueue = downloadQueue.map((item, idx) =>
-						idx === queueIndex
-							? { ...item, progress: Math.max(item.progress, job.progress) }
-							: item
+						idx === queueIndex ? { ...item, progress: Math.max(item.progress, job.progress) } : item
 					);
 
 					if (job.status === 'COMPLETED') {
@@ -445,7 +445,9 @@
 						downloadQueue = downloadQueue.map((item, idx) =>
 							idx === queueIndex ? { ...item, state: 'failed', error: job.error_message } : item
 						);
-						toast.error(job.error_message || tx('Kompresi arsip gagal', 'Archive compression failed'));
+						toast.error(
+							job.error_message || tx('Kompresi arsip gagal', 'Archive compression failed')
+						);
 					}
 				} catch {
 					// Network hiccup during poll; will retry on next tick

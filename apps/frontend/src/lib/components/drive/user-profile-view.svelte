@@ -85,11 +85,13 @@
 				<div class="space-y-1 sm:col-span-2">
 					<p class="text-xs font-medium text-muted">{tx('Kuota efektif', 'Effective quota')}</p>
 					<p class="text-sm text-main">
-						{#if quota.limitGb == null}{tx(
-								'Tidak terbatas',
-								'Unlimited'
-							)}{:else}{quota.limitGb.toFixed(1).replace('.', locale.language === 'id' ? ',' : '.')} GiB{/if}
-						<span class="text-muted"> · {tx('terpakai', 'used')} {user.usedGb.toFixed(1).replace('.', locale.language === 'id' ? ',' : '.')} GiB</span>
+						{#if quota.limitGb == null}{tx('Tidak terbatas', 'Unlimited')}{:else}{quota.limitGb
+								.toFixed(1)
+								.replace('.', locale.language === 'id' ? ',' : '.')} GiB{/if}
+						<span class="text-muted">
+							· {tx('terpakai', 'used')}
+							{user.usedGb.toFixed(1).replace('.', locale.language === 'id' ? ',' : '.')} GiB</span
+						>
 					</p>
 				</div>
 			</Card.Content>

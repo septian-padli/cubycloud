@@ -8,12 +8,16 @@ const admin = { username: 'storage-e2e-admin', password: 'StorageE2E-password-20
 async function setup(page: Page) {
 	const status = await page.request.get('/api/v1/setup/status');
 	expect(status.ok()).toBeTruthy();
-	if (!(await status.json() as { is_setup_completed: boolean }).is_setup_completed) {
+	if (!((await status.json()) as { is_setup_completed: boolean }).is_setup_completed) {
 		const scan = await page.request.get('/api/v1/setup/scan-nodes');
-		const { nodes } = await scan.json() as { nodes: { path: string; capacity_bytes: number }[] };
+		const { nodes } = (await scan.json()) as { nodes: { path: string; capacity_bytes: number }[] };
 		const response = await page.request.post('/api/v1/setup/complete', {
 			data: {
-				admin: { ...admin, email: 'topbar-upload@example.test', recovery_key: 'ABCDE-FGHKL-MNPQR-STUVW-XYZ23-45678' },
+				admin: {
+					...admin,
+					email: 'topbar-upload@example.test',
+					recovery_key: 'ABCDE-FGHKL-MNPQR-STUVW-XYZ23-45678'
+				},
 				storage_nodes: nodes.map((node) => ({ ...node, enabled: true })),
 				placement_strategy: 'FILL_FIRST',
 				cloud: { enabled: false }
@@ -30,7 +34,9 @@ async function setup(page: Page) {
 	await page.waitForURL('**/drive/home');
 }
 
-test('Topbar upload button automatically uploads files to the root of My Drive from any page or subfolder', async ({ page }) => {
+test('Topbar upload button automatically uploads files to the root of My Drive from any page or subfolder', async ({
+	page
+}) => {
 	test.setTimeout(120_000);
 	await setup(page);
 

@@ -56,9 +56,7 @@ describe('resolveHeaderUploadTarget', () => {
 			).toEqual({
 				action: 'upload-my-storage'
 			});
-			expect(
-				resolveHeaderUploadTarget('/drive/my-storage', 'subfolder-123', 'editor')
-			).toEqual({
+			expect(resolveHeaderUploadTarget('/drive/my-storage', 'subfolder-123', 'editor')).toEqual({
 				action: 'upload-my-storage'
 			});
 		});
@@ -116,11 +114,7 @@ describe('resolveHeaderUploadTarget', () => {
 		});
 
 		it('decodes URL-encoded folder names from pathname', () => {
-			const result = resolveHeaderUploadTarget(
-				'/drive/shared/Tim%20Desain%202026',
-				null,
-				'editor'
-			);
+			const result = resolveHeaderUploadTarget('/drive/shared/Tim%20Desain%202026', null, 'editor');
 			expect(result).toEqual({
 				action: 'upload-shared',
 				targetFolderId: 'Tim Desain 2026'
@@ -202,12 +196,7 @@ describe('handleHeaderFilesUpload', () => {
 			}
 		};
 
-		await handleHeaderFilesUpload(
-			[],
-			{ action: 'upload-my-storage' },
-			{},
-			drivers
-		);
+		await handleHeaderFilesUpload([], { action: 'upload-my-storage' }, {}, drivers);
 
 		expect(myStorageCalled).toBe(false);
 		expect(sharedCalled).toBe(false);
@@ -223,15 +212,11 @@ describe('handleHeaderFilesUpload', () => {
 		const files = [createFile('test.txt')];
 
 		await expect(
-			handleHeaderFilesUpload(
-				files,
-				target,
-				{
-					onError: (err) => {
-						errorReceived = err;
-					}
+			handleHeaderFilesUpload(files, target, {
+				onError: (err) => {
+					errorReceived = err;
 				}
-			)
+			})
 		).rejects.toThrow('Anda tidak memiliki izin mengunggah ke folder bersama ini');
 
 		expect(errorReceived).toBeInstanceOf(Error);
@@ -308,19 +293,13 @@ describe('handleHeaderFilesUpload', () => {
 			drivers
 		);
 
-		expect(sharedUploads).toEqual([
-			{ folderId: 'folder-shared-99', fileName: 'shared-file.png' }
-		]);
+		expect(sharedUploads).toEqual([{ folderId: 'folder-shared-99', fileName: 'shared-file.png' }]);
 		expect(successCalled).toBe(true);
 		expect(progressUpdates).toContain(100);
 	});
 
 	it('stops immediately when quota error occurs during multi-file upload', async () => {
-		const files = [
-			createFile('first.txt'),
-			createFile('second.txt'),
-			createFile('third.txt')
-		];
+		const files = [createFile('first.txt'), createFile('second.txt'), createFile('third.txt')];
 		const target: HeaderUploadTarget = { action: 'upload-my-storage' };
 
 		const uploadedNames: string[] = [];
@@ -372,9 +351,9 @@ describe('handleHeaderFilesUpload', () => {
 			}
 		};
 
-		await expect(
-			handleHeaderFilesUpload(files, target, {}, drivers)
-		).rejects.toMatchObject({ code: 'USER_QUOTA_EXCEEDED' });
+		await expect(handleHeaderFilesUpload(files, target, {}, drivers)).rejects.toMatchObject({
+			code: 'USER_QUOTA_EXCEEDED'
+		});
 
 		expect(uploadedNames).toEqual([]);
 	});

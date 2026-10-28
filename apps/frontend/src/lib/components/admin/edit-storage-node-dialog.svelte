@@ -133,7 +133,9 @@
 
 				<div class="space-y-2">
 					<Label for="edit-capacity"
-						>{locale.language === 'id' ? 'Kapasitas Maksimal (GiB)' : 'Maximum capacity (GiB)'}</Label
+						>{locale.language === 'id'
+							? 'Kapasitas Maksimal (GiB)'
+							: 'Maximum capacity (GiB)'}</Label
 					>
 					<Input
 						id="edit-capacity"

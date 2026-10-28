@@ -44,14 +44,11 @@ const AUTH_ERROR_MESSAGES: Record<string, [string, string]> = {
 	],
 	'passwords do not match': ['Password tidak cocok.', 'Passwords do not match.'],
 	'user not found': ['Pengguna tidak ditemukan.', 'User not found.'],
-	'unauthorized': [
+	unauthorized: [
 		'Sesi Anda telah berakhir. Silakan masuk kembali.',
 		'Your session has expired. Please sign in again.'
 	],
-	'authentication required': [
-		'Silakan masuk untuk melanjutkan.',
-		'Please sign in to continue.'
-	],
+	'authentication required': ['Silakan masuk untuk melanjutkan.', 'Please sign in to continue.'],
 	forbidden: [
 		'Anda tidak memiliki izin untuk melakukan tindakan ini.',
 		'You do not have permission to perform this action.'
@@ -204,7 +201,10 @@ class AuthAPI {
 		}
 	}
 
-	async login(identifier: string, password: string): Promise<{ data?: LoginResponse; error?: string }> {
+	async login(
+		identifier: string,
+		password: string
+	): Promise<{ data?: LoginResponse; error?: string }> {
 		return this.request<LoginResponse>('/auth/login', {
 			method: 'POST',
 			body: JSON.stringify({ identifier, password })
@@ -246,10 +246,7 @@ class AuthAPI {
 		});
 	}
 
-
-	async updateProfile(
-		req: UpdateProfileRequest
-	): Promise<{ data?: UserResponse; error?: string }> {
+	async updateProfile(req: UpdateProfileRequest): Promise<{ data?: UserResponse; error?: string }> {
 		return this.request<UserResponse>('/auth/profile', {
 			method: 'PATCH',
 			body: JSON.stringify(req)
@@ -265,12 +262,9 @@ class AuthAPI {
 		});
 	}
 
-	async getUserProfile(
-		userId: string
-	): Promise<{ data?: UserResponse; error?: string }> {
+	async getUserProfile(userId: string): Promise<{ data?: UserResponse; error?: string }> {
 		return this.request<UserResponse>(`/auth/profile/${encodeURIComponent(userId)}`);
 	}
 }
 
 export const authAPI = new AuthAPI();
-

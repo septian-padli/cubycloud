@@ -57,7 +57,9 @@
 		}
 		navigator.clipboard.writeText(recoveryKey).then(() => {
 			downloaded = true;
-			toast.success(tx('Kunci pemulihan disalin ke papan klip', 'Recovery key copied to clipboard'));
+			toast.success(
+				tx('Kunci pemulihan disalin ke papan klip', 'Recovery key copied to clipboard')
+			);
 			triggerJustDownloaded();
 		});
 	}

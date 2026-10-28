@@ -348,9 +348,11 @@
 									</div>
 									<p class="text-xs text-muted">
 										{#if entry.kind === 'folder'}
-											{tx('Folder', 'Folder')} · {tx('Diubah', 'Modified')} {locale.formatDate(entry.modifiedAt)}
+											{tx('Folder', 'Folder')} · {tx('Diubah', 'Modified')}
+											{locale.formatDate(entry.modifiedAt)}
 										{:else}
-											{formatSize(entry.sizeBytes)} · {tx('Diubah', 'Modified')} {locale.formatDate(entry.modifiedAt)}
+											{formatSize(entry.sizeBytes)} · {tx('Diubah', 'Modified')}
+											{locale.formatDate(entry.modifiedAt)}
 										{/if}
 									</p>
 								</div>

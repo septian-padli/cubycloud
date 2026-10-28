@@ -15,15 +15,29 @@ test('ZIP without native file picker submits repeated ids to the browser downloa
 	const fields: { name: string; value: string }[] = [];
 	let submitted: { action: string; method: string; target: string; enctype: string } | undefined;
 	const frame = {
-		isConnected: false, name: '', title: '', hidden: false,
+		isConnected: false,
+		name: '',
+		title: '',
+		hidden: false,
 		contentDocument: { URL: 'about:blank', body: { textContent: '' } },
 		onload: null as (() => void) | null
 	};
 	const form = {
-		action: '', method: '', target: '', enctype: '', style: { display: '' },
-		append(input: { name: string; value: string }) { fields.push({ name: input.name, value: input.value }); },
+		action: '',
+		method: '',
+		target: '',
+		enctype: '',
+		style: { display: '' },
+		append(input: { name: string; value: string }) {
+			fields.push({ name: input.name, value: input.value });
+		},
 		submit() {
-			submitted = { action: this.action, method: this.method, target: this.target, enctype: this.enctype };
+			submitted = {
+				action: this.action,
+				method: this.method,
+				target: this.target,
+				enctype: this.enctype
+			};
 		},
 		remove() {}
 	};
@@ -34,21 +48,34 @@ test('ZIP without native file picker submits repeated ids to the browser downloa
 			if (tag === 'input') return { name: '', value: '', type: '' };
 			throw new Error(`Unexpected element: ${tag}`);
 		},
-		body: { append(element: unknown) { if (element === frame) frame.isConnected = true; } }
+		body: {
+			append(element: unknown) {
+				if (element === frame) frame.isConnected = true;
+			}
+		}
 	} as unknown as Document;
 	globalThis.window = {} as Window & typeof globalThis;
-	globalThis.fetch = (async () => { throw new Error('ZIP must not be fetched into JS memory'); }) as unknown as typeof fetch;
+	globalThis.fetch = (async () => {
+		throw new Error('ZIP must not be fetched into JS memory');
+	}) as unknown as typeof fetch;
 
 	const result = await myStorageAPI.downloadBatchZip(['one', 'two']);
 	expect(result).toBe('started');
 	expect(submitted).toEqual({
 		action: '/api/v1/drive/my-storage/batch/download-zip',
-		method: 'POST', target: 'cubycloud-zip-download', enctype: 'application/x-www-form-urlencoded'
+		method: 'POST',
+		target: 'cubycloud-zip-download',
+		enctype: 'application/x-www-form-urlencoded'
 	});
-	expect(fields).toEqual([{ name: 'ids', value: 'one' }, { name: 'ids', value: 'two' }]);
+	expect(fields).toEqual([
+		{ name: 'ids', value: 'one' },
+		{ name: 'ids', value: 'two' }
+	]);
 
 	let errorMessage = '';
-	myStorageAPI.downloadBatchZip(['one'], (message) => { errorMessage = message; });
+	myStorageAPI.downloadBatchZip(['one'], (message) => {
+		errorMessage = message;
+	});
 	frame.contentDocument.URL = '/api/v1/drive/my-storage/batch/download-zip';
 	frame.contentDocument.body.textContent = JSON.stringify({ error: 'ids is required' });
 	(frame.onload as (() => void) | null)?.();
@@ -72,25 +99,42 @@ test('overlapping ZIP downloads keep each response and error callback bound to i
 					name: '',
 					contentDocument: { URL: 'about:blank', body: { textContent: '' } },
 					onload: null as (() => void) | null,
-					remove() { this.isConnected = false; }
+					remove() {
+						this.isConnected = false;
+					}
 				};
 				frames.push(frame);
 				return frame;
 			}
-			if (tag === 'form') return {
-				action: '', method: '', enctype: '', target: '', style: { display: '' },
-				append() {}, submit() {}, remove() {}
-			};
+			if (tag === 'form')
+				return {
+					action: '',
+					method: '',
+					enctype: '',
+					target: '',
+					style: { display: '' },
+					append() {},
+					submit() {},
+					remove() {}
+				};
 			if (tag === 'input') return { name: '', value: '', type: '' };
 			throw new Error(`Unexpected element: ${tag}`);
 		},
-		body: { append(element: { isConnected?: boolean }) { element.isConnected = true; } }
+		body: {
+			append(element: { isConnected?: boolean }) {
+				element.isConnected = true;
+			}
+		}
 	} as unknown as Document;
 
 	const errorsA: string[] = [];
 	const errorsB: string[] = [];
-	myStorageAPI.downloadBatchZip(['one'], (message) => { errorsA.push(message); });
-	myStorageAPI.downloadBatchZip(['two'], (message) => { errorsB.push(message); });
+	myStorageAPI.downloadBatchZip(['one'], (message) => {
+		errorsA.push(message);
+	});
+	myStorageAPI.downloadBatchZip(['two'], (message) => {
+		errorsB.push(message);
+	});
 	expect(frames).toHaveLength(2);
 	expect(frames[0].name).not.toBe(frames[1].name);
 

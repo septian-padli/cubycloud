@@ -30,7 +30,9 @@
 	const resolvedConfirmText = $derived(
 		confirmText ?? (locale.language === 'id' ? 'Konfirmasi' : 'Confirm')
 	);
-	const resolvedCancelText = $derived(cancelText ?? (locale.language === 'id' ? 'Batal' : 'Cancel'));
+	const resolvedCancelText = $derived(
+		cancelText ?? (locale.language === 'id' ? 'Batal' : 'Cancel')
+	);
 
 	async function handleConfirm() {
 		await onConfirm();

@@ -294,7 +294,9 @@
 				{#if testState === 'success'}
 					<Alert.Root variant="default" class="border-emerald-500/20 bg-emerald-500/5">
 						<CheckCircle2 class="size-4 stroke-2 text-emerald-600 dark:text-emerald-400" />
-						<Alert.Title class="text-emerald-800 dark:text-emerald-200">{tx('Koneksi berhasil', 'Connection successful')}</Alert.Title>
+						<Alert.Title class="text-emerald-800 dark:text-emerald-200"
+							>{tx('Koneksi berhasil', 'Connection successful')}</Alert.Title
+						>
 						<Alert.Description class="text-emerald-700 dark:text-emerald-300">
 							{tx(
 								'Kredensial dan akses bucket S3 terverifikasi.',

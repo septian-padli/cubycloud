@@ -15,7 +15,9 @@ async function ensureSetup(page: Page) {
 		if (!json.is_setup_completed) {
 			const scan = await page.request.get('/api/v1/setup/scan-nodes');
 			expect(scan.ok()).toBeTruthy();
-			const { nodes } = (await scan.json()) as { nodes: { path: string; capacity_bytes: number }[] };
+			const { nodes } = (await scan.json()) as {
+				nodes: { path: string; capacity_bytes: number }[];
+			};
 			const setup = await page.request.post('/api/v1/setup/complete', {
 				data: {
 					admin: {
@@ -99,7 +101,9 @@ test.describe('Admin Storage Stats & Top Users', () => {
 		await expect(page.getByRole('heading', { name: 'Penyimpanan Sistem' })).toBeVisible();
 
 		// 7. Verify storage overview card exists
-		const overviewCard = page.locator('section').filter({ hasText: 'Detail kuota & pemakaian sistem' });
+		const overviewCard = page
+			.locator('section')
+			.filter({ hasText: 'Detail kuota & pemakaian sistem' });
 		await expect(overviewCard).toBeVisible();
 		await expect(overviewCard.getByText('Total Kapasitas')).toBeVisible();
 		await expect(overviewCard.getByText('Total Pemakaian')).toBeVisible();
@@ -134,7 +138,9 @@ test.describe('Admin Storage Stats & Top Users', () => {
 		await expect(overviewCard.getByRole('button', { name: 'Dokumen' })).toBeVisible();
 		await expect(overviewCard.getByRole('button', { name: 'Arsip' })).toBeVisible();
 		await expect(overviewCard.getByRole('button', { name: /^(Trash|Sampah)$/ })).toBeVisible();
-		const topUsersSection = page.locator('section').filter({ hasText: 'Pengguna dengan konsumsi terbesar' });
+		const topUsersSection = page
+			.locator('section')
+			.filter({ hasText: 'Pengguna dengan konsumsi terbesar' });
 		await expect(topUsersSection).toBeVisible();
 
 		// Verify users are listed and ranked
@@ -148,7 +154,9 @@ test.describe('Admin Storage Stats & Top Users', () => {
 
 		// Verify descending order of used_bytes
 		for (let i = 0; i < topUsersData.items.length - 1; i++) {
-			expect(topUsersData.items[i].used_bytes).toBeGreaterThanOrEqual(topUsersData.items[i + 1].used_bytes);
+			expect(topUsersData.items[i].used_bytes).toBeGreaterThanOrEqual(
+				topUsersData.items[i + 1].used_bytes
+			);
 		}
 
 		// Verify first user appears on page
@@ -206,7 +214,9 @@ test.describe('Admin Storage Stats & Top Users', () => {
 		await page.goto('/admin/storage');
 		await page.waitForURL('**/admin/storage');
 
-		const overviewCard = page.locator('section').filter({ hasText: 'Detail kuota & pemakaian sistem' });
+		const overviewCard = page
+			.locator('section')
+			.filter({ hasText: 'Detail kuota & pemakaian sistem' });
 		await expect(overviewCard).toBeVisible();
 
 		// Segmented bar track

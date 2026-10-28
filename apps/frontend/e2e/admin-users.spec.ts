@@ -11,10 +11,17 @@ async function ensureAdminLoggedIn(page: Page) {
 		if (!json.is_setup_completed) {
 			const scan = await page.request.get('/api/v1/setup/scan-nodes');
 			expect(scan.ok()).toBeTruthy();
-			const { nodes } = (await scan.json()) as { nodes: { path: string; capacity_bytes: number }[] };
+			const { nodes } = (await scan.json()) as {
+				nodes: { path: string; capacity_bytes: number }[];
+			};
 			const setup = await page.request.post('/api/v1/setup/complete', {
 				data: {
-					admin: { username: adminUsername, email: 'user-e2e@example.test', password: adminPassword, recovery_key: recoveryKey },
+					admin: {
+						username: adminUsername,
+						email: 'user-e2e@example.test',
+						password: adminPassword,
+						recovery_key: recoveryKey
+					},
 					storage_nodes: nodes.map((node) => ({ ...node, enabled: true })),
 					placement_strategy: 'FILL_FIRST',
 					cloud: { enabled: false }
@@ -32,14 +39,18 @@ async function ensureAdminLoggedIn(page: Page) {
 	await page.waitForURL('**/drive/home');
 }
 
-test('Admin Users manages user creation, quota modes (fractional, default, unlimited), and deletion', async ({ page }) => {
+test('Admin Users manages user creation, quota modes (fractional, default, unlimited), and deletion', async ({
+	page
+}) => {
 	await ensureAdminLoggedIn(page);
 	await page.request.put('/api/v1/admin/settings', {
 		data: { default_quota: { mode: 'limited', gb: 100 } }
 	});
 	// 1. Navigate to /admin/users
 	await page.goto('/admin/users');
-	await expect(page.getByRole('heading', { name: /Users & Quotas|Pengguna & Kuota/ })).toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: /Users & Quotas|Pengguna & Kuota/ })
+	).toBeVisible();
 
 	// 2. Open Buat Pengguna dialog
 	await page.getByRole('button', { name: /Buat Pengguna|Create User/ }).click();
@@ -58,13 +69,20 @@ test('Admin Users manages user creation, quota modes (fractional, default, unlim
 	await expect(page.getByRole('dialog').getByText('GiB', { exact: true })).toBeVisible();
 	await quotaInput.fill('1.5');
 	// Submit creation
-	await page.getByRole('button', { name: /Buat Pengguna|Create user/ }).last().click();
-	await expect(page.getByRole('heading', { name: /Undangan pengguna siap|User invitation ready/ })).toBeVisible();
+	await page
+		.getByRole('button', { name: /Buat Pengguna|Create user/ })
+		.last()
+		.click();
+	await expect(
+		page.getByRole('heading', { name: /Undangan pengguna siap|User invitation ready/ })
+	).toBeVisible();
 	const inviteInput = page.getByLabel(/Tautan undangan|Invitation link/);
 	const inviteUrl = await inviteInput.inputValue();
 	const inviteToken = new URL(inviteUrl).hash.replace('#token=', '');
 	await page.keyboard.press('Escape');
-	await expect(page.getByRole('heading', { name: /Undangan pengguna siap|User invitation ready/ })).not.toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: /Undangan pengguna siap|User invitation ready/ })
+	).not.toBeVisible();
 	await expect(page.getByRole('heading', { name: /Buat Pengguna|Create user/ })).not.toBeVisible();
 	// 4. Verify user appears in table with 1.5 GiB
 	const userRow = page.locator('tr').filter({ hasText: newUsername });
@@ -72,7 +90,9 @@ test('Admin Users manages user creation, quota modes (fractional, default, unlim
 	await expect(userRow.getByText('1.5 GiB')).toBeVisible();
 
 	// 5. Edit Kuota -> Reset ke Default
-	await userRow.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${newUsername}`) }).click();
+	await userRow
+		.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${newUsername}`) })
+		.click();
 	await page.getByRole('menuitem', { name: /Edit Kuota|Edit quota/ }).click();
 	await expect(page.getByRole('heading', { name: /Edit Kuota|Edit quota/ })).toBeVisible();
 
@@ -85,11 +105,16 @@ test('Admin Users manages user creation, quota modes (fractional, default, unlim
 	await expect(userRow.getByText('100 GiB')).toBeVisible();
 
 	// 6. Edit Kuota -> Unlimited
-	await userRow.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${newUsername}`) }).click();
+	await userRow
+		.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${newUsername}`) })
+		.click();
 	await page.getByRole('menuitem', { name: /Edit Kuota|Edit quota/ }).click();
 	await expect(page.getByRole('heading', { name: /Edit Kuota|Edit quota/ })).toBeVisible();
 
-	await page.getByRole('dialog').getByLabel(/Unlimited|Tanpa batas/).click();
+	await page
+		.getByRole('dialog')
+		.getByLabel(/Unlimited|Tanpa batas/)
+		.click();
 	await page.getByRole('button', { name: /Simpan|Save/ }).click();
 	await expect(page.getByRole('heading', { name: /Edit Kuota|Edit quota/ })).not.toBeVisible();
 
@@ -127,7 +152,9 @@ test('Admin Users manages user creation, quota modes (fractional, default, unlim
 	await expect(userRow).toBeVisible();
 
 	// 8. Lower quota below usage (set to 0 GiB) -> triggers confirmation dialog
-	await userRow.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${newUsername}`) }).click();
+	await userRow
+		.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${newUsername}`) })
+		.click();
 	await page.getByRole('menuitem', { name: /Edit Kuota|Edit quota/ }).click();
 	await expect(page.getByRole('heading', { name: /Edit Kuota|Edit quota/ })).toBeVisible();
 
@@ -139,17 +166,28 @@ test('Admin Users manages user creation, quota modes (fractional, default, unlim
 	await page.getByRole('button', { name: /Simpan|Save/ }).click();
 
 	// Confirm dialog must appear
-	await expect(page.getByRole('heading', { name: /Konfirmasi Penurunan Kuota|Confirm quota reduction/i })).toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: /Konfirmasi Penurunan Kuota|Confirm quota reduction/i })
+	).toBeVisible();
 
 	// Click Batal on confirmation dialog
-	await page.getByRole('dialog', { name: /Konfirmasi Penurunan Kuota|Confirm quota reduction/i }).getByRole('button', { name: /Batal|Cancel/i }).click();
-	await expect(page.getByRole('heading', { name: /Konfirmasi Penurunan Kuota|Confirm quota reduction/i })).not.toBeVisible();
+	await page
+		.getByRole('dialog', { name: /Konfirmasi Penurunan Kuota|Confirm quota reduction/i })
+		.getByRole('button', { name: /Batal|Cancel/i })
+		.click();
+	await expect(
+		page.getByRole('heading', { name: /Konfirmasi Penurunan Kuota|Confirm quota reduction/i })
+	).not.toBeVisible();
 
 	// Click Simpan again, this time confirm with "Ya, Simpan"
 	await page.getByRole('button', { name: /Simpan|Save/i }).click();
-	await expect(page.getByRole('heading', { name: /Konfirmasi Penurunan Kuota|Confirm quota reduction/i })).toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: /Konfirmasi Penurunan Kuota|Confirm quota reduction/i })
+	).toBeVisible();
 	await page.getByRole('button', { name: /Ya, Simpan|Yes, save/i }).click();
-	await expect(page.getByRole('heading', { name: /Konfirmasi Penurunan Kuota|Confirm quota reduction/i })).not.toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: /Konfirmasi Penurunan Kuota|Confirm quota reduction/i })
+	).not.toBeVisible();
 	await expect(page.getByRole('heading', { name: /Edit Kuota|Edit quota/ })).not.toBeVisible();
 
 	// Verify quota is updated to 0 GiB
@@ -157,18 +195,28 @@ test('Admin Users manages user creation, quota modes (fractional, default, unlim
 
 	// Verify Super Admin row does NOT have 'Hapus' action item (hidden for super admin)
 	const adminRow = page.locator('tr').filter({ hasText: adminUsername });
-	await adminRow.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${adminUsername}`) }).click();
+	await adminRow
+		.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${adminUsername}`) })
+		.click();
 	await expect(page.getByRole('menuitem', { name: /Hapus|Delete/ })).not.toBeVisible();
-	await expect(page.getByRole('menuitem', { name: /Reset Kata Sandi|Reset password/ })).not.toBeVisible();
+	await expect(
+		page.getByRole('menuitem', { name: /Reset Kata Sandi|Reset password/ })
+	).not.toBeVisible();
 	await page.keyboard.press('Escape');
 
 	// Verify regular user row has 'Reset Kata Sandi' action item
-	await userRow.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${newUsername}`) }).click();
-	await expect(page.getByRole('menuitem', { name: /Reset Kata Sandi|Reset password/ })).toBeVisible();
+	await userRow
+		.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${newUsername}`) })
+		.click();
+	await expect(
+		page.getByRole('menuitem', { name: /Reset Kata Sandi|Reset password/ })
+	).toBeVisible();
 	await page.keyboard.press('Escape');
 
 	// 9. Delete regular user with confirmation dialog requiring exact email
-	await userRow.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${newUsername}`) }).click();
+	await userRow
+		.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${newUsername}`) })
+		.click();
 	await page.getByRole('menuitem', { name: /Hapus|Delete/ }).click();
 
 	const deleteDialog = page.getByRole('dialog', { name: /Hapus Pengguna|Delete user/ });
@@ -215,7 +263,9 @@ test('Admin Users manages user creation, quota modes (fractional, default, unlim
 	await page.waitForURL(/\/login/);
 	await expect(page).toHaveURL(/\/login/);
 });
-test('Delete User enforces exact email typing, blocks paste, purges personal storage & trash, and preserves organization items as deleted user', async ({ page }) => {
+test('Delete User enforces exact email typing, blocks paste, purges personal storage & trash, and preserves organization items as deleted user', async ({
+	page
+}) => {
 	await ensureAdminLoggedIn(page);
 	const baseURL = new URL(page.url()).origin;
 
@@ -224,13 +274,20 @@ test('Delete User enforces exact email typing, blocks paste, purges personal sto
 	await page.getByRole('button', { name: /Buat Pengguna|Create User/ }).click();
 	await page.getByLabel(/Nama pengguna|Username/).fill('alice_del');
 	await page.getByLabel('Email').fill('alice_del@example.test');
-	await page.getByRole('button', { name: /Buat Pengguna|Create user/ }).last().click();
-	await expect(page.getByRole('heading', { name: /Undangan pengguna siap|User invitation ready/ })).toBeVisible();
+	await page
+		.getByRole('button', { name: /Buat Pengguna|Create user/ })
+		.last()
+		.click();
+	await expect(
+		page.getByRole('heading', { name: /Undangan pengguna siap|User invitation ready/ })
+	).toBeVisible();
 	const aliceInviteInput = page.getByLabel(/Tautan undangan|Invitation link/);
 	const aliceInviteUrl = await aliceInviteInput.inputValue();
 	const aliceToken = new URL(aliceInviteUrl).hash.replace('#token=', '');
 	await page.keyboard.press('Escape');
-	await expect(page.getByRole('heading', { name: /Undangan pengguna siap|User invitation ready/ })).not.toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: /Undangan pengguna siap|User invitation ready/ })
+	).not.toBeVisible();
 	await expect(page.getByRole('heading', { name: /Buat Pengguna|Create user/ })).not.toBeVisible();
 	const aliceRow = page.locator('tr').filter({ hasText: 'alice_del' });
 	await expect(aliceRow).toBeVisible();
@@ -254,15 +311,18 @@ test('Delete User enforces exact email typing, blocks paste, purges personal sto
 	expect(aliceLogin.ok()).toBeTruthy();
 
 	// Personal file 1 (active)
-	const upActive = await aliceApi.post('/api/v1/drive/my-storage/upload?filename=alice-active.txt', {
-		multipart: {
-			file: {
-				name: 'alice-active.txt',
-				mimeType: 'text/plain',
-				buffer: Buffer.from('active content')
+	const upActive = await aliceApi.post(
+		'/api/v1/drive/my-storage/upload?filename=alice-active.txt',
+		{
+			multipart: {
+				file: {
+					name: 'alice-active.txt',
+					mimeType: 'text/plain',
+					buffer: Buffer.from('active content')
+				}
 			}
 		}
-	});
+	);
 	expect(upActive.ok()).toBeTruthy();
 
 	// Personal file 2 (move to trash)
@@ -281,15 +341,18 @@ test('Delete User enforces exact email typing, blocks paste, purges personal sto
 	expect(delRes.status()).toBe(204);
 
 	// Organization shared file
-	const upOrg = await aliceApi.post('/api/v1/drive/organization/upload?filename=alice-shared-doc.txt', {
-		multipart: {
-			file: {
-				name: 'alice-shared-doc.txt',
-				mimeType: 'text/plain',
-				buffer: Buffer.from('shared organization content')
+	const upOrg = await aliceApi.post(
+		'/api/v1/drive/organization/upload?filename=alice-shared-doc.txt',
+		{
+			multipart: {
+				file: {
+					name: 'alice-shared-doc.txt',
+					mimeType: 'text/plain',
+					buffer: Buffer.from('shared organization content')
+				}
 			}
 		}
-	});
+	);
 	expect(upOrg.ok()).toBeTruthy();
 	await aliceApi.dispose();
 
@@ -353,7 +416,9 @@ test('Delete User enforces exact email typing, blocks paste, purges personal sto
 	await verifyContext.dispose();
 });
 
-test('Superadmin can reset another user password with single-use link and session revocation', async ({ page }) => {
+test('Superadmin can reset another user password with single-use link and session revocation', async ({
+	page
+}) => {
 	await ensureAdminLoggedIn(page);
 	const baseURL = new URL(page.url()).origin;
 
@@ -363,13 +428,20 @@ test('Superadmin can reset another user password with single-use link and sessio
 	const targetUsername = 'bob_reset';
 	await page.getByLabel(/Nama pengguna|Username/).fill(targetUsername);
 	await page.getByLabel('Email').fill('bob_reset@example.test');
-	await page.getByRole('button', { name: /Buat Pengguna|Create user/ }).last().click();
-	await expect(page.getByRole('heading', { name: /Undangan pengguna siap|User invitation ready/ })).toBeVisible();
+	await page
+		.getByRole('button', { name: /Buat Pengguna|Create user/ })
+		.last()
+		.click();
+	await expect(
+		page.getByRole('heading', { name: /Undangan pengguna siap|User invitation ready/ })
+	).toBeVisible();
 	const bobInviteInput = page.getByLabel(/Tautan undangan|Invitation link/);
 	const bobInviteUrl = await bobInviteInput.inputValue();
 	const bobToken = new URL(bobInviteUrl).hash.replace('#token=', '');
 	await page.keyboard.press('Escape');
-	await expect(page.getByRole('heading', { name: /Undangan pengguna siap|User invitation ready/ })).not.toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: /Undangan pengguna siap|User invitation ready/ })
+	).not.toBeVisible();
 
 	const bobRow = page.locator('tr').filter({ hasText: targetUsername });
 	await expect(bobRow).toBeVisible();
@@ -391,7 +463,9 @@ test('Superadmin can reset another user password with single-use link and sessio
 	expect(bobLogin1.ok()).toBeTruthy();
 
 	// 3. Admin opens Reset Kata Sandi dialog for bob
-	await bobRow.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${targetUsername}`) }).click();
+	await bobRow
+		.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${targetUsername}`) })
+		.click();
 	const resetItem = page.getByRole('menuitem', { name: /Reset Kata Sandi|Reset password/ });
 	await expect(resetItem).toBeVisible();
 	await resetItem.click();
@@ -404,14 +478,18 @@ test('Superadmin can reset another user password with single-use link and sessio
 	await expect(resetDialog).not.toBeVisible();
 
 	// Open dialog again and confirm reset
-	await bobRow.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${targetUsername}`) }).click();
+	await bobRow
+		.getByRole('button', { name: new RegExp(`(Aksi|Actions for) ${targetUsername}`) })
+		.click();
 	await page.getByRole('menuitem', { name: /Reset Kata Sandi|Reset password/ }).click();
 	await expect(resetDialog).toBeVisible();
 	await resetDialog.getByRole('button', { name: /Reset Kata Sandi|Reset Password/ }).click();
 	await expect(resetDialog).not.toBeVisible();
 
 	// Success dialog displays reset one-time link
-	await expect(page.getByRole('heading', { name: /Tautan reset siap|Reset link ready/ })).toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: /Tautan reset siap|Reset link ready/ })
+	).toBeVisible();
 	const resetInput = page.getByLabel(/Tautan reset kata sandi|Password reset link/);
 	const resetLink = await resetInput.inputValue();
 	const resetToken = new URL(resetLink).hash.replace('#token=', '');

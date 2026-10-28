@@ -64,8 +64,9 @@ export function cloneMockDevices(): LinuxDevice[] {
 /** Cryptographically random Recovery Key in the 6×5 format (UI mock — not persisted). */
 export function generateMockRecoveryKey(): string {
 	const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-	const characters = Array.from(crypto.getRandomValues(new Uint8Array(30)), (value) =>
-		alphabet[value & 31]
+	const characters = Array.from(
+		crypto.getRandomValues(new Uint8Array(30)),
+		(value) => alphabet[value & 31]
 	);
 	return characters.reduce(
 		(key, character, index) => key + (index > 0 && index % 5 === 0 ? '-' : '') + character,

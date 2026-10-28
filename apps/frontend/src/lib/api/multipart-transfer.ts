@@ -112,7 +112,9 @@ export class MultipartSessionGoneError extends MultipartError {
 function multipartErrorMessage(body: { error?: string } | undefined, status: number): string {
 	const id = locale.language === 'id';
 	if (body?.error === 'USER_QUOTA_EXCEEDED')
-		return id ? 'Kuota penyimpanan penuh. Hubungi admin.' : 'Storage quota is full. Contact an administrator.';
+		return id
+			? 'Kuota penyimpanan penuh. Hubungi admin.'
+			: 'Storage quota is full. Contact an administrator.';
 	if (body?.error === 'STORAGE_POOL_FULL')
 		return id ? 'Penyimpanan server penuh.' : 'Server storage is full.';
 	if (body?.error === 'multipart_session_expired')

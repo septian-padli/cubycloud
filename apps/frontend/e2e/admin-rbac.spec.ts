@@ -15,7 +15,9 @@ async function ensureSetup(page: Page) {
 		if (!json.is_setup_completed) {
 			const scan = await page.request.get('/api/v1/setup/scan-nodes');
 			expect(scan.ok()).toBeTruthy();
-			const { nodes } = (await scan.json()) as { nodes: { path: string; capacity_bytes: number }[] };
+			const { nodes } = (await scan.json()) as {
+				nodes: { path: string; capacity_bytes: number }[];
+			};
 			const setup = await page.request.post('/api/v1/setup/complete', {
 				data: {
 					admin: {
@@ -54,19 +56,27 @@ test('Role-based access control enforces Super Admin routes and prevents Regular
 
 	// Verifikasi dapat membuka /admin/settings dengan sukses (heading 'Admin Settings' visible, tidak ada pesan 403)
 	await page.goto('/admin/settings');
-	await expect(page.getByRole('heading', { name: /Pengaturan Admin|Admin Settings/i })).toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: /Pengaturan Admin|Admin Settings/i })
+	).toBeVisible();
 	await expect(page.getByTestId('admin-forbidden-page')).not.toBeVisible();
 	await expect(page.getByText('Akses ditolak')).not.toBeVisible();
 
 	// Verifikasi sidebar memiliki menu Super Admin
 	const superAdminSidebar = page.locator('aside');
 	await expect(superAdminSidebar.getByText('Super Admin', { exact: true })).toBeVisible();
-	await expect(superAdminSidebar.getByRole('link', { name: /Pengaturan Admin|Admin Settings/i })).toBeVisible();
-	await expect(superAdminSidebar.getByRole('link', { name: /Pengguna & Kuota|Users & Quotas/i })).toBeVisible();
+	await expect(
+		superAdminSidebar.getByRole('link', { name: /Pengaturan Admin|Admin Settings/i })
+	).toBeVisible();
+	await expect(
+		superAdminSidebar.getByRole('link', { name: /Pengguna & Kuota|Users & Quotas/i })
+	).toBeVisible();
 
 	// Verifikasi header nav TIDAK memiliki tombol toggle role demo
 	const superAdminHeader = page.locator('header');
-	await expect(superAdminHeader.getByRole('button', { name: /Super Admin|Regular/i })).toHaveCount(0);
+	await expect(superAdminHeader.getByRole('button', { name: /Super Admin|Regular/i })).toHaveCount(
+		0
+	);
 	await expect(superAdminHeader.getByText('Super Admin', { exact: true })).toHaveCount(0);
 	await expect(superAdminHeader.getByText('Regular', { exact: true })).toHaveCount(0);
 
@@ -93,8 +103,12 @@ test('Role-based access control enforces Super Admin routes and prevents Regular
 	// Verifikasi sidebar TIDAK menampilkan menu 'Super Admin' maupun link ke /admin/settings, /admin/users
 	const regularSidebar = page.locator('aside');
 	await expect(regularSidebar.getByText('Super Admin', { exact: true })).not.toBeVisible();
-	await expect(regularSidebar.getByRole('link', { name: /Pengaturan Admin|Admin Settings/i })).toHaveCount(0);
-	await expect(regularSidebar.getByRole('link', { name: /Pengguna & Kuota|Users & Quotas/i })).toHaveCount(0);
+	await expect(
+		regularSidebar.getByRole('link', { name: /Pengaturan Admin|Admin Settings/i })
+	).toHaveCount(0);
+	await expect(
+		regularSidebar.getByRole('link', { name: /Pengguna & Kuota|Users & Quotas/i })
+	).toHaveCount(0);
 	await expect(regularSidebar.locator('a[href^="/admin/"]')).toHaveCount(0);
 
 	// Buka langsung /admin/settings
@@ -104,7 +118,9 @@ test('Role-based access control enforces Super Admin routes and prevents Regular
 	await expect(forbiddenSettings).toContainText(/403|Akses ditolak/i);
 
 	// Verifikasi form 'Admin Settings' atau 'Pengaturan sistem' TIDAK tampil
-	await expect(page.getByRole('heading', { name: /Pengaturan Admin|Admin Settings/i })).not.toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: /Pengaturan Admin|Admin Settings/i })
+	).not.toBeVisible();
 	await expect(page.getByText('Pengaturan sistem')).not.toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Node penyimpanan' })).not.toBeVisible();
 
@@ -115,7 +131,9 @@ test('Role-based access control enforces Super Admin routes and prevents Regular
 	await expect(forbiddenUsers).toContainText(/Akses ditolak/i);
 
 	// Verifikasi tabel user management TIDAK tampil
-	await expect(page.getByRole('heading', { name: /Pengguna & Kuota|Users & Quotas/i })).not.toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: /Pengguna & Kuota|Users & Quotas/i })
+	).not.toBeVisible();
 	await expect(page.getByRole('button', { name: 'Buat Pengguna' })).not.toBeVisible();
 	await expect(page.locator('table')).not.toBeVisible();
 

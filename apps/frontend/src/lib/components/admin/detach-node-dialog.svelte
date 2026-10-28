@@ -25,10 +25,9 @@
 		try {
 			const res = await adminAPI.detachNode(node.id);
 			if (res.error) {
-				toast.error(
-					locale.language === 'id' ? 'Gagal melepaskan node' : 'Failed to detach node',
-					{ description: res.error }
-				);
+				toast.error(locale.language === 'id' ? 'Gagal melepaskan node' : 'Failed to detach node', {
+					description: res.error
+				});
 			} else if (res.data) {
 				if (res.data.safe_to_disconnect) {
 					toast.success(
@@ -53,9 +52,7 @@
 				open = false;
 			}
 		} catch (err) {
-			toast.error(
-				locale.language === 'id' ? 'Terjadi kesalahan sistem' : 'System error occurred'
-			);
+			toast.error(locale.language === 'id' ? 'Terjadi kesalahan sistem' : 'System error occurred');
 		} finally {
 			detaching = false;
 		}
@@ -72,7 +69,7 @@
 						{locale.language === 'id'
 							? `Node “${node.name}” memiliki berkas tersimpan. Operasi ini akan menonaktifkan alokasi baru dan memigrasikan seluruh berkas fisik ke node tujuan secara streaming dengan verifikasi checksum.`
 							: `Node “${node.name}” contains stored files. This will disable new allocations and migrate physical files to eligible nodes via streaming with checksum verification.`}
-						<span class="mt-2 block font-medium text-warning">
+						<span class="text-warning mt-2 block font-medium">
 							{locale.language === 'id'
 								? 'Node belum aman dicabut hingga proses migrasi seluruh berkas selesai tanpa kesalahan.'
 								: 'The node is not safe to disconnect until all files are completely and safely migrated.'}

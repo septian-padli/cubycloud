@@ -66,7 +66,9 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 
 	// 1. Navigate to /admin/settings and open Add Storage Node modal
 	await page.goto('/admin/settings');
-	await expect(page.getByRole('heading', { name: /Pengaturan Admin|Admin Settings/i })).toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: /Pengaturan Admin|Admin Settings/i })
+	).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Node penyimpanan' })).toBeVisible();
 
 	await page.getByTestId('btn-add-storage-node').click();
@@ -326,7 +328,9 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 		.toBeTruthy();
 
 	// Reload persisted S3 node settings from the restarted process.
-	await page.goto('/admin/settings', { waitUntil: 'domcontentloaded' }).catch(() => page.goto('/admin/settings'));
+	await page
+		.goto('/admin/settings', { waitUntil: 'domcontentloaded' })
+		.catch(() => page.goto('/admin/settings'));
 	await expect(page.getByText(nodeName).first()).toBeVisible();
 	await expect(page.getByText('Bucket: cubycloud-dev').first()).toBeVisible();
 	await expect(page.getByText('S3').first()).toBeVisible();

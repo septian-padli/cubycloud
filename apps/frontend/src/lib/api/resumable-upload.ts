@@ -81,8 +81,12 @@ const tx = (id: string, en: string): string => (locale.language === 'id' ? id : 
 
 function apiErrorMessage(code: string | undefined, status: number): string {
 	if (code === 'USER_QUOTA_EXCEEDED')
-		return tx('Kuota penyimpanan penuh. Hubungi admin.', 'Storage quota is full. Contact an administrator.');
-	if (code === 'STORAGE_POOL_FULL') return tx('Penyimpanan server penuh.', 'Server storage is full.');
+		return tx(
+			'Kuota penyimpanan penuh. Hubungi admin.',
+			'Storage quota is full. Contact an administrator.'
+		);
+	if (code === 'STORAGE_POOL_FULL')
+		return tx('Penyimpanan server penuh.', 'Server storage is full.');
 	if (code === 'multipart_session_expired')
 		return tx(
 			'Sesi upload kedaluwarsa. Mulai ulang upload berkas ini.',
@@ -178,7 +182,10 @@ function throwTusFailure(snapshot: TusSessionSnapshot): never {
 	const error = snapshot.error ?? '';
 	if (/tidak ditemukan|not found|kedaluwarsa|expired/i.test(error)) {
 		throw new TransferAPIError(
-			tx('Sesi upload tidak ditemukan atau sudah kedaluwarsa.', 'The upload session was not found or has expired.'),
+			tx(
+				'Sesi upload tidak ditemukan atau sudah kedaluwarsa.',
+				'The upload session was not found or has expired.'
+			),
 			'UPLOAD_SESSION_EXPIRED',
 			410
 		);
@@ -226,10 +233,7 @@ async function uploadTus(
 		if (result.reason === 'paused' || result.reason === 'uncertain') {
 			if (result.reason === 'uncertain') {
 				const error = new TransferAPIError(
-					tx(
-						'Finalisasi upload belum terkonfirmasi',
-						'Upload finalization has not been confirmed'
-					),
+					tx('Finalisasi upload belum terkonfirmasi', 'Upload finalization has not been confirmed'),
 					'NETWORK_ERROR',
 					0
 				);
@@ -692,7 +696,9 @@ export function createResumableUploadDriver(
 			);
 			return;
 		}
-		throw new TransferAPIError(tx('Respons multipart upload tidak dapat dikenali', 'Unrecognized multipart upload response'));
+		throw new TransferAPIError(
+			tx('Respons multipart upload tidak dapat dikenali', 'Unrecognized multipart upload response')
+		);
 	};
 
 	const cancel: TransferCancelDriver = async (record) => {

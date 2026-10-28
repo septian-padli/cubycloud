@@ -4,13 +4,13 @@
 
 ## 1. Source of truth and selective reading
 
-| Concern | Authoritative reference |
-| --- | --- |
-| Business behavior, permissions, quotas, lifecycle | `docs/prd.md` |
-| Routes, page behavior, URL parameters | `apps/frontend/SITEMAP.md` |
-| UI tokens, components, styling, interactions | `apps/frontend/DESIGN.md` |
-| System architecture, backend integration | `docs/architecture.md` |
-| Frontend coding conventions | This file |
+| Concern                                           | Authoritative reference    |
+| ------------------------------------------------- | -------------------------- |
+| Business behavior, permissions, quotas, lifecycle | `docs/prd.md`              |
+| Routes, page behavior, URL parameters             | `apps/frontend/SITEMAP.md` |
+| UI tokens, components, styling, interactions      | `apps/frontend/DESIGN.md`  |
+| System architecture, backend integration          | `docs/architecture.md`     |
+| Frontend coding conventions                       | This file                  |
 
 **Progressive context loading:** Before implementation, identify affected features/routes and inspect the relevant headings or index of each applicable source. Read **only the sections needed** for the task and dependencies; expand when modifying a contract, investigating ambiguity, or changing shared behavior. Do not dump entire PRD, SITEMAP, or DESIGN into context by default. A direct change to a document requires reading the affected sections and cross-references before editing. These instructions govern reading efficiency, **not** permission to ignore applicable contracts. Root-level instructions take precedence if stricter.
 

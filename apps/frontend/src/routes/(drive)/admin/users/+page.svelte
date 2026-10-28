@@ -87,7 +87,6 @@
 		void loadData();
 	});
 
-
 	function onEditQuota(user: AdminUser) {
 		if (String(user.role).toLowerCase() === 'super_admin') {
 			toast.info(
@@ -159,7 +158,9 @@
 
 	function onRequestResetPassword(user: AdminUser) {
 		if (currentUserId && user.id === currentUserId) {
-			toast.info(tx('Anda tidak dapat mereset akun sendiri.', 'You cannot reset your own account.'));
+			toast.info(
+				tx('Anda tidak dapat mereset akun sendiri.', 'You cannot reset your own account.')
+			);
 			return;
 		}
 		resetUserTarget = user;
@@ -169,7 +170,9 @@
 	async function onConfirmResetPassword(user: AdminUser) {
 		const res = await adminAPI.resetUserPassword(user.id);
 		if (res.error || !res.data) {
-			toast.error(`${tx('Gagal mereset kata sandi', 'Failed to reset password')}: ${res.error ?? ''}`);
+			toast.error(
+				`${tx('Gagal mereset kata sandi', 'Failed to reset password')}: ${res.error ?? ''}`
+			);
 			throw new Error(res.error ?? 'Reset response missing');
 		}
 		resetUserTarget = null;
@@ -211,7 +214,11 @@
 	/>
 </div>
 
-	<CreateUserDialog bind:open={createOpen} {defaultQuota} onCreated={() => loadData()} />
+<CreateUserDialog bind:open={createOpen} {defaultQuota} onCreated={() => loadData()} />
 <EditQuotaDialog bind:open={editOpen} user={editUser} {defaultQuota} onSave={onSaveQuota} />
 <DeleteUserDialog bind:open={deleteOpen} user={deleteUserTarget} onConfirm={onConfirmDelete} />
-	<ResetPasswordDialog bind:open={resetOpen} user={resetUserTarget} onConfirm={onConfirmResetPassword} />
+<ResetPasswordDialog
+	bind:open={resetOpen}
+	user={resetUserTarget}
+	onConfirm={onConfirmResetPassword}
+/>

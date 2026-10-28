@@ -16,7 +16,7 @@ const OS_JUNK_NAMES: Record<string, true> = {
 	'.spotlight-v100': true,
 	'.trashes': true,
 	'.git': true,
-	'__macosx': true,
+	__macosx: true,
 	'.svn': true,
 	'.hg': true
 };
@@ -41,9 +41,7 @@ export function isOsJunkFile(name: string): boolean {
  * Reads all entries from a FileSystemDirectoryReader by invoking readEntries in a loop
  * until an empty batch is returned (browsers return at most 100 entries per batch).
  */
-function readAllDirectoryEntries(
-	reader: FileSystemDirectoryReader
-): Promise<FileSystemEntry[]> {
+function readAllDirectoryEntries(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
 	const { promise, resolve } = Promise.withResolvers<FileSystemEntry[]>();
 	const allEntries: FileSystemEntry[] = [];
 	const MAX_BATCHES = 10000; // safety ceiling against non-compliant infinite loop mocks

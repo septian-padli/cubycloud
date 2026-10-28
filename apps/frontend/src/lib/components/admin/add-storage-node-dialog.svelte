@@ -246,7 +246,9 @@
 
 				<div class="space-y-2">
 					<Label for="local-capacity"
-						>{locale.language === 'id' ? 'Kapasitas Maksimal (GiB)' : 'Maximum capacity (GiB)'}</Label
+						>{locale.language === 'id'
+							? 'Kapasitas Maksimal (GiB)'
+							: 'Maximum capacity (GiB)'}</Label
 					>
 					<Input
 						id="local-capacity"
@@ -355,7 +357,9 @@
 
 				<div class="space-y-2">
 					<Label for="cloud-capacity"
-						>{locale.language === 'id' ? 'Kapasitas Maksimal (GiB)' : 'Maximum capacity (GiB)'}</Label
+						>{locale.language === 'id'
+							? 'Kapasitas Maksimal (GiB)'
+							: 'Maximum capacity (GiB)'}</Label
 					>
 					<Input
 						id="cloud-capacity"

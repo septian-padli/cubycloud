@@ -69,7 +69,11 @@
 									? 'bg-secondary-accent text-white hover:bg-secondary-accent dark:text-app'
 									: 'bg-secondary text-main hover:bg-secondary dark:text-app'}"
 							>
-								{node.kind === 'UNKNOWN' ? (locale.language === 'id' ? 'Tidak diketahui' : 'Unknown') : node.kind}
+								{node.kind === 'UNKNOWN'
+									? locale.language === 'id'
+										? 'Tidak diketahui'
+										: 'Unknown'
+									: node.kind}
 							</Badge>
 							{#if critical}
 								<Badge variant="destructive" class="rounded-full"
@@ -78,11 +82,17 @@
 							{/if}
 							{#if !node.enabled}
 								{#if node.migrationStatus === 'MIGRATING'}
-									<Badge variant="outline" class="animate-pulse rounded-full border-primary/50 text-primary">
+									<Badge
+										variant="outline"
+										class="animate-pulse rounded-full border-primary/50 text-primary"
+									>
 										{locale.language === 'id' ? 'Memigrasikan...' : 'Migrating...'}
 									</Badge>
 								{:else if node.safeToDisconnect}
-									<Badge variant="outline" class="rounded-full border-emerald-500/50 text-emerald-500">
+									<Badge
+										variant="outline"
+										class="rounded-full border-emerald-500/50 text-emerald-500"
+									>
 										{locale.language === 'id' ? 'Aman Dicabut' : 'Safe to disconnect'}
 									</Badge>
 								{:else if node.usedBytes > 0}
@@ -100,7 +110,8 @@
 
 					<div class="space-y-2">
 						<div class="flex justify-between text-xs text-muted">
-							<span>{node.freeGb.toFixed(1)} GiB {locale.language === 'id' ? 'bebas' : 'free'}</span>
+							<span>{node.freeGb.toFixed(1)} GiB {locale.language === 'id' ? 'bebas' : 'free'}</span
+							>
 							<span>{(node.usedBytes / 1024 ** 3).toFixed(1)} / {node.capacityCapGb} GiB</span>
 						</div>
 						<Progress

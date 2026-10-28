@@ -108,7 +108,9 @@
 				const decimal = locale.language === 'id' ? ',' : '.';
 				const quotaPctLabel =
 					rawQuotaPct < 0.1 && rawQuotaPct > 0
-						? locale.language === 'id' ? '< 0,1' : '< 0.1'
+						? locale.language === 'id'
+							? '< 0,1'
+							: '< 0.1'
 						: (Math.round(rawQuotaPct * 10) / 10).toString().replace('.', decimal);
 				return {
 					cat,

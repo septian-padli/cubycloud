@@ -75,4 +75,3 @@ export const locale = {
 		return DATE_FORMATTERS[language].format(timestamp);
 	}
 };
-

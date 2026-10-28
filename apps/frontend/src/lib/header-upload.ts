@@ -106,13 +106,13 @@ export function isQuotaError(err: unknown): boolean {
 
 	return Boolean(
 		status === 413 ||
-			code === 'USER_QUOTA_EXCEEDED' ||
-			code === 'STORAGE_POOL_FULL' ||
-			(message &&
-				(message.toLowerCase().includes('kuota') ||
-					message.toLowerCase().includes('quota') ||
-					message.includes('USER_QUOTA_EXCEEDED') ||
-					message.includes('STORAGE_POOL_FULL')))
+		code === 'USER_QUOTA_EXCEEDED' ||
+		code === 'STORAGE_POOL_FULL' ||
+		(message &&
+			(message.toLowerCase().includes('kuota') ||
+				message.toLowerCase().includes('quota') ||
+				message.includes('USER_QUOTA_EXCEEDED') ||
+				message.includes('STORAGE_POOL_FULL')))
 	);
 }
 
@@ -167,9 +167,12 @@ async function uploadThroughTransferQueue(
 
 		const current = transferQueueState.items.find((item) => item.id === id);
 		if (current?.state === 'failed' || current?.state === 'expired') {
-			firstError ??= Object.assign(new Error(current.error || tx('Unggahan gagal', 'Upload failed')), {
-				code: current.errorCode
-			});
+			firstError ??= Object.assign(
+				new Error(current.error || tx('Unggahan gagal', 'Upload failed')),
+				{
+					code: current.errorCode
+				}
+			);
 			if (isTransferQuotaError(current)) {
 				await failPendingTransfers(
 					ids.slice(index + 1),
@@ -213,10 +216,8 @@ export async function handleHeaderFilesUpload(
 
 	if (target.action === 'upload-my-storage' && ownerId && !drivers.uploadMyStorage) {
 		try {
-			await (drivers.uploadQueue ?? uploadThroughTransferQueue)(
-				ownerId,
-				files,
-				(progress) => callbacks.onProgress?.(progress)
+			await (drivers.uploadQueue ?? uploadThroughTransferQueue)(ownerId, files, (progress) =>
+				callbacks.onProgress?.(progress)
 			);
 			callbacks.onSuccess?.();
 			return;

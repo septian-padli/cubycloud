@@ -137,7 +137,10 @@ class AdminAPI {
 	async detachNode(
 		nodeId: string,
 		targetNodeId?: string
-	): Promise<{ data?: { message: string; job_id?: string; safe_to_disconnect: boolean }; error?: string }> {
+	): Promise<{
+		data?: { message: string; job_id?: string; safe_to_disconnect: boolean };
+		error?: string;
+	}> {
 		return this.request(`/admin/storage-nodes/${nodeId}/detach`, {
 			method: 'POST',
 			body: JSON.stringify({ target_node_id: targetNodeId || undefined })
@@ -267,15 +270,23 @@ class AdminAPI {
 	}
 
 	async resetUserPassword(userId: string): Promise<{ data?: OneTimeLinkResponse; error?: string }> {
-		return this.request<OneTimeLinkResponse>(`/admin/users/${encodeURIComponent(userId)}/reset-password`, {
-			method: 'POST'
-		});
+		return this.request<OneTimeLinkResponse>(
+			`/admin/users/${encodeURIComponent(userId)}/reset-password`,
+			{
+				method: 'POST'
+			}
+		);
 	}
 
-	async regenerateInvitation(userId: string): Promise<{ data?: OneTimeLinkResponse; error?: string }> {
-		return this.request<OneTimeLinkResponse>(`/admin/users/${encodeURIComponent(userId)}/invitation`, {
-			method: 'POST'
-		});
+	async regenerateInvitation(
+		userId: string
+	): Promise<{ data?: OneTimeLinkResponse; error?: string }> {
+		return this.request<OneTimeLinkResponse>(
+			`/admin/users/${encodeURIComponent(userId)}/invitation`,
+			{
+				method: 'POST'
+			}
+		);
 	}
 
 	async getStorageStats(): Promise<{ data?: AdminStorageStats; error?: string }> {

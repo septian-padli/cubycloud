@@ -102,8 +102,10 @@ function shareErrorMessage(error?: string, status?: number): string {
 		return id
 			? 'Anda tidak memiliki izin untuk tindakan ini.'
 			: 'You do not have permission to perform this action.';
-	if (status === 404) return id ? 'Berkas atau folder tidak ditemukan.' : 'File or folder not found.';
-	if (status === 410) return id ? 'Tautan berbagi sudah kedaluwarsa.' : 'This share link has expired.';
+	if (status === 404)
+		return id ? 'Berkas atau folder tidak ditemukan.' : 'File or folder not found.';
+	if (status === 410)
+		return id ? 'Tautan berbagi sudah kedaluwarsa.' : 'This share link has expired.';
 	return locale.language === 'id'
 		? `Permintaan berbagi gagal (HTTP ${status ?? 'error'}).`
 		: `Share request failed (HTTP ${status ?? 'error'}).`;

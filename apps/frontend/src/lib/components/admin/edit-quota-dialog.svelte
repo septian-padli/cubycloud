@@ -160,10 +160,10 @@
 										step="any"
 										bind:value={quotaGb}
 										class="w-full pe-9"
-									aria-label={locale.language === 'id' ? 'Kuota dalam GiB' : 'Quota in GiB'}
+										aria-label={locale.language === 'id' ? 'Kuota dalam GiB' : 'Quota in GiB'}
 									/>
 									<span class="pointer-events-none absolute end-3 text-xs font-semibold text-muted">
-									GiB
+										GiB
 									</span>
 								</div>
 							{/if}

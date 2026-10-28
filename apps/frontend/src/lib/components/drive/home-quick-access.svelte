@@ -44,7 +44,9 @@
 			aria-label={tx('Akses cepat', 'Quick access')}
 		>
 			{#each items as item (item.id)}
-				{@const openedAgo = item.accessedAt ? formatTimeAgo(item.accessedAt) : (item.openedAgo ?? '')}
+				{@const openedAgo = item.accessedAt
+					? formatTimeAgo(item.accessedAt)
+					: (item.openedAgo ?? '')}
 				<DriveListRow onOpen={() => openItem(item)} onSelect={() => openItem(item)}>
 					{#snippet leading()}
 						<FileKindIcon kind={item.kind} />
@@ -59,12 +61,14 @@
 	{:else}
 		<DriveFileGrid label={tx('Akses cepat', 'Quick access')}>
 			{#each items as item (item.id)}
-				{@const openedAgo = item.accessedAt ? formatTimeAgo(item.accessedAt) : (item.openedAgo ?? '')}
+				{@const openedAgo = item.accessedAt
+					? formatTimeAgo(item.accessedAt)
+					: (item.openedAgo ?? '')}
 				<QuickAccessCard
 					variant={item.kind}
 					name={item.name}
 					sizeLabel={item.sizeLabel}
-					openedAgo={openedAgo}
+					{openedAgo}
 					onOpen={() => openItem(item)}
 					onSelect={() => openItem(item)}
 				/>

@@ -94,7 +94,7 @@
 		src={url}
 		alt={name}
 		loading="lazy"
-		class="absolute inset-0 h-full w-full object-cover pointer-events-none select-none rounded-lg"
+		class="pointer-events-none absolute inset-0 h-full w-full rounded-lg object-cover select-none"
 		data-testid="grid-image-thumbnail"
 		onload={() => {
 			isLoaded = true;
@@ -112,7 +112,7 @@
 		playsinline
 		tabindex="-1"
 		aria-hidden="true"
-		class="absolute inset-0 h-full w-full object-cover pointer-events-none select-none rounded-lg"
+		class="pointer-events-none absolute inset-0 h-full w-full rounded-lg object-cover select-none"
 		data-testid="grid-video-thumbnail"
 		onloadedmetadata={() => {
 			if (videoEl) {
@@ -133,7 +133,7 @@
 	<img
 		src={pdfDataUrl}
 		alt={name}
-		class="absolute inset-0 h-full w-full object-cover pointer-events-none select-none rounded-lg"
+		class="pointer-events-none absolute inset-0 h-full w-full rounded-lg object-cover select-none"
 		data-testid="grid-pdf-thumbnail"
 	/>
 {/if}

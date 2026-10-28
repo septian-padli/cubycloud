@@ -33,10 +33,9 @@
 				id: `node-${i}`,
 				name: n.path.split('/').pop() || n.path,
 				path: n.path,
-				kind: (n.kind === 'SSD' || n.kind === 'HDD' || n.kind === 'UNKNOWN' ? n.kind : 'UNKNOWN') as
-					| 'SSD'
-					| 'HDD'
-					| 'UNKNOWN',
+				kind: (n.kind === 'SSD' || n.kind === 'HDD' || n.kind === 'UNKNOWN'
+					? n.kind
+					: 'UNKNOWN') as 'SSD' | 'HDD' | 'UNKNOWN',
 				totalGb: Math.round(n.capacity_bytes / 1024 ** 3),
 				freeGb: Math.round(n.free_bytes / 1024 ** 3),
 				enabled: true,
@@ -115,8 +114,8 @@
 								<p class="text-xs text-muted">{node.path}</p>
 								<div>
 									<div class="mb-1.5 flex justify-between text-xs text-muted">
-									<span>{node.freeGb} GiB {tx('bebas', 'free')}</span>
-									<span>{node.totalGb} GiB {tx('total', 'total')}</span>
+										<span>{node.freeGb} GiB {tx('bebas', 'free')}</span>
+										<span>{node.totalGb} GiB {tx('total', 'total')}</span>
 									</div>
 									<div class="h-1.5 rounded-full bg-black/10 dark:bg-white/10">
 										<div
@@ -173,7 +172,7 @@
 						<div class="min-w-0 flex-1">
 							<p class="text-sm font-medium text-main">{device.path}</p>
 							<p class="text-xs text-muted">
-							{device.model} · {device.sizeGb} GiB
+								{device.model} · {device.sizeGb} GiB
 							</p>
 						</div>
 					</label>

@@ -14,9 +14,7 @@
 		indicatorClass?: string;
 	} = $props();
 
-	const pct = $derived(
-		max && max > 0 ? Math.min(100, Math.max(0, (100 * (value ?? 0)) / max)) : 0
-	);
+	const pct = $derived(max && max > 0 ? Math.min(100, Math.max(0, (100 * (value ?? 0)) / max)) : 0);
 </script>
 
 <ProgressPrimitive.Root

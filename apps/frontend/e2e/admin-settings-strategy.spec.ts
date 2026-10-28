@@ -11,10 +11,17 @@ async function ensureAdminLoggedIn(page: Page) {
 		if (!json.is_setup_completed) {
 			const scan = await page.request.get('/api/v1/setup/scan-nodes');
 			expect(scan.ok()).toBeTruthy();
-			const { nodes } = (await scan.json()) as { nodes: { path: string; capacity_bytes: number }[] };
+			const { nodes } = (await scan.json()) as {
+				nodes: { path: string; capacity_bytes: number }[];
+			};
 			const setup = await page.request.post('/api/v1/setup/complete', {
 				data: {
-					admin: { username, email: 'strategy-e2e@example.test', password, recovery_key: recoveryKey },
+					admin: {
+						username,
+						email: 'strategy-e2e@example.test',
+						password,
+						recovery_key: recoveryKey
+					},
 					storage_nodes: nodes.map((node) => ({ ...node, enabled: true })),
 					placement_strategy: 'FILL_FIRST',
 					cloud: { enabled: false }
@@ -32,12 +39,16 @@ async function ensureAdminLoggedIn(page: Page) {
 	await page.waitForURL('**/drive/home');
 }
 
-test('Admin settings allows selecting placement strategy with confirmation dialog on save', async ({ page }) => {
+test('Admin settings allows selecting placement strategy with confirmation dialog on save', async ({
+	page
+}) => {
 	await ensureAdminLoggedIn(page);
 
 	// 1. Navigate to /admin/settings
 	await page.goto('/admin/settings');
-	await expect(page.getByRole('heading', { name: /Pengaturan Admin|Admin Settings/i })).toBeVisible();
+	await expect(
+		page.getByRole('heading', { name: /Pengaturan Admin|Admin Settings/i })
+	).toBeVisible();
 	await expect(page.getByText(/Pengaturan sistem|System settings/i)).toBeVisible();
 
 	const strategySelect = page.getByTestId('select-placement-strategy');
@@ -49,12 +60,22 @@ test('Admin settings allows selecting placement strategy with confirmation dialo
 	// 2. Open dropdown and verify the 3 options exist
 	await strategySelect.click();
 	await expect(page.getByRole('option', { name: /Isi disk pertama|Fill First/i })).toBeVisible();
-	await expect(page.getByRole('option', { name: /Ruang kosong terbanyak|Sisa kapasitas terbanyak|Most Free Space/i })).toBeVisible();
+	await expect(
+		page.getByRole('option', {
+			name: /Ruang kosong terbanyak|Sisa kapasitas terbanyak|Most Free Space/i
+		})
+	).toBeVisible();
 	await expect(page.getByRole('option', { name: /Bergiliran|Round Robin/i })).toBeVisible();
 
 	// 3. Select 'Most Free Space'
-	await page.getByRole('option', { name: /Ruang kosong terbanyak|Sisa kapasitas terbanyak|Most Free Space/i }).click();
-	await expect(strategySelect).toContainText(/Ruang kosong terbanyak|Sisa kapasitas terbanyak|Most Free Space/i);
+	await page
+		.getByRole('option', {
+			name: /Ruang kosong terbanyak|Sisa kapasitas terbanyak|Most Free Space/i
+		})
+		.click();
+	await expect(strategySelect).toContainText(
+		/Ruang kosong terbanyak|Sisa kapasitas terbanyak|Most Free Space/i
+	);
 	await expect(saveBtn).toBeEnabled();
 
 	// 4. Click Save -> Confirmation dialog must appear
@@ -70,11 +91,17 @@ test('Admin settings allows selecting placement strategy with confirmation dialo
 
 	// Verify not yet persisted by reloading
 	await page.reload();
-	await expect(page.getByTestId('select-placement-strategy')).toContainText(/Isi disk pertama|Fill First/i);
+	await expect(page.getByTestId('select-placement-strategy')).toContainText(
+		/Isi disk pertama|Fill First/i
+	);
 
 	// 6. Select 'Most Free Space' again and confirm save
 	await page.getByTestId('select-placement-strategy').click();
-	await page.getByRole('option', { name: /Ruang kosong terbanyak|Sisa kapasitas terbanyak|Most Free Space/i }).click();
+	await page
+		.getByRole('option', {
+			name: /Ruang kosong terbanyak|Sisa kapasitas terbanyak|Most Free Space/i
+		})
+		.click();
 	await expect(saveBtn).toBeEnabled();
 
 	await saveBtn.click();
@@ -87,7 +114,9 @@ test('Admin settings allows selecting placement strategy with confirmation dialo
 
 	// 7. Reload page and verify persisted value
 	await page.reload();
-	await expect(page.getByTestId('select-placement-strategy')).toContainText(/Ruang kosong terbanyak|Sisa kapasitas terbanyak|Most Free Space/i);
+	await expect(page.getByTestId('select-placement-strategy')).toContainText(
+		/Ruang kosong terbanyak|Sisa kapasitas terbanyak|Most Free Space/i
+	);
 
 	// 8. Select 'Round Robin' and confirm save
 	await page.getByTestId('select-placement-strategy').click();
@@ -104,5 +133,7 @@ test('Admin settings allows selecting placement strategy with confirmation dialo
 
 	// 9. Reload page and verify 'Round Robin' persisted
 	await page.reload();
-	await expect(page.getByTestId('select-placement-strategy')).toContainText(/Bergiliran|Round Robin/i);
+	await expect(page.getByTestId('select-placement-strategy')).toContainText(
+		/Bergiliran|Round Robin/i
+	);
 });

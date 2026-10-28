@@ -43,5 +43,9 @@
 		</Alert.Description>
 	</Alert.Root>
 
-	<FileExplorer variant="organization" initialTree={[]} rootLabel={tx('Organisasi', 'Organization')} />
+	<FileExplorer
+		variant="organization"
+		initialTree={[]}
+		rootLabel={tx('Organisasi', 'Organization')}
+	/>
 </div>

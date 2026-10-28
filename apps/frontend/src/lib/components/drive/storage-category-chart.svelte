@@ -37,9 +37,11 @@
 						<span class="font-medium text-main">{categoryLabel(cat)}</span>
 						<span class="text-muted">
 							{#if empty}
-							{tx('0 GiB · belum digunakan', '0 GiB · unused')}
+								{tx('0 GiB · belum digunakan', '0 GiB · unused')}
 							{:else}
-								{cat.usedGb.toFixed(1).replace('.', locale.language === 'id' ? ',' : '.')} GiB · {Math.round(ratio)}%
+								{cat.usedGb.toFixed(1).replace('.', locale.language === 'id' ? ',' : '.')} GiB · {Math.round(
+									ratio
+								)}%
 							{/if}
 						</span>
 					</div>

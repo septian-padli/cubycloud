@@ -34,12 +34,7 @@ async function ensureSetup(page: Page) {
 	expect(setup.ok()).toBeTruthy();
 }
 
-async function submitLogin(
-	page: Page,
-	username: string,
-	password: string,
-	buttonLabel: string
-) {
+async function submitLogin(page: Page, username: string, password: string, buttonLabel: string) {
 	await page.locator('#login-identifier').fill(username);
 	await page.locator('#login-password').fill(password);
 	await page.getByRole('button', { name: buttonLabel, exact: true }).click();
@@ -58,14 +53,18 @@ async function chooseLanguage(page: Page, currentLabel: string, language: 'en' |
 	await expect(page.locator('html')).toHaveAttribute('lang', language);
 }
 
-test('language selection defaults from browser language and persists per account', async ({ page }) => {
+test('language selection defaults from browser language and persists per account', async ({
+	page
+}) => {
 	await ensureSetup(page);
 	await page.goto('/login');
 	await expect(page.locator('html')).toHaveAttribute('lang', 'id');
 	await chooseLanguage(page, 'Bahasa', 'en');
 	await submitLogin(page, adminUsername, adminPassword, 'Sign in');
 	await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-	await expect(page.locator('aside').getByRole('link', { name: 'Home', exact: true })).toBeVisible();
+	await expect(
+		page.locator('aside').getByRole('link', { name: 'Home', exact: true })
+	).toBeVisible();
 	const createUser = await page.request.post('/api/v1/admin/users', {
 		data: {
 			username: regularUsername,
@@ -83,11 +82,17 @@ test('language selection defaults from browser language and persists per account
 
 	await loginUser(page, regularUsername, regularPassword);
 	await expect(page.locator('html')).toHaveAttribute('lang', 'id');
-	await expect(page.locator('aside').getByRole('link', { name: 'Beranda', exact: true })).toBeVisible();
+	await expect(
+		page.locator('aside').getByRole('link', { name: 'Beranda', exact: true })
+	).toBeVisible();
 	await chooseLanguage(page, 'Bahasa', 'en');
-	await expect(page.locator('aside').getByRole('link', { name: 'Home', exact: true })).toBeVisible();
+	await expect(
+		page.locator('aside').getByRole('link', { name: 'Home', exact: true })
+	).toBeVisible();
 	await chooseLanguage(page, 'Language', 'id');
-	await expect(page.locator('aside').getByRole('link', { name: 'Beranda', exact: true })).toBeVisible();
+	await expect(
+		page.locator('aside').getByRole('link', { name: 'Beranda', exact: true })
+	).toBeVisible();
 
 	const savedPreferences = await page.evaluate(() =>
 		Object.entries(localStorage)
@@ -99,7 +104,9 @@ test('language selection defaults from browser language and persists per account
 
 	await loginUser(page, adminUsername, adminPassword);
 	await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-	await expect(page.locator('aside').getByRole('link', { name: 'Home', exact: true })).toBeVisible();
+	await expect(
+		page.locator('aside').getByRole('link', { name: 'Home', exact: true })
+	).toBeVisible();
 });
 
 test('login errors follow the selected language', async ({ page }) => {

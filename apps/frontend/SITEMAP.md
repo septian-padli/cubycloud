@@ -170,13 +170,13 @@ src/routes/
 
 ### Quota widget and visibility
 
-| State | Display / response |
-| --- | --- |
-| Limited | `My Storage`, `8.2 / 15 GB`, flat progress bar |
-| ≥80% used | Warning-colored bar; warn on My Storage write attempts |
-| At 100% / `USER_QUOTA_EXCEEDED` | Block upload; `Kuota My Storage penuh. Hubungi admin.` |
-| Physical pool full | `Penyimpanan server penuh.` (different from user quota) |
-| Unlimited / Super Admin | `Used: 8.2 GB`, **no cap or limit progress bar** |
+| State                           | Display / response                                      |
+| ------------------------------- | ------------------------------------------------------- |
+| Limited                         | `My Storage`, `8.2 / 15 GB`, flat progress bar          |
+| ≥80% used                       | Warning-colored bar; warn on My Storage write attempts  |
+| At 100% / `USER_QUOTA_EXCEEDED` | Block upload; `Kuota My Storage penuh. Hubungi admin.`  |
+| Physical pool full              | `Penyimpanan server penuh.` (different from user quota) |
+| Unlimited / Super Admin         | `Used: 8.2 GB`, **no cap or limit progress bar**        |
 
 - Node badges/physical node identity in explorer: **Super Admin only**. `/admin/settings` storage-node UI is Super Admin only.
 - Organization files: **never** included in personal usage/quota.

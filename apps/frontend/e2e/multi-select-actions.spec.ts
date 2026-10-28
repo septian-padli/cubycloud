@@ -18,7 +18,12 @@ async function finishSetup(page: Page) {
 		expect(nodes.length).toBeGreaterThan(0);
 		const setup = await page.request.post('/api/v1/setup/complete', {
 			data: {
-				admin: { username, email: 'multiselect-e2e@example.test', password, recovery_key: recoveryKey },
+				admin: {
+					username,
+					email: 'multiselect-e2e@example.test',
+					password,
+					recovery_key: recoveryKey
+				},
 				storage_nodes: nodes.map((node) => ({ ...node, enabled: true })),
 				placement_strategy: 'FILL_FIRST',
 				cloud: { enabled: false }
@@ -40,7 +45,9 @@ function itemRow(page: Page, name: string | RegExp): Locator {
 	return page.getByRole('option').filter({ hasText: name });
 }
 
-test('Multi-select actions in List & Grid view with bulk bar, move, delete, zip, and drag-drop', async ({ page }) => {
+test('Multi-select actions in List & Grid view with bulk bar, move, delete, zip, and drag-drop', async ({
+	page
+}) => {
 	await finishSetup(page);
 
 	const cleanRes = await page.request.get('/api/v1/drive/my-storage');
@@ -136,7 +143,10 @@ test('Multi-select actions in List & Grid view with bulk bar, move, delete, zip,
 		await expect(moveDialog.getByText('2 item dipilih')).toBeVisible();
 
 		// Select ArchiveFolder in MoveDialog
-		await moveDialog.getByTestId(/^btn-move-to-/).first().click();
+		await moveDialog
+			.getByTestId(/^btn-move-to-/)
+			.first()
+			.click();
 		await expect(moveDialog).toBeHidden();
 
 		// Both alpha and beta are moved into ArchiveFolder
@@ -154,8 +164,10 @@ test('Multi-select actions in List & Grid view with bulk bar, move, delete, zip,
 		await page.getByRole('button', { name: 'Pilih doc-beta.txt' }).click();
 
 		await page.getByTestId('bulk-actions-menu-trigger').click();
-		const zipRequest = page.waitForRequest((request) =>
-			request.url().endsWith('/api/v1/drive/my-storage/batch/download-zip') && request.method() === 'POST'
+		const zipRequest = page.waitForRequest(
+			(request) =>
+				request.url().endsWith('/api/v1/drive/my-storage/batch/download-zip') &&
+				request.method() === 'POST'
 		);
 		const downloadPromise = page.waitForEvent('download');
 		await page.getByTestId('bulk-action-download').click();
@@ -185,7 +197,10 @@ test('Multi-select actions in List & Grid view with bulk bar, move, delete, zip,
 
 		// 8. Test Drag and Drop multi-item into folder
 		// Navigate back to root
-		await page.getByRole('navigation', { name: /Breadcrumb|Jejak navigasi/i }).getByRole('button', { name: 'My Storage' }).click();
+		await page
+			.getByRole('navigation', { name: /Breadcrumb|Jejak navigasi/i })
+			.getByRole('button', { name: 'My Storage' })
+			.click();
 		await page.waitForURL((url) => !url.searchParams.get('folder'));
 		await expect(itemRow(page, 'doc-gamma.txt')).toBeVisible();
 		await expect(itemRow(page, 'ArchiveFolder')).toBeVisible();

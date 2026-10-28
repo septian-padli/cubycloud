@@ -31,13 +31,23 @@
 	});
 	async function validate() {
 		if (!token) {
-			error = tx('Tautan tidak valid atau sudah tidak berlaku.', 'This link is invalid or has expired.');
+			error = tx(
+				'Tautan tidak valid atau sudah tidak berlaku.',
+				'This link is invalid or has expired.'
+			);
 			loading = false;
 			return;
 		}
 		const result = await authAPI.validateSetupPassword(token);
 		validation = result.data?.valid ? result.data : null;
-		error = result.error ?? (!validation ? tx('Tautan tidak valid, kedaluwarsa, atau sudah digunakan.', 'This link is invalid, expired, or already used.') : '');
+		error =
+			result.error ??
+			(!validation
+				? tx(
+						'Tautan tidak valid, kedaluwarsa, atau sudah digunakan.',
+						'This link is invalid, expired, or already used.'
+					)
+				: '');
 		loading = false;
 	}
 
@@ -45,26 +55,45 @@
 		event.preventDefault();
 		submitted = true;
 		error = '';
-		if (!token || password.length < 15 || new TextEncoder().encode(password).length > 72 || password !== confirmation || submitting) return;
+		if (
+			!token ||
+			password.length < 15 ||
+			new TextEncoder().encode(password).length > 72 ||
+			password !== confirmation ||
+			submitting
+		)
+			return;
 		submitting = true;
 		const result = await authAPI.setupPassword({ token, password, confirm_password: confirmation });
 		submitting = false;
-		if (result.error) { error = result.error; return; }
+		if (result.error) {
+			error = result.error;
+			return;
+		}
 		success = true;
 	}
 </script>
 
 <svelte:head>
 	<title>{tx('Atur kata sandi', 'Set password')} | CubyCloud</title>
-	<meta name="description" content={tx('Atur kata sandi akun CubyCloud.', 'Set your CubyCloud account password.')} />
+	<meta
+		name="description"
+		content={tx('Atur kata sandi akun CubyCloud.', 'Set your CubyCloud account password.')}
+	/>
 </svelte:head>
 
 <Card.Root class="rounded-xl border-subtle bg-surface shadow-none">
 	<Card.Header>
-		<Card.Title class="text-lg font-semibold text-main">{success ? tx('Kata sandi berhasil diatur', 'Password set successfully') : tx('Atur kata sandi', 'Set your password')}</Card.Title>
+		<Card.Title class="text-lg font-semibold text-main"
+			>{success
+				? tx('Kata sandi berhasil diatur', 'Password set successfully')
+				: tx('Atur kata sandi', 'Set your password')}</Card.Title
+		>
 		<Card.Description class="text-sm text-muted">
 			{#if validation}
-				<div class="mt-2.5 flex items-center gap-2 rounded-lg border border-subtle bg-surface-muted/60 px-3 py-2 text-xs text-muted">
+				<div
+					class="bg-surface-muted/60 mt-2.5 flex items-center gap-2 rounded-lg border border-subtle px-3 py-2 text-xs text-muted"
+				>
 					<Mail class="size-4 shrink-0 text-primary" />
 					<div class="min-w-0 flex-1 truncate">
 						<span class="font-medium text-main">{validation.username}</span>
@@ -73,20 +102,34 @@
 					</div>
 				</div>
 			{:else}
-				{tx('Gunakan tautan undangan atau reset untuk melanjutkan.', 'Use your invitation or reset link to continue.')}
+				{tx(
+					'Gunakan tautan undangan atau reset untuk melanjutkan.',
+					'Use your invitation or reset link to continue.'
+				)}
 			{/if}
 		</Card.Description>
 	</Card.Header>
 	<Card.Content class="space-y-4">
 		{#if loading}
-			<p role="status" class="text-sm text-muted">{tx('Memvalidasi tautan…', 'Validating link…')}</p>
+			<p role="status" class="text-sm text-muted">
+				{tx('Memvalidasi tautan…', 'Validating link…')}
+			</p>
 		{:else if success}
-			<p role="status" class="text-sm text-main">{tx('Kata sandi baru tersimpan. Silakan masuk.', 'Your new password is saved. Sign in to continue.')}</p>
-			<Button class="w-full" onclick={() => goto('/login')}>{tx('Ke Halaman Masuk', 'Go to Sign in')}</Button>
+			<p role="status" class="text-sm text-main">
+				{tx(
+					'Kata sandi baru tersimpan. Silakan masuk.',
+					'Your new password is saved. Sign in to continue.'
+				)}
+			</p>
+			<Button class="w-full" onclick={() => goto('/login')}
+				>{tx('Ke Halaman Masuk', 'Go to Sign in')}</Button
+			>
 		{:else if !validation}
 			<p role="alert" class="text-sm text-danger">{error}</p>
 			<p class="text-center text-sm text-muted">
-				<a href="/login" class="font-medium text-primary hover:underline">{tx('Kembali ke Masuk', 'Back to Sign in')}</a>
+				<a href="/login" class="font-medium text-primary hover:underline"
+					>{tx('Kembali ke Masuk', 'Back to Sign in')}</a
+				>
 			</p>
 		{:else}
 			<form class="space-y-4" onsubmit={submit}>
@@ -96,16 +139,29 @@
 						id="setup-password"
 						autocomplete="new-password"
 						bind:value={password}
-						aria-invalid={submitted && (password.length < 15 || new TextEncoder().encode(password).length > 72)}
+						aria-invalid={submitted &&
+							(password.length < 15 || new TextEncoder().encode(password).length > 72)}
 					/>
 					<p id="password-rule" class="text-xs text-muted">
-						{tx('Minimal 15 karakter.', 'At least 15 characters.')}{#if password.length > 0}{password.length >= 15 ? ' ✓' : ` (${password.length}/15)`}{/if}
+						{tx(
+							'Minimal 15 karakter.',
+							'At least 15 characters.'
+						)}{#if password.length > 0}{password.length >= 15
+								? ' ✓'
+								: ` (${password.length}/15)`}{/if}
 					</p>
 					{#if submitted && password.length < 15}
-						<p class="text-xs text-danger">{tx('Kata sandi harus minimal 15 karakter.', 'Password must be at least 15 characters.')}</p>
+						<p class="text-xs text-danger">
+							{tx(
+								'Kata sandi harus minimal 15 karakter.',
+								'Password must be at least 15 characters.'
+							)}
+						</p>
 					{/if}
 					{#if submitted && new TextEncoder().encode(password).length > 72}
-						<p class="text-xs text-danger">{tx('Kata sandi tidak boleh melebihi 72 byte.', 'Password must not exceed 72 bytes.')}</p>
+						<p class="text-xs text-danger">
+							{tx('Kata sandi tidak boleh melebihi 72 byte.', 'Password must not exceed 72 bytes.')}
+						</p>
 					{/if}
 				</div>
 
@@ -118,7 +174,9 @@
 						aria-invalid={submitted && confirmation !== password}
 					/>
 					{#if submitted && confirmation !== password}
-						<p class="text-xs text-danger">{tx('Kata sandi tidak cocok.', 'Passwords do not match.')}</p>
+						<p class="text-xs text-danger">
+							{tx('Kata sandi tidak cocok.', 'Passwords do not match.')}
+						</p>
 					{/if}
 				</div>
 
@@ -132,7 +190,9 @@
 			</form>
 
 			<p class="text-center text-sm text-muted">
-				<a href="/login" class="font-medium text-primary hover:underline">{tx('Kembali ke Masuk', 'Back to Sign in')}</a>
+				<a href="/login" class="font-medium text-primary hover:underline"
+					>{tx('Kembali ke Masuk', 'Back to Sign in')}</a
+				>
 			</p>
 		{/if}
 	</Card.Content>

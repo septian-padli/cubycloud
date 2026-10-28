@@ -18,7 +18,12 @@ async function finishSetup(page: Page) {
 		expect(nodes.length).toBeGreaterThan(0);
 		const setup = await page.request.post('/api/v1/setup/complete', {
 			data: {
-				admin: { username, email: 'compress-e2e@example.test', password, recovery_key: recoveryKey },
+				admin: {
+					username,
+					email: 'compress-e2e@example.test',
+					password,
+					recovery_key: recoveryKey
+				},
 				storage_nodes: nodes.map((node) => ({ ...node, enabled: true })),
 				placement_strategy: 'FILL_FIRST',
 				cloud: { enabled: false }
@@ -40,7 +45,9 @@ function itemRow(page: Page, name: string | RegExp): Locator {
 	return page.getByRole('option').filter({ hasText: name });
 }
 
-test('Compress to ZIP creates persistent archive in action-origin folder with conflict resolution', async ({ page }) => {
+test('Compress to ZIP creates persistent archive in action-origin folder with conflict resolution', async ({
+	page
+}) => {
 	test.setTimeout(120_000);
 	await finishSetup(page);
 

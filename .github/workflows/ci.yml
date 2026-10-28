@@ -81,23 +81,22 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Start MinIO for S3 E2E Tests
+      - name: Start MinIO & Initialize Bucket for S3 E2E Tests
         run: |
-          docker run -d --name minio-e2e \
-            -p 19000:9000 -p 19001:9001 \
-            -e MINIO_ROOT_USER=minioadmin \
-            -e MINIO_ROOT_PASSWORD=minioadmin \
-            minio/minio server /data --console-address ":9001"
+          docker compose -f compose.minio.yaml up -d
           
           # Wait for MinIO readiness
           for i in {1..30}; do
-            if curl -s http://127.0.0.1:19000/minio/health/live; then
+            if curl -s http://127.0.0.1:19000/minio/health/live >/dev/null 2>&1; then
               echo "MinIO is healthy"
               break
             fi
             echo "Waiting for MinIO..."
             sleep 1
           done
+          
+          # Verify bucket & credentials initialized by minio-init
+          docker compose -f compose.minio.yaml logs minio-init
 
       - name: Install Frontend Dependencies
         run: |

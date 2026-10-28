@@ -340,10 +340,21 @@
 			>
 				<p class="text-xs text-muted">
 					{tx('Menampilkan', 'Showing')}
-					<span class="font-medium text-foreground">{new Intl.NumberFormat(locale.language === 'id' ? 'id-ID' : 'en-US').format(fromItem)}</span>–<span
-						class="font-medium text-foreground">{new Intl.NumberFormat(locale.language === 'id' ? 'id-ID' : 'en-US').format(toItem)}</span
+					<span class="font-medium text-foreground"
+						>{new Intl.NumberFormat(locale.language === 'id' ? 'id-ID' : 'en-US').format(
+							fromItem
+						)}</span
+					>–<span class="font-medium text-foreground"
+						>{new Intl.NumberFormat(locale.language === 'id' ? 'id-ID' : 'en-US').format(
+							toItem
+						)}</span
 					>
-					{tx('dari', 'of')} <span class="font-medium text-foreground">{new Intl.NumberFormat(locale.language === 'id' ? 'id-ID' : 'en-US').format(total)}</span>
+					{tx('dari', 'of')}
+					<span class="font-medium text-foreground"
+						>{new Intl.NumberFormat(locale.language === 'id' ? 'id-ID' : 'en-US').format(
+							total
+						)}</span
+					>
 					{tx('hasil', 'results')}
 				</p>
 

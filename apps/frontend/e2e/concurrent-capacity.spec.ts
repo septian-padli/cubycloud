@@ -78,7 +78,9 @@ test.describe('Concurrent Upload Capacity in My Storage and Organization', () =>
 			// Tab 2: Organization (same authenticated context)
 			const orgPage = await context.newPage();
 			await orgPage.goto('/drive/organization');
-			await expect(orgPage.getByRole('heading', { name: /Organization|Organisasi/i })).toBeVisible();
+			await expect(
+				orgPage.getByRole('heading', { name: /Organization|Organisasi/i })
+			).toBeVisible();
 
 			const myStorageInput = myStoragePage.getByTestId('upload-file-input');
 			const orgInput = orgPage.getByTestId('upload-file-input');
@@ -158,7 +160,9 @@ test.describe('Concurrent Upload Capacity in My Storage and Organization', () =>
 			// Tab 2: Organization
 			const orgPage = await context.newPage();
 			await orgPage.goto('/drive/organization');
-			await expect(orgPage.getByRole('heading', { name: /Organization|Organisasi/i })).toBeVisible();
+			await expect(
+				orgPage.getByRole('heading', { name: /Organization|Organisasi/i })
+			).toBeVisible();
 
 			// Simulate that available physical node capacity was exhausted by the first upload,
 			// causing the concurrent organization upload to receive STORAGE_POOL_FULL (413)
@@ -236,7 +240,9 @@ test.describe('Concurrent Upload Capacity in My Storage and Organization', () =>
 			// Tab 2: Organization
 			const orgPage = await context.newPage();
 			await orgPage.goto('/drive/organization');
-			await expect(orgPage.getByRole('heading', { name: /Organization|Organisasi/i })).toBeVisible();
+			await expect(
+				orgPage.getByRole('heading', { name: /Organization|Organisasi/i })
+			).toBeVisible();
 
 			// Simulate node physical storage pool being completely full for both endpoints
 			await myStoragePage.route('**/api/v1/drive/my-storage/upload**', async (route) => {

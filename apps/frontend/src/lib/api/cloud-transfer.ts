@@ -20,17 +20,19 @@ export function putPresigned(
 	xhr.open('PUT', url);
 	for (const [name, value] of Object.entries(headers)) xhr.setRequestHeader(name, value);
 	xhr.upload.onprogress = (event) => {
-		if (event.lengthComputable && event.total > 0) progress(Math.round(event.loaded / event.total * 100));
+		if (event.lengthComputable && event.total > 0)
+			progress(Math.round((event.loaded / event.total) * 100));
 	};
-	xhr.onload = () => xhr.status >= 200 && xhr.status < 300
-		? resolve()
-		: reject(
-				new Error(
-					locale.language === 'id'
-						? `Unggah ke cloud gagal (HTTP ${xhr.status})`
-						: `Cloud upload failed (HTTP ${xhr.status})`
-				)
-			);
+	xhr.onload = () =>
+		xhr.status >= 200 && xhr.status < 300
+			? resolve()
+			: reject(
+					new Error(
+						locale.language === 'id'
+							? `Unggah ke cloud gagal (HTTP ${xhr.status})`
+							: `Cloud upload failed (HTTP ${xhr.status})`
+					)
+				);
 	xhr.onerror = () =>
 		reject(
 			new Error(
@@ -44,10 +46,17 @@ export function putPresigned(
 }
 
 /** Keep the browser on the direct S3 path for files, and preserve the authenticated ZIP route for folders. */
-export async function downloadObject(base: string, id: string, name: string, folder = false): Promise<void> {
+export async function downloadObject(
+	base: string,
+	id: string,
+	name: string,
+	folder = false
+): Promise<void> {
 	let url = `${base}/${encodeURIComponent(id)}/download`;
 	if (!folder) {
-		const response = await fetch(`${base}/${encodeURIComponent(id)}/download-url`, { credentials: 'include' });
+		const response = await fetch(`${base}/${encodeURIComponent(id)}/download-url`, {
+			credentials: 'include'
+		});
 		if (!response.ok) {
 			throw new Error(
 				locale.language === 'id'
@@ -55,7 +64,7 @@ export async function downloadObject(base: string, id: string, name: string, fol
 					: `Failed to prepare download (HTTP ${response.status})`
 			);
 		}
-		const signed = await response.json() as { url: string | null };
+		const signed = (await response.json()) as { url: string | null };
 		if (signed.url) url = signed.url;
 	}
 	const anchor = document.createElement('a');
@@ -70,12 +79,19 @@ const activeZipFrames = new Set<HTMLIFrameElement>();
 let zipDownloadCounter = 0;
 
 /** Let the browser stream POSTed ZIP bytes to Downloads; fetch/Blob would buffer the whole archive. */
-export function downloadBatchZip(base: string, ids: string[], onError?: (message: string) => void): 'started' {
+export function downloadBatchZip(
+	base: string,
+	ids: string[],
+	onError?: (message: string) => void
+): 'started' {
 	for (const f of activeZipFrames) {
 		if (f.isConnected === false) activeZipFrames.delete(f);
 	}
 	const frame = document.createElement('iframe');
-	frame.name = activeZipFrames.size === 0 ? 'cubycloud-zip-download' : `cubycloud-zip-download-${++zipDownloadCounter}`;
+	frame.name =
+		activeZipFrames.size === 0
+			? 'cubycloud-zip-download'
+			: `cubycloud-zip-download-${++zipDownloadCounter}`;
 	activeZipFrames.add(frame);
 	frame.title = locale.language === 'id' ? 'Unduhan ZIP' : 'ZIP download';
 	frame.hidden = true;
@@ -84,7 +100,8 @@ export function downloadBatchZip(base: string, ids: string[], onError?: (message
 		if (frame.contentDocument?.URL === 'about:blank') return;
 		const body = frame.contentDocument?.body?.textContent?.trim();
 		if (!body) return;
-		let message = locale.language === 'id' ? 'Gagal mengunduh berkas ZIP' : 'Failed to download ZIP file';
+		let message =
+			locale.language === 'id' ? 'Gagal mengunduh berkas ZIP' : 'Failed to download ZIP file';
 		try {
 			const payload = JSON.parse(body) as { error?: unknown };
 			if (typeof payload.error === 'string' && payload.error) message = payload.error;

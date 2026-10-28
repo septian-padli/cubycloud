@@ -1,7 +1,9 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Setup Cloud Storage S3 Connection Validation', () => {
-	test('tests S3 connection with 4 distinct conditions: valid, unreachable, invalid credentials, invalid bucket', async ({ page }) => {
+	test('tests S3 connection with 4 distinct conditions: valid, unreachable, invalid credentials, invalid bucket', async ({
+		page
+	}) => {
 		// 1. Check setup status first
 		const statusRes = await page.request.get('/api/v1/setup/status');
 		expect(statusRes.ok()).toBeTruthy();
@@ -33,15 +35,21 @@ test.describe('Setup Cloud Storage S3 Connection Validation', () => {
 		await page.getByLabel(/Nama pengguna|Username/i).fill('superadmin');
 		await page.getByLabel(/Email/i).fill('admin@example.test');
 		await page.getByLabel(/^Kata sandi$|^Password$/i).fill('SuperSecretPassword12345!');
-		await page.getByLabel(/Konfirmasi kata sandi|Confirm password/i).fill('SuperSecretPassword12345!');
+		await page
+			.getByLabel(/Konfirmasi kata sandi|Confirm password/i)
+			.fill('SuperSecretPassword12345!');
 		await page.getByRole('button', { name: /Lanjut|Next/i }).click();
 		// Step 2: Storage nodes (select default local node)
-		await expect(page.getByText(/Penyimpanan Lokal \(Opsional\)|Local Storage \(Optional\)/i)).toBeVisible();
+		await expect(
+			page.getByText(/Penyimpanan Lokal \(Opsional\)|Local Storage \(Optional\)/i)
+		).toBeVisible();
 		await page.getByRole('button', { name: /Lanjut|Next/i }).click();
 
 		// Step 3: Cloud Storage
 		await expect(page.getByText(/Cloud \(Opsional\)|Cloud \(Optional\)/i)).toBeVisible();
-		const enableCloudSwitch = page.getByRole('switch', { name: /Aktifkan node cloud|Enable cloud node/i });
+		const enableCloudSwitch = page.getByRole('switch', {
+			name: /Aktifkan node cloud|Enable cloud node/i
+		});
 		if (!(await enableCloudSwitch.isChecked())) {
 			await enableCloudSwitch.click();
 		}
