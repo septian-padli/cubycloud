@@ -4,7 +4,8 @@
 
 CubyCloud is a self-hosted file drive for people who want a familiar way to organize and share files while choosing where those files live. It combines a Go API, a SvelteKit web app, SQLite, local storage, and optional S3-compatible storage.
 
-[![Build and Publish](https://github.com/septian-padli/cubycloud/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/septian-padli/cubycloud/actions/workflows/docker-publish.yml)
+[![CI Quality Gates](https://github.com/septian-padli/cubycloud/actions/workflows/ci.yml/badge.svg)](https://github.com/septian-padli/cubycloud/actions/workflows/ci.yml)
+[![Release Automation](https://github.com/septian-padli/cubycloud/actions/workflows/release.yml/badge.svg)](https://github.com/septian-padli/cubycloud/actions/workflows/release.yml)
 [![GHCR Package](https://img.shields.io/badge/container-ghcr.io-24292e?logo=docker&logoColor=white)](https://github.com/septian-padli/cubycloud/pkgs/container/cubycloud)
 ![Multi-Arch](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-blue)
 [![Go 1.25](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)](https://go.dev/)
@@ -100,6 +101,8 @@ All state is contained within `/app/data`. To back up CubyCloud, copy or snapsho
 - `storage/`: all locally stored files
 
 To restore, place these files back into `/app/data` before starting the container.
+
+Detailed backup, upgrade, and rollback instructions are documented in the [Release & Deployment Guide](docs/release-guide.md).
 
 ### Run from source
 

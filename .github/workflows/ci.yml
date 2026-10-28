@@ -1,0 +1,135 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-lint-and-test:
+    name: Backend Tests & OpenAPI Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'apps/backend/go.mod'
+          cache-dependency-path: apps/backend/go.sum
+
+      - name: Run Go Unit and Integration Tests
+        run: |
+          cd apps/backend
+          go test -race -v ./...
+
+      - name: Validate OpenAPI Bundle and Coverage
+        run: |
+          cd apps/backend
+          go test -v -run "TestOpenAPI|TestValidateIndividualYamlFiles" ./cmd/...
+
+  frontend-checks:
+    name: Frontend Typecheck, Lint & Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd apps/frontend
+          bun install --frozen-lockfile
+
+      - name: Frontend Type Check
+        run: |
+          cd apps/frontend
+          bun run check
+
+      - name: Frontend Linter & Prettier Check
+        run: |
+          cd apps/frontend
+          bun run lint
+
+  playwright-e2e:
+    name: Playwright E2E Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Start MinIO for S3 E2E Tests
+        run: |
+          docker run -d --name minio-e2e \
+            -p 19000:9000 -p 19001:9001 \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio server /data --console-address ":9001"
+          
+          # Wait for MinIO readiness
+          for i in {1..30}; do
+            if curl -s http://127.0.0.1:19000/minio/health/live; then
+              echo "MinIO is healthy"
+              break
+            fi
+            echo "Waiting for MinIO..."
+            sleep 1
+          done
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd apps/frontend
+          bun install --frozen-lockfile
+
+      - name: Install Playwright Chromium Only
+        run: |
+          cd apps/frontend
+          bunx playwright install --with-deps chromium
+
+      - name: Run E2E Tests
+        run: |
+          cd apps/frontend
+          bun run test:e2e
+
+  docker-dry-run-build:
+    name: Docker Build Verification (No Push)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Image (Dry-Run / Verification)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: cubycloud:ci-verify
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
