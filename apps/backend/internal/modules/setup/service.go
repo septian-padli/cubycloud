@@ -290,6 +290,9 @@ func (s *Service) CompleteSetup(ctx context.Context, req *CompleteSetupRequest) 
 }
 
 func (s *Service) TestCloud(ctx context.Context, cloud CloudConfig) error {
+	if s.setupGuard.IsCompleted() {
+		return echo.NewHTTPError(http.StatusForbidden, "setup already completed")
+	}
 	if !cloud.Enabled {
 		return echo.NewHTTPError(http.StatusBadRequest, "cloud storage is not enabled")
 	}

@@ -18,6 +18,7 @@ import (
 	"github.com/cubycloud/backend/internal/storage"
 	"github.com/oklog/ulid/v2"
 	"github.com/uptrace/bun"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -748,10 +749,22 @@ func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*Admi
 	if err != nil { return nil, fmt.Errorf("begin transaction: %w", err) }
 	defer tx.Rollback()
 	now := time.Now()
-	if _, err := tx.ExecContext(ctx, `INSERT INTO users(id, username, email, password_hash, role, status, quota_mode, quota_bytes, created_at, updated_at) VALUES(?, ?, ?, '', 'REGULAR', 'PENDING_ACTIVATION', ?, ?, ?, ?)`, id, username, email, mode, quotaBytes, now, now); err != nil { return nil, fmt.Errorf("insert user: %w", err) }
- 	secret, tokenHash, tokenID, err := database.GenerateAuthToken()
- 	if err != nil { return nil, fmt.Errorf("generate invitation token: %w", err) }
- 	if _, err := tx.ExecContext(ctx, `INSERT INTO auth_tokens(id, user_id, token_hash, token_type, expires_at) VALUES(?, ?, ?, 'INVITATION', ?)`, tokenID, id, tokenHash, now.Add(24*time.Hour)); err != nil { return nil, fmt.Errorf("insert invitation token: %w", err) }
+	initialStatus := "PENDING_ACTIVATION"
+	initialPasswordHash := ""
+	if strings.TrimSpace(req.Password) != "" {
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 10)
+		if err != nil {
+			return nil, fmt.Errorf("hash password: %w", err)
+		}
+		initialPasswordHash = string(hash)
+		initialStatus = "ACTIVE"
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO users(id, username, email, password_hash, role, status, quota_mode, quota_bytes, created_at, updated_at) VALUES(?, ?, ?, ?, 'REGULAR', ?, ?, ?, ?, ?)`, id, username, email, initialPasswordHash, initialStatus, mode, quotaBytes, now, now); err != nil { return nil, fmt.Errorf("insert user: %w", err) }
+	secret, tokenHash, tokenID, err := database.GenerateAuthToken()
+	if err != nil { return nil, fmt.Errorf("generate invitation token: %w", err) }
+	if initialStatus == "PENDING_ACTIVATION" {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO auth_tokens(id, user_id, token_hash, token_type, expires_at) VALUES(?, ?, ?, 'INVITATION', ?)`, tokenID, id, tokenHash, now.Add(24*time.Hour)); err != nil { return nil, fmt.Errorf("insert invitation token: %w", err) }
+	}
 	if err := tx.Commit(); err != nil { return nil, fmt.Errorf("commit user creation: %w", err) }
 	var quotaGB *float64
 	if quotaBytes >= 0 { q := float64(quotaBytes) / (1024.0*1024.0*1024.0); quotaGB = &q }
