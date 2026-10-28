@@ -71,6 +71,10 @@ func (m *mockCloudStorageDriver) HeadObject(context.Context, string, string) (in
 	return 0, nil
 }
 
+func (m *mockCloudStorageDriver) ListObjects(context.Context, string, string) ([]string, error) {
+	return nil, nil
+}
+
 func (m *mockCloudStorageDriver) PresignUpload(context.Context, string, string, time.Duration) (string, error) {
 	return "", nil
 }

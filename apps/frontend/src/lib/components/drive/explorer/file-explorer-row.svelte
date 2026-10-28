@@ -1,12 +1,13 @@
 <script lang="ts">
 	import type { ExplorerVariant, FileEntry } from '$lib/types/drive.js';
 	import { formatSize } from '$lib/mocks/file-tree.js';
-	import { getDriveChrome } from '$lib/drive-context.svelte.js';
 	import FileKindIcon from './file-kind-icon.svelte';
 	import FileExplorerActionsMenu from './file-explorer-actions-menu.svelte';
 	import FileExplorerContextMenu from './file-explorer-context-menu.svelte';
 	import { Checkbox } from '$lib/components/ui/checkbox/index.js';
 	import { cn } from '$lib/utils.js';
+	import OfflineFileNotice from './offline-file-notice.svelte';
+	import { locale } from '$lib/locale.svelte.js';
 
 	let {
 		entry,
@@ -22,7 +23,8 @@
 		onCopy,
 		onStar,
 		onShare,
-		onDelete
+		onDelete,
+		onCompress
 	}: {
 		entry: FileEntry;
 		variant?: ExplorerVariant;
@@ -38,9 +40,15 @@
 		onStar: (entry: FileEntry) => void;
 		onShare: (entry: FileEntry) => void;
 		onDelete: (entry: FileEntry) => void;
+		onCompress?: (entry: FileEntry) => void;
 	} = $props();
-
-	const { user } = getDriveChrome();
+	const modifiedAt = $derived(
+		entry.modifiedAt === 'Baru saja'
+			? locale.language === 'id'
+				? 'Baru saja'
+				: 'Just now'
+			: entry.modifiedAt
+	);
 </script>
 
 <FileExplorerContextMenu
@@ -54,13 +62,16 @@
 	{onStar}
 	{onShare}
 	{onDelete}
+	{onCompress}
 >
 	<div
 		role="option"
 		tabindex="0"
 		aria-selected={selected}
+		aria-disabled={entry.kind !== 'folder' && entry.storageAvailable === false}
 		class={cn(
-			'group/row flex cursor-pointer items-center justify-between border-b border-subtle px-4 py-3 transition-colors hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 dark:hover:bg-white/5',
+			'group/row flex cursor-pointer items-center justify-between border-b border-subtle px-4 py-3 transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none dark:hover:bg-white/5',
+			entry.kind !== 'folder' && entry.storageAvailable === false && 'opacity-60',
 			selected && 'bg-primary/5',
 			isDragOver && 'border-primary bg-accent/40 ring-2 ring-primary/50'
 		)}
@@ -73,27 +84,41 @@
 		<div class="flex min-w-0 items-center gap-3">
 			<div
 				role="button"
-				tabindex="0"
-				aria-label={`Pilih ${entry.name}`}
-				class="relative flex size-6 shrink-0 items-center justify-center cursor-pointer"
+				tabindex={entry.kind !== 'folder' && entry.storageAvailable === false ? -1 : 0}
+				aria-label={`${locale.t('file.select')} ${entry.name}`}
+				aria-disabled={entry.kind !== 'folder' && entry.storageAvailable === false}
+				class="relative flex size-6 shrink-0 cursor-pointer items-center justify-center"
 				onclick={(e) => {
 					e.stopPropagation();
+					if (entry.kind !== 'folder' && entry.storageAvailable === false) return;
 					onToggleSelect?.(entry);
 				}}
 				onkeydown={(e) => {
 					if (e.key === ' ' || e.key === 'Enter') {
 						e.stopPropagation();
+						if (entry.kind !== 'folder' && entry.storageAvailable === false) return;
 						onToggleSelect?.(entry);
 					}
 				}}
 			>
-				<div class={cn('flex items-center justify-center transition-opacity', selected ? 'hidden' : 'group-hover/row:hidden')}>
+				<div
+					class={cn(
+						'flex items-center justify-center transition-opacity',
+						selected ? 'hidden' : 'group-hover/row:hidden'
+					)}
+				>
 					<FileKindIcon kind={entry.kind} />
 				</div>
-				<div class={cn('items-center justify-center', selected ? 'flex' : 'hidden group-hover/row:flex')}>
+				<div
+					class={cn(
+						'items-center justify-center',
+						selected ? 'flex' : 'hidden group-hover/row:flex'
+					)}
+				>
 					<Checkbox
 						checked={selected}
-						aria-label={`Pilih ${entry.name}`}
+						disabled={entry.kind !== 'folder' && entry.storageAvailable === false}
+						aria-label={`${locale.t('file.select')} ${entry.name}`}
 						class="pointer-events-none"
 						tabindex={-1}
 					/>
@@ -105,15 +130,17 @@
 				</p>
 				<p class="text-xs text-muted">
 					{#if entry.kind === 'folder'}
-						Folder · Diubah {entry.modifiedAt}
+						{locale.t('file.folder')} · {locale.t('file.changed')} {modifiedAt}
 					{:else}
-						{formatSize(entry.sizeBytes)} · Diubah {entry.modifiedAt}
+						{formatSize(entry.sizeBytes)} · {locale.t('file.changed')} {modifiedAt}
 					{/if}
 				</p>
 			</div>
 		</div>
-
 		<div class="flex shrink-0 items-center gap-2">
+			{#if entry.kind !== 'folder' && entry.storageAvailable === false}
+				<OfflineFileNotice />
+			{/if}
 			<FileExplorerActionsMenu
 				{entry}
 				{variant}
@@ -125,6 +152,7 @@
 				{onStar}
 				{onShare}
 				{onDelete}
+				{onCompress}
 			/>
 		</div>
 	</div>

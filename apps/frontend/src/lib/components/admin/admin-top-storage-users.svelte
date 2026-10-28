@@ -9,7 +9,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
 	import { cn } from '$lib/utils.js';
-
+	import { locale } from '$lib/locale.svelte.js';
 	let {
 		totalSystemUsedBytes = 0,
 		class: className
@@ -34,10 +34,18 @@
 				hasMore = res.data.has_more ?? false;
 				nextOffset = res.data.next_offset ?? 0;
 			} else if (res.error) {
-				toast.error(`Gagal memuat pengguna terbesar: ${res.error}`);
+				toast.error(
+					`${locale.language === 'id' ? 'Gagal memuat pengguna terbesar' : 'Failed to load top storage users'}: ${res.error}`
+				);
 			}
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Gagal memuat pengguna');
+			toast.error(
+				error instanceof Error
+					? error.message
+					: locale.language === 'id'
+						? 'Gagal memuat pengguna'
+						: 'Failed to load users'
+			);
 		} finally {
 			loading = false;
 		}
@@ -53,10 +61,18 @@
 				hasMore = res.data.has_more ?? false;
 				nextOffset = res.data.next_offset ?? 0;
 			} else if (res.error) {
-				toast.error(`Gagal memuat halaman berikutnya: ${res.error}`);
+				toast.error(
+					`${locale.language === 'id' ? 'Gagal memuat halaman berikutnya' : 'Failed to load the next page'}: ${res.error}`
+				);
 			}
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Gagal memuat halaman berikutnya');
+			toast.error(
+				error instanceof Error
+					? error.message
+					: locale.language === 'id'
+						? 'Gagal memuat halaman berikutnya'
+						: 'Failed to load the next page'
+			);
 		} finally {
 			loadingMore = false;
 		}
@@ -84,9 +100,13 @@
 <section class={cn('space-y-3', className)}>
 	<div class="flex flex-wrap items-center justify-between gap-2">
 		<div>
-			<h2 class="text-sm font-semibold text-main">Pengguna dengan konsumsi terbesar</h2>
+			<h2 class="text-sm font-semibold text-main">
+				{locale.language === 'id' ? 'Pengguna dengan konsumsi terbesar' : 'Top storage users'}
+			</h2>
 			<p class="text-xs text-muted">
-				Diurutkan berdasarkan total ukuran penyimpanan berkas pengguna.
+				{locale.language === 'id'
+					? 'Diurutkan berdasarkan total ukuran penyimpanan berkas pengguna.'
+					: 'Ranked by the total size of each user’s stored files.'}
 			</p>
 		</div>
 		<Button
@@ -95,7 +115,7 @@
 			href="/admin/users"
 			class="h-8 gap-1.5 text-xs text-muted hover:text-main"
 		>
-			<span>Kelola Users & Quotas</span>
+			<span>{locale.language === 'id' ? 'Kelola Pengguna & Kuota' : 'Manage users & quotas'}</span>
 			<ArrowUpRight class="size-3.5" />
 		</Button>
 	</div>
@@ -105,7 +125,7 @@
 			<Card.Content class="p-6">
 				<div class="space-y-4">
 					{#each Array(4) as _}
-						<div class="flex items-center justify-between gap-4 animate-pulse">
+						<div class="flex animate-pulse items-center justify-between gap-4">
 							<div class="flex items-center gap-3">
 								<div class="size-9 rounded-full bg-muted/20"></div>
 								<div class="space-y-1.5">
@@ -123,9 +143,15 @@
 		<Card.Root class="rounded-xl border-subtle bg-surface shadow-none">
 			<Card.Content class="py-12 text-center">
 				<Users class="mx-auto size-10 text-muted/60" />
-				<p class="mt-3 text-sm font-medium text-main">Belum ada data pemakaian pengguna</p>
+				<p class="mt-3 text-sm font-medium text-main">
+					{locale.language === 'id'
+						? 'Belum ada data pemakaian pengguna'
+						: 'No user usage data yet'}
+				</p>
 				<p class="mt-1 text-xs text-muted">
-					Data konsumsi penyimpanan pengguna akan muncul di sini setelah ada berkas terunggah.
+					{locale.language === 'id'
+						? 'Data konsumsi penyimpanan pengguna akan muncul di sini setelah ada berkas terunggah.'
+						: 'User storage usage will appear here once files have been uploaded.'}
 				</p>
 			</Card.Content>
 		</Card.Root>
@@ -134,17 +160,14 @@
 			<Card.Content class="p-0">
 				<div class="divide-y divide-subtle">
 					{#each users as user, idx (user.id)}
-						{@const isSuperAdmin =
-							user.role?.toLowerCase() === 'super_admin'}
-						{@const isUnlimited =
-							isSuperAdmin ||
-							user.quota_mode?.toUpperCase() === 'UNLIMITED'}
+						{@const isSuperAdmin = user.role?.toLowerCase() === 'super_admin'}
+						{@const isUnlimited = isSuperAdmin || user.quota_mode?.toUpperCase() === 'UNLIMITED'}
 						{@const percentOfTotal =
 							totalSystemUsedBytes > 0
 								? ((user.used_bytes / totalSystemUsedBytes) * 100).toFixed(1)
 								: null}
 						<div
-							class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between transition-colors hover:bg-black/5 dark:hover:bg-white/5"
+							class="flex flex-col gap-3 px-4 py-3 transition-colors hover:bg-black/5 sm:flex-row sm:items-center sm:justify-between dark:hover:bg-white/5"
 						>
 							<div class="flex min-w-0 items-center gap-3">
 								<!-- Ranking number & Avatar -->
@@ -154,9 +177,7 @@
 								<div
 									class={cn(
 										'flex size-9 shrink-0 items-center justify-center rounded-full',
-										isSuperAdmin
-											? 'bg-primary/15 text-primary'
-											: 'bg-secondary text-main'
+										isSuperAdmin ? 'bg-primary/15 text-primary' : 'bg-secondary text-main'
 									)}
 								>
 									{#if isSuperAdmin}
@@ -173,25 +194,33 @@
 										</p>
 										<Badge
 											class={cn(
-												'rounded-full px-2 py-0 text-[11px] font-medium border-0',
+												'rounded-full border-0 px-2 py-0 text-[11px] font-medium',
 												isSuperAdmin
 													? 'bg-primary/15 text-primary hover:bg-primary/20'
 													: 'bg-app text-muted hover:bg-app'
 											)}
 										>
-											{isSuperAdmin ? 'Super Admin' : 'User'}
+											{isSuperAdmin
+												? 'Super Admin'
+												: locale.language === 'id'
+													? 'Pengguna'
+													: 'User'}
 										</Badge>
 										<Badge
 											variant="outline"
 											class="rounded-full border-subtle px-2 py-0 text-[11px] font-normal text-muted"
 										>
 											{isUnlimited
-												? 'Unlimited'
+												? locale.language === 'id'
+													? 'Tanpa batas'
+													: 'Unlimited'
 												: user.quota_gb
-													? `${user.quota_gb} GB`
+													? `${user.quota_gb} GiB`
 													: user.quota_bytes > 0
 														? formatSize(user.quota_bytes)
-														: 'Default'}
+														: locale.language === 'id'
+															? 'Bawaan'
+															: 'Default'}
 										</Badge>
 									</div>
 									<p class="truncate text-xs text-muted">{user.email}</p>
@@ -199,16 +228,22 @@
 							</div>
 
 							<!-- Storage usage stats -->
-							<div class="flex items-center justify-between sm:justify-end gap-3 shrink-0 pl-8 sm:pl-0">
+							<div
+								class="flex shrink-0 items-center justify-between gap-3 pl-8 sm:justify-end sm:pl-0"
+							>
 								<div class="text-left sm:text-right">
 									<p class="text-sm font-semibold text-main">
 										{formatSize(user.used_bytes)}
 									</p>
 									<p class="text-xs text-muted">
 										{#if percentOfTotal !== null}
-											<span>{percentOfTotal}% dari total berkas</span>
+											<span
+												>{percentOfTotal}% {locale.language === 'id'
+													? 'dari total berkas'
+													: 'of total files'}</span
+											>
 										{:else}
-											<span>{user.used_gb.toFixed(2)} GB</span>
+											<span>{user.used_gb.toFixed(2)} GiB</span>
 										{/if}
 									</p>
 								</div>
@@ -229,7 +264,11 @@
 			{#if loadingMore}
 				<div class="flex items-center gap-2 text-xs text-muted">
 					<Loader2 class="size-4 animate-spin text-primary" />
-					<span>Memuat lebih banyak pengguna...</span>
+					<span
+						>{locale.language === 'id'
+							? 'Memuat lebih banyak pengguna...'
+							: 'Loading more users...'}</span
+					>
 				</div>
 			{:else}
 				<Button
@@ -239,7 +278,7 @@
 					class="text-xs text-muted hover:text-main"
 					onclick={() => void loadMore()}
 				>
-					Muat lebih banyak
+					{locale.language === 'id' ? 'Muat lebih banyak' : 'Load more'}
 				</Button>
 			{/if}
 		</div>

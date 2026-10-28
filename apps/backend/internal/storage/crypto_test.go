@@ -1,68 +1,102 @@
 package storage
+
 import (
 	"bytes"
+	"encoding/base64"
+	"os"
 	"path/filepath"
 	"testing"
+	"github.com/cubycloud/backend/internal/database"
 )
-func TestEncryptDecryptRoundtrip(t *testing.T) {
-	key := []byte("test-key-material")
-	plaintext := []byte("s3-secret-key-value")
 
-	ciphertext, err := EncryptCredential(plaintext, key)
-	if err != nil {
-		t.Fatalf("encrypt failed: %v", err)
-	}
-	if bytes.Equal(ciphertext, plaintext) {
-		t.Fatal("ciphertext equals plaintext")
-	}
-
-	decrypted, err := DecryptCredential(ciphertext, key)
-	if err != nil {
-		t.Fatalf("decrypt failed: %v", err)
-	}
-	if !bytes.Equal(decrypted, plaintext) {
-		t.Fatalf("got %s, want %s", decrypted, plaintext)
-	}
-}
-func TestNodeDriverNormalizesDataDirPathForCredentials(t *testing.T) {
+func TestMasterKeyInitializationAndReload(t *testing.T) {
 	dataDir := t.TempDir()
-	t.Setenv("DATA_DIR_PATH", dataDir+"/")
-
-	driver := newNodeDriver(nil, filepath.Join(dataDir, "storage")).(*nodeDriver)
-	wantKey := []byte(filepath.Clean(dataDir))
-	if !bytes.Equal(driver.keyMaterial, wantKey) {
-		t.Fatalf("decryption key material = %q, want normalized path %q", driver.keyMaterial, wantKey)
-	}
-
-	ciphertext, err := EncryptCredential([]byte("secret"), wantKey)
+	key, err := InitMasterKey(dataDir, "", "", nil)
 	if err != nil {
-		t.Fatalf("encrypt credential: %v", err)
+		t.Fatal(err)
 	}
-	plaintext, err := DecryptCredential(ciphertext, driver.keyMaterial)
-	if err != nil {
-		t.Fatalf("decrypt credential with DATA_DIR_PATH trailing slash: %v", err)
+	info, err := os.Stat(filepath.Join(dataDir, "secrets", "master.key"))
+	if err != nil || info.Mode().Perm() != 0600 {
+		t.Fatalf("master key file permissions: info=%v err=%v", info, err)
 	}
-	if !bytes.Equal(plaintext, []byte("secret")) {
-		t.Fatalf("decrypted credential = %q, want secret", plaintext)
+	dirInfo, err := os.Stat(filepath.Join(dataDir, "secrets"))
+	if err != nil || dirInfo.Mode().Perm() != 0700 {
+		t.Fatalf("master key directory permissions: info=%v err=%v", dirInfo, err)
+	}
+	reloaded, err := InitMasterKey(dataDir, "", "", nil)
+	if err != nil || !bytes.Equal(key, reloaded) {
+		t.Fatalf("reload key differs: err=%v", err)
 	}
 }
 
-func TestDecryptWrongKey(t *testing.T) {
-	key1 := []byte("key-1")
-	key2 := []byte("key-2")
-	plaintext := []byte("secret")
-
-	ciphertext, _ := EncryptCredential(plaintext, key1)
-	_, err := DecryptCredential(ciphertext, key2)
-	if err == nil {
-		t.Fatal("expected decrypt to fail with wrong key")
+func TestMasterKeyOverridesAndValidation(t *testing.T) {
+	key := bytes.Repeat([]byte{0x42}, masterKeyLen)
+	encoded := base64.StdEncoding.EncodeToString(key)
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "secrets"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "secrets", "master.key"), bytes.Repeat([]byte{1}, masterKeyLen), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := InitMasterKey(dir, encoded, "", nil)
+	if err != nil || !bytes.Equal(got, key) {
+		t.Fatalf("env override failed: %v", err)
+	}
+	if _, err := InitMasterKey(dir, "bad-key", "", nil); err == nil {
+		t.Fatal("invalid env key accepted")
+	}
+	file := filepath.Join(dir, "provided.key")
+	if err := os.WriteFile(file, []byte(encoded), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err = InitMasterKey(dir, "", file, nil)
+	if err != nil || !bytes.Equal(got, key) {
+		t.Fatalf("secret file key failed: %v", err)
 	}
 }
 
-func TestDecryptShortCiphertext(t *testing.T) {
-	key := []byte("key")
-	_, err := DecryptCredential([]byte("short"), key)
-	if err == nil {
-		t.Fatal("expected error for short ciphertext")
+func TestMissingMasterKeyWithCredentialsFailsClosed(t *testing.T) {
+	dataDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dataDir, "db"), 0755); err != nil {
+		t.Fatal(err)
 	}
+	db, err := database.Connect(dataDir)
+	if err != nil { t.Fatal(err) }
+	defer db.Close()
+	if _, err := db.Exec(`INSERT INTO storage_nodes(id,type,access_key_encrypted,secret_key_encrypted,capacity_bytes,enabled) VALUES('cloud','S3',x'01',x'02',1,1)`); err != nil { t.Fatal(err) }
+	if _, err := InitMasterKey(dataDir, "", "", db); err == nil { t.Fatal("missing key was silently regenerated") }
+	if _, err := os.Stat(filepath.Join(dataDir, "secrets", "master.key")); !os.IsNotExist(err) { t.Fatalf("unexpected key file after failure: %v", err) }
+}
+
+func TestCredentialEnvelopeRoundtripNonceAndTamper(t *testing.T) {
+	key := bytes.Repeat([]byte{9}, masterKeyLen)
+	first, err := EncryptCredential([]byte("s3-secret"), key)
+	if err != nil { t.Fatal(err) }
+	second, err := EncryptCredential([]byte("s3-secret"), key)
+	if err != nil { t.Fatal(err) }
+	if bytes.Equal(first, second) { t.Fatal("nonces were reused") }
+	plain, err := DecryptCredential(first, key)
+	if err != nil || string(plain) != "s3-secret" { t.Fatalf("roundtrip: %q, %v", plain, err) }
+	first[len(first)-1] ^= 1
+	if _, err := DecryptCredential(first, key); err == nil { t.Fatal("tampered envelope accepted") }
+}
+
+func TestCredentialUsesInitializedKey(t *testing.T) {
+	key := bytes.Repeat([]byte{7}, masterKeyLen)
+	if _, err := InitMasterKey(t.TempDir(), base64.StdEncoding.EncodeToString(key), "", nil); err != nil { t.Fatal(err) }
+	sealed, err := EncryptCredentialString("access-secret")
+	if err != nil { t.Fatal(err) }
+	plain, err := DecryptCredentialString(sealed)
+	if err != nil || plain != "access-secret" { t.Fatalf("roundtrip=%q err=%v", plain, err) }
+}
+
+func TestRestoreWithSuppliedKeyInNewDataDirectory(t *testing.T) {
+	key := bytes.Repeat([]byte{0x31}, masterKeyLen)
+	if _, err := InitMasterKey(t.TempDir(), base64.StdEncoding.EncodeToString(key), "", nil); err != nil { t.Fatal(err) }
+	envelope, err := EncryptCredentialString("provider-secret")
+	if err != nil { t.Fatal(err) }
+	if _, err := InitMasterKey(t.TempDir(), base64.StdEncoding.EncodeToString(key), "", nil); err != nil { t.Fatal(err) }
+	got, err := DecryptCredentialString(envelope)
+	if err != nil || got != "provider-secret" { t.Fatalf("restore decrypt=%q err=%v", got, err) }
 }

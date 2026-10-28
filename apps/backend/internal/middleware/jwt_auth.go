@@ -70,11 +70,34 @@ func JWTAuth(jwtSecret string, db ...*bun.DB) echo.MiddlewareFunc {
 				c.Set("user_role", role)
 			}
 			if len(db) > 0 && db[0] != nil {
-				var count int
-				err := db[0].QueryRowContext(c.Request().Context(), `SELECT COUNT(*) FROM users WHERE id = ? AND deleted_at IS NULL`, sub).Scan(&count)
-				if err != nil || count == 0 {
+				var dbTokenVersion int
+				var dbRole string
+				err := db[0].QueryRowContext(c.Request().Context(), `SELECT token_version, role FROM users WHERE id = ? AND deleted_at IS NULL`, sub).Scan(&dbTokenVersion, &dbRole)
+				if err != nil {
 					return echo.NewHTTPError(http.StatusUnauthorized, map[string]string{
 						"error": "account inactive or deleted",
+					})
+				}
+				if dbRole != "" {
+					c.Set("user_role", dbRole)
+				}
+				var claimTokenVersion int
+				if tv, exists := claims["token_version"]; exists {
+					switch v := tv.(type) {
+					case float64:
+						claimTokenVersion = int(v)
+					case int:
+						claimTokenVersion = v
+					case int64:
+						claimTokenVersion = int(v)
+					default:
+						claimTokenVersion = -1
+					}
+				}
+
+				if claimTokenVersion != dbTokenVersion {
+					return echo.NewHTTPError(http.StatusUnauthorized, map[string]string{
+						"error": "invalid or expired session",
 					})
 				}
 			}

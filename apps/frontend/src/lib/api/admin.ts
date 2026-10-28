@@ -1,3 +1,4 @@
+import { locale } from '$lib/locale.svelte.js';
 import type { AdminStorageStats, AdminTopStorageUsersResponse } from '$lib/types/admin.js';
 
 export const API_BASE = '/api/v1';
@@ -32,6 +33,9 @@ export interface StorageNode {
 	capacity_cap_gb: number;
 	used_bytes: number;
 	enabled: boolean;
+	safe_to_disconnect?: boolean;
+	migration_status?: string;
+	migration_job_id?: string;
 	endpoint?: string;
 	bucket?: string;
 }
@@ -45,12 +49,27 @@ export interface BackendAdminUser {
 	username: string;
 	email: string;
 	role: string;
+	status?: 'ACTIVE' | 'PENDING_ACTIVATION';
 	quota_mode: string;
 	quota_bytes: number;
 	quota_gb?: number;
 	used_bytes: number;
 	used_gb: number;
 	created_at: string;
+}
+
+export interface OneTimeLinkResponse {
+	expires_at: string;
+	message?: string;
+	invitation_token?: string;
+	invitation_url?: string;
+	reset_token?: string;
+	reset_url?: string;
+}
+
+export interface CreateAdminUserResponse extends BackendAdminUser {
+	invitation_token: string;
+	invitation_url: string;
 }
 
 export interface AdminUsersListResponse {
@@ -82,7 +101,12 @@ class AdminAPI {
 			return { data };
 		} catch (err) {
 			return {
-				error: err instanceof Error ? err.message : 'Network error'
+				error:
+					err instanceof Error
+						? err.message
+						: locale.language === 'id'
+							? 'Kesalahan jaringan'
+							: 'Network error'
 			};
 		}
 	}
@@ -107,6 +131,19 @@ class AdminAPI {
 	async disableNode(nodeId: string): Promise<{ error?: string }> {
 		return this.request(`/admin/storage-nodes/${nodeId}/disable`, {
 			method: 'PUT'
+		});
+	}
+
+	async detachNode(
+		nodeId: string,
+		targetNodeId?: string
+	): Promise<{
+		data?: { message: string; job_id?: string; safe_to_disconnect: boolean };
+		error?: string;
+	}> {
+		return this.request(`/admin/storage-nodes/${nodeId}/detach`, {
+			method: 'POST',
+			body: JSON.stringify({ target_node_id: targetNodeId || undefined })
 		});
 	}
 
@@ -139,7 +176,12 @@ class AdminAPI {
 			return {};
 		} catch (err) {
 			return {
-				error: err instanceof Error ? err.message : 'Download failed'
+				error:
+					err instanceof Error
+						? err.message
+						: locale.language === 'id'
+							? 'Unduhan gagal'
+							: 'Download failed'
 			};
 		}
 	}
@@ -195,11 +237,10 @@ class AdminAPI {
 	async createUser(data: {
 		username: string;
 		email: string;
-		password: string;
 		quota_mode: string;
 		quota_gb?: number;
-	}): Promise<{ data?: BackendAdminUser; error?: string }> {
-		return this.request<BackendAdminUser>('/admin/users', {
+	}): Promise<{ data?: CreateAdminUserResponse; error?: string }> {
+		return this.request<CreateAdminUserResponse>('/admin/users', {
 			method: 'POST',
 			body: JSON.stringify(data)
 		});
@@ -226,6 +267,26 @@ class AdminAPI {
 			method: 'DELETE',
 			body: data ? JSON.stringify(data) : undefined
 		});
+	}
+
+	async resetUserPassword(userId: string): Promise<{ data?: OneTimeLinkResponse; error?: string }> {
+		return this.request<OneTimeLinkResponse>(
+			`/admin/users/${encodeURIComponent(userId)}/reset-password`,
+			{
+				method: 'POST'
+			}
+		);
+	}
+
+	async regenerateInvitation(
+		userId: string
+	): Promise<{ data?: OneTimeLinkResponse; error?: string }> {
+		return this.request<OneTimeLinkResponse>(
+			`/admin/users/${encodeURIComponent(userId)}/invitation`,
+			{
+				method: 'POST'
+			}
+		);
 	}
 
 	async getStorageStats(): Promise<{ data?: AdminStorageStats; error?: string }> {

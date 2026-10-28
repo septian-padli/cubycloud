@@ -1,0 +1,45 @@
+ErrorResponse:
+  type: object
+  required:
+    - error
+  properties:
+    error:
+      type: string
+      description: Error message describing why the request failed
+      example: "Invalid credentials or unauthorized access"
+
+StatusOkResponse:
+  type: object
+  required:
+    - status
+  properties:
+    status:
+      type: string
+      description: Status indicator
+      example: "ok"
+
+MessageResponse:
+  type: object
+  required:
+    - message
+  properties:
+    message:
+      type: string
+      description: Human-readable notification or confirmation message
+      example: "Operation completed successfully"
+
+Breadcrumb:
+  type: object
+  required:
+    - id
+    - name
+  properties:
+    id:
+      type: string
+      example: "01JQ2Z5X7K9M3N4P6R8T0V1W2Y"
+    name:
+      type: string
+      example: "Documents"
+    parent_id:
+      type: [string, "null"]
+      example: null

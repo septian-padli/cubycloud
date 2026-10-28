@@ -33,15 +33,16 @@ var (
 )
 
 type Item struct {
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	Kind       string    `json:"kind"`
-	SizeBytes  int64     `json:"size_bytes"`
-	ParentID   *string   `json:"parent_id"`
-	ModifiedAt time.Time `json:"modified_at"`
-	IsStarred  bool      `json:"is_starred"`
-	DiskKey    *string   `json:"-"`
-	CreatedBy  string    `json:"created_by,omitempty"`
+	ID               string    `json:"id"`
+	Name             string    `json:"name"`
+	Kind             string    `json:"kind"`
+	SizeBytes        int64     `json:"size_bytes"`
+	ParentID         *string   `json:"parent_id"`
+	ModifiedAt       time.Time `json:"modified_at"`
+	IsStarred        bool      `json:"is_starred"`
+	StorageAvailable bool      `json:"storage_available"`
+	DiskKey          *string   `json:"-"`
+	CreatedBy        string    `json:"created_by,omitempty"`
 }
 
 type Folder struct {
@@ -66,7 +67,7 @@ func (s *Service) List(ctx context.Context, userID string, parent *string) ([]It
 			WHEN u.id IS NULL OR u.deleted_at IS NOT NULL THEN 'deleted user'
 			ELSE u.username
 		END AS created_by,
-		CASE WHEN s.id IS NOT NULL THEN 1 ELSE 0 END AS is_starred
+		CASE WHEN s.id IS NOT NULL THEN 1 ELSE 0 END AS is_starred, COALESCE(i.storage_node_id,'')
 		FROM organization_items i
 		LEFT JOIN users u ON u.id = i.created_by
 		LEFT JOIN vfs_starred s ON s.node_id = i.id AND s.user_id = ?
@@ -91,15 +92,41 @@ func (s *Service) List(ctx context.Context, userID string, parent *string) ([]It
 		return nil, nil, err
 	}
 	defer rows.Close()
-	items := make([]Item, 0)
+	type listedItem struct {
+		item   Item
+		nodeID string
+	}
+	listed := make([]listedItem, 0)
 	for rows.Next() {
-		var i Item
-		if err = rows.Scan(&i.ID, &i.Name, &i.Kind, &i.SizeBytes, &i.ParentID, &i.ModifiedAt, &i.DiskKey, &i.CreatedBy, &i.IsStarred); err != nil {
+		var record listedItem
+		if err = rows.Scan(&record.item.ID, &record.item.Name, &record.item.Kind, &record.item.SizeBytes, &record.item.ParentID, &record.item.ModifiedAt, &record.item.DiskKey, &record.item.CreatedBy, &record.item.IsStarred, &record.nodeID); err != nil {
 			return nil, nil, err
 		}
-		items = append(items, i)
+		listed = append(listed, record)
 	}
-	return items, nil, rows.Err()
+	if err = rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	if err = rows.Close(); err != nil {
+		return nil, nil, err
+	}
+	items := make([]Item, 0, len(listed))
+	availability := make(map[string]bool)
+	for _, record := range listed {
+		item := record.item
+		if item.Kind != "folder" {
+			available, ok := availability[record.nodeID]
+			if !ok {
+				available = storage.NodeAvailable(ctx, s.storage, record.nodeID)
+				availability[record.nodeID] = available
+			}
+			item.StorageAvailable = available
+		} else {
+			item.StorageAvailable = true
+		}
+		items = append(items, item)
+	}
+	return items, nil, nil
 }
 
 func (s *Service) Folders(ctx context.Context) ([]Folder, error) {
@@ -286,9 +313,8 @@ func (s *Service) localPlacement(ctx context.Context) (string, string, int64, er
 			if physicalCapacity%20 != 0 {
 				physicalReserve++
 			}
-			physicalFree -= physicalReserve
-			if physicalFree < candidates[i].capacity {
-				candidates[i].capacity = physicalFree
+			if physicalFree <= physicalReserve {
+				candidates[i].capacity = 0
 			}
 		}
 	}
@@ -383,6 +409,15 @@ func (s *Service) Upload(ctx context.Context, userID, name string, parent *strin
 	if err != nil {
 		return Item{}, err
 	}
+	instanceID, err := storage.InstanceID(ctx, s.db)
+	if err != nil {
+		return Item{}, err
+	}
+	effectiveNodeID := placement.ID
+	if effectiveNodeID == "" {
+		_ = s.db.QueryRowContext(ctx, `SELECT id FROM storage_nodes WHERE type='LOCAL' ORDER BY CASE WHEN path LIKE '%/storage/default' THEN 0 ELSE 1 END, created_at ASC, id ASC LIMIT 1`).Scan(&effectiveNodeID)
+	}
+	blobKey := storage.BuildBlobKey(instanceID, effectiveNodeID, id)
 	var storedNodeID any
 	if placement.ID != "" {
 		storedNodeID = placement.ID
@@ -411,20 +446,20 @@ func (s *Service) Upload(ctx context.Context, userID, name string, parent *strin
 		if !ok {
 			return Item{}, errors.New("cloud driver unavailable")
 		}
-		if err = cloud.WriteObject(ctx, placement.ID, id, counter, -1); err != nil {
-			_ = cloud.DeleteObject(ctx, placement.ID, id)
+		if err = cloud.WriteObject(ctx, placement.ID, blobKey, counter, -1); err != nil {
+			_ = cloud.DeleteObject(ctx, placement.ID, blobKey)
 			return Item{}, err
 		}
 		cleanup = func() {
-			_ = cloud.DeleteObject(ctx, placement.ID, id)
+			_ = cloud.DeleteObject(ctx, placement.ID, blobKey)
 		}
 	} else {
-		if err = s.storage.WriteLocal(ctx, placement.Path, id, counter); err != nil {
-			_ = s.storage.DeleteLocal(ctx, placement.Path, id)
+		if err = s.storage.WriteLocal(ctx, placement.Path, blobKey, counter); err != nil {
+			_ = s.storage.DeleteLocal(ctx, placement.Path, blobKey)
 			return Item{}, err
 		}
 		cleanup = func() {
-			_ = s.storage.DeleteLocal(ctx, placement.Path, id)
+			_ = s.storage.DeleteLocal(ctx, placement.Path, blobKey)
 		}
 	}
 	size := counter.n
@@ -486,7 +521,7 @@ func (s *Service) Upload(ctx context.Context, userID, name string, parent *strin
 		candidate,
 		size,
 		parent,
-		id,
+		blobKey,
 		storedNodeID,
 		now,
 	)
@@ -517,6 +552,7 @@ func (s *Service) get(ctx context.Context, id string) (Item, error) {
 
 func (s *Service) Get(ctx context.Context, userID, id string) (Item, error) {
 	var i Item
+	var nodeID string
 	err := s.db.DB.QueryRowContext(
 		ctx,
 		`SELECT i.id, i.name, i.kind, i.size_bytes, i.parent_id, i.modified_at, i.disk_key,
@@ -524,18 +560,27 @@ func (s *Service) Get(ctx context.Context, userID, id string) (Item, error) {
 				WHEN u.id IS NULL OR u.deleted_at IS NOT NULL THEN 'deleted user'
 				ELSE u.username
 			END AS created_by,
-			CASE WHEN s.id IS NOT NULL THEN 1 ELSE 0 END AS is_starred
+			CASE WHEN s.id IS NOT NULL THEN 1 ELSE 0 END AS is_starred,
+			COALESCE(i.storage_node_id, '')
 		FROM organization_items i
 		LEFT JOIN users u ON u.id = i.created_by
 		LEFT JOIN vfs_starred s ON s.node_id = i.id AND s.user_id = ?
 		WHERE i.id=? AND i.deleted_at IS NULL`,
 		userID,
 		id,
-	).Scan(&i.ID, &i.Name, &i.Kind, &i.SizeBytes, &i.ParentID, &i.ModifiedAt, &i.DiskKey, &i.CreatedBy, &i.IsStarred)
+	).Scan(&i.ID, &i.Name, &i.Kind, &i.SizeBytes, &i.ParentID, &i.ModifiedAt, &i.DiskKey, &i.CreatedBy, &i.IsStarred, &nodeID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return i, errNotFound
 	}
-	return i, err
+	if err != nil {
+		return i, err
+	}
+	if i.Kind != "folder" {
+		i.StorageAvailable = storage.NodeAvailable(ctx, s.storage, nodeID)
+	} else {
+		i.StorageAvailable = true
+	}
+	return i, nil
 }
 
 type queryRunner interface {

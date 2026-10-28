@@ -21,9 +21,7 @@
 <span
 	class={cn(
 		'rounded-full px-2.5 py-1 text-xs font-medium',
-		cloud
-			? 'bg-secondary-accent text-white dark:text-app'
-			: 'bg-secondary text-main dark:text-app'
+		cloud ? 'bg-secondary-accent text-white dark:text-app' : 'bg-secondary text-main dark:text-app'
 	)}
 >
 	{labels[node]}

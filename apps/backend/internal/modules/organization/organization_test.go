@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -330,5 +331,164 @@ func TestOrganization_BatchDownloadZipForm(t *testing.T) {
 	}
 	if len(archive.File) != 1 || archive.File[0].Name != "first.txt" {
 		t.Fatalf("archive entries = %v, want first.txt", archive.File)
+	}
+}
+
+func TestOrganization_BatchCompressZip(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.db.Close()
+	user1ID := ulid.Make().String()
+	insertTestUser(t, env.db, user1ID, "user1", "REGULAR", 100*1024*1024)
+	token := generateToken(env.secret, user1ID, "REGULAR")
+
+	fileContent := []byte("first content")
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, _ := writer.CreateFormFile("file", "first.txt")
+	part.Write(fileContent)
+	writer.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/drive/organization/upload?filename=first.txt", body)
+	req.Header.Set(echo.HeaderContentType, writer.FormDataContentType())
+	req.Header.Set(echo.HeaderAuthorization, "Bearer "+token)
+	rec := httptest.NewRecorder()
+	env.echo.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("upload first: %d %s", rec.Code, rec.Body.String())
+	}
+	var first organization.Item
+	if err := json.Unmarshal(rec.Body.Bytes(), &first); err != nil {
+		t.Fatal(err)
+	}
+
+	compressBody := fmt.Sprintf(`{"ids":["%s"],"parent_id":null,"name":"OrgZip.zip"}`, first.ID)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/drive/organization/batch/compress-zip", strings.NewReader(compressBody))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	req.Header.Set(echo.HeaderAuthorization, "Bearer "+token)
+	rec = httptest.NewRecorder()
+	env.echo.ServeHTTP(rec, req)
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("batch compress status = %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "job_id") || !strings.Contains(rec.Body.String(), "PENDING") {
+		t.Fatalf("unexpected response body: %s", rec.Body.String())
+	}
+}
+
+func TestOrganizationMultipartSessionIsOwnerScoped(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.db.Close()
+
+	aliceID, bobID := ulid.Make().String(), ulid.Make().String()
+	insertTestUser(t, env.db, aliceID, "multipart-alice", "REGULAR", 1<<30)
+	insertTestUser(t, env.db, bobID, "multipart-bob", "REGULAR", 1<<30)
+	aliceToken := generateToken(env.secret, aliceID, "REGULAR")
+	bobToken := generateToken(env.secret, bobID, "REGULAR")
+
+	createFolder := httptest.NewRequest(http.MethodPost, "/api/v1/drive/organization/folders", strings.NewReader(`{"name":"Multipart owner folder"}`))
+	createFolder.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	createFolder.Header.Set(echo.HeaderAuthorization, "Bearer "+aliceToken)
+	folderResponse := httptest.NewRecorder()
+	env.echo.ServeHTTP(folderResponse, createFolder)
+	if folderResponse.Code != http.StatusCreated {
+		t.Fatalf("create folder: status %d: %s", folderResponse.Code, folderResponse.Body.String())
+	}
+	var folder struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(folderResponse.Body.Bytes(), &folder); err != nil || folder.ID == "" {
+		t.Fatalf("decode folder response: id=%q err=%v", folder.ID, err)
+	}
+
+	var nodeID string
+	if err := env.db.QueryRowContext(context.Background(), `SELECT id FROM storage_nodes LIMIT 1`).Scan(&nodeID); err != nil {
+		t.Fatal(err)
+	}
+	sessionID := ulid.Make().String()
+	_, err := env.db.ExecContext(context.Background(), `
+		INSERT INTO multipart_uploads (id, scope, owner_id, storage_node_id, s3_key, s3_upload_id, filename, size_bytes, part_size_bytes, part_count, status, final_item_id, expires_at)
+		VALUES (?, 'organization', ?, ?, 'multipart-owner-key', 'provider-upload', 'file.bin', 16, 16, 1, 'completed', ?, ?)
+	`, sessionID, aliceID, nodeID, folder.ID, time.Now().UTC().Add(24*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ownState := httptest.NewRequest(http.MethodGet, "/api/v1/drive/organization/multipart/"+sessionID, nil)
+	ownState.Header.Set(echo.HeaderAuthorization, "Bearer "+aliceToken)
+	ownResponse := httptest.NewRecorder()
+	env.echo.ServeHTTP(ownResponse, ownState)
+	if ownResponse.Code != http.StatusOK {
+		t.Fatalf("owner state: status %d: %s", ownResponse.Code, ownResponse.Body.String())
+	}
+
+	requests := []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{http.MethodGet, "/multipart/" + sessionID, ""},
+		{http.MethodPost, "/multipart/" + sessionID + "/parts/urls", `{"part_numbers":[1]}`},
+		{http.MethodPut, "/multipart/" + sessionID + "/parts", `{"parts":[]}`},
+		{http.MethodPost, "/multipart/" + sessionID + "/complete", ""},
+		{http.MethodDelete, "/multipart/" + sessionID, ""},
+	}
+	for _, request := range requests {
+		req := httptest.NewRequest(request.method, "/api/v1/drive/organization"+request.path, strings.NewReader(request.body))
+		req.Header.Set(echo.HeaderAuthorization, "Bearer "+bobToken)
+		if request.body != "" {
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		}
+		rec := httptest.NewRecorder()
+		env.echo.ServeHTTP(rec, req)
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("%s %s: status %d, want 404: %s", request.method, request.path, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestOrganizationCleanupExpiredCompletedMultipartMetadata(t *testing.T) {
+	env := setupTestEnv(t)
+	defer env.db.Close()
+
+	ctx := context.Background()
+	ownerID := ulid.Make().String()
+	insertTestUser(t, env.db, ownerID, "multipart-cleanup-owner", "REGULAR", 1<<20)
+	var nodeID string
+	if err := env.db.QueryRowContext(ctx, `SELECT id FROM storage_nodes LIMIT 1`).Scan(&nodeID); err != nil {
+		t.Fatal(err)
+	}
+	orgID, myStorageID := ulid.Make().String(), ulid.Make().String()
+	for _, session := range []struct{ id, scope, key string }{
+		{orgID, "organization", "org-completed-key"},
+		{myStorageID, "my-storage", "my-storage-completed-key"},
+	} {
+		_, err := env.db.ExecContext(ctx, `
+			INSERT INTO multipart_uploads (id, scope, owner_id, storage_node_id, s3_key, s3_upload_id, filename, size_bytes, part_size_bytes, part_count, status, expires_at)
+			VALUES (?, ?, ?, ?, ?, ?, 'file.bin', 16, 16, 1, 'completed', ?)
+		`, session.id, session.scope, ownerID, nodeID, session.key, "provider-upload-"+session.scope, time.Now().UTC().Add(-time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	service := organization.NewService(env.db, env.driver)
+	removed, err := service.CleanupExpiredMultipartSessions(ctx)
+	if err != nil || removed != 1 {
+		t.Fatalf("cleanup removed %d sessions, err=%v", removed, err)
+	}
+	for _, want := range []struct {
+		id    string
+		count int
+	}{
+		{orgID, 0},
+		{myStorageID, 1},
+	} {
+		var count int
+		if err := env.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM multipart_uploads WHERE id=?`, want.id).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		if count != want.count {
+			t.Errorf("session %s count = %d, want %d", want.id, count, want.count)
+		}
 	}
 }

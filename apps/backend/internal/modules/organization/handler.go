@@ -1,6 +1,7 @@
 package organization
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -9,29 +10,49 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/cubycloud/backend/internal/database"
+	"github.com/cubycloud/backend/internal/modules/jobs"
 	"github.com/cubycloud/backend/internal/modules/mystorage"
 	"github.com/cubycloud/backend/internal/storage"
 	"github.com/labstack/echo/v4"
 	"github.com/uptrace/bun"
 )
 
+type jobEnqueuer interface {
+	Enqueue(ctx context.Context, jobType, userID string, payload any) (*database.Job, error)
+}
+
 type Handler struct {
 	service *Service
+	queue   jobEnqueuer
 }
 
 func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
-func RegisterRoutes(e *echo.Echo, db *bun.DB, driver storage.StorageDriver, jwtAuth echo.MiddlewareFunc) *Handler {
+func (h *Handler) SetQueue(q jobEnqueuer) {
+	h.queue = q
+}
+
+func RegisterRoutes(e *echo.Echo, db *bun.DB, driver storage.StorageDriver, jwtAuth echo.MiddlewareFunc, queue ...jobEnqueuer) *Handler {
 	h := &Handler{service: NewService(db, driver)}
+	if len(queue) > 0 {
+		h.queue = queue[0]
+	} else {
+		h.queue = jobs.NewQueue(db)
+	}
 	g := e.Group("/api/v1/drive/organization", jwtAuth)
 	g.GET("", h.list)
 	g.GET("/folders", h.folders)
 	g.POST("/folders", h.createFolder)
 	g.POST("/upload", h.upload)
+	h.RegisterTusRoutes(g)
+	h.RegisterMultipartRoutes(g)
 	g.GET("/:id/download", h.download)
+	g.HEAD("/:id/download", h.download)
 	g.POST("/batch/download-zip", h.batchDownloadZip)
+	g.POST("/batch/compress-zip", h.batchCompressZip)
 	g.PATCH("/:id", h.update)
 	g.POST("/:id/duplicate", h.duplicate)
 	g.DELETE("/:id", h.delete)
@@ -169,10 +190,15 @@ func (h *Handler) download(c echo.Context) error {
 	if err != nil {
 		return respond(c, err)
 	}
-	_ = h.service.RecordAccess(c.Request().Context(), currentUserID(c), item.ID)
+	if c.Request().Method != http.MethodHead {
+		_ = h.service.RecordAccess(c.Request().Context(), currentUserID(c), item.ID)
+	}
 	defer r.Close()
 	if item.Kind == "file" {
 		if served, err := mystorage.ServePreview(c, item.Name, r); served {
+			return err
+		}
+		if served, err := mystorage.ServeFileDownload(c, item.ID, item.Name, item.SizeBytes, item.ModifiedAt, r); served {
 			return err
 		}
 	}
@@ -213,6 +239,38 @@ func (h *Handler) batchDownloadZip(c echo.Context) error {
 	c.Response().Header().Set(echo.HeaderContentType, "application/zip")
 	c.Response().Header().Set(echo.HeaderContentDisposition, `attachment; filename="cubycloud-archive.zip"`)
 	return c.Stream(http.StatusOK, "application/zip", r)
+}
+
+func (h *Handler) batchCompressZip(c echo.Context) error {
+	var req struct {
+		IDs      []string `json:"ids"`
+		ParentID *string  `json:"parent_id"`
+		Name     string   `json:"name"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request"})
+	}
+	if len(req.IDs) == 0 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "ids is required"})
+	}
+	if h.queue == nil {
+		h.queue = jobs.NewQueue(h.service.db)
+	}
+	userID := currentUserID(c)
+	job, err := h.queue.Enqueue(c.Request().Context(), jobs.TypeCompressZip, userID, jobs.CompressZipPayload{
+		Scope:          "organization",
+		UserID:         userID,
+		ItemIDs:        req.IDs,
+		TargetParentID: req.ParentID,
+		TargetName:     req.Name,
+	})
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusAccepted, map[string]any{
+		"job_id": job.ID,
+		"status": job.Status,
+	})
 }
 
 func (h *Handler) update(c echo.Context) error {
@@ -323,6 +381,8 @@ func respond(c echo.Context, err error) error {
 		return echo.NewHTTPError(http.StatusNotFound, map[string]string{"error": "not_found"})
 	case errors.Is(err, errStorageFull):
 		return echo.NewHTTPError(http.StatusRequestEntityTooLarge, map[string]string{"error": "STORAGE_POOL_FULL"})
+	case errors.Is(err, storage.ErrUnavailable):
+		return echo.NewHTTPError(http.StatusServiceUnavailable, map[string]string{"error": "storage_unavailable"})
 	case errors.Is(err, errConflict):
 		return echo.NewHTTPError(http.StatusConflict, map[string]string{"error": "name_conflict"})
 	case errors.Is(err, errInvalidName), errors.Is(err, errBadParent), errors.Is(err, errMoveCycle):

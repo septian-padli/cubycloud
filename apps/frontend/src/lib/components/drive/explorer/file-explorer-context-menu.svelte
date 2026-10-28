@@ -3,6 +3,7 @@
 	import type { Snippet } from 'svelte';
 	import * as ContextMenu from '$lib/components/ui/context-menu/index.js';
 	import {
+		Archive,
 		Copy,
 		Download,
 		Eye,
@@ -13,6 +14,7 @@
 		Trash2
 	} from '@lucide/svelte';
 	import { cn } from '$lib/utils.js';
+	import { locale } from '$lib/locale.svelte.js';
 
 	let {
 		entry,
@@ -26,6 +28,7 @@
 		onStar,
 		onShare,
 		onDelete,
+		onCompress,
 		children
 	}: {
 		entry: FileEntry;
@@ -39,6 +42,7 @@
 		onStar: (entry: FileEntry) => void;
 		onShare: (entry: FileEntry) => void;
 		onDelete: (entry: FileEntry) => void;
+		onCompress?: (entry: FileEntry) => void;
 		children: Snippet;
 	} = $props();
 </script>
@@ -49,50 +53,103 @@
 	</ContextMenu.Trigger>
 	<ContextMenu.Content class="min-w-48">
 		{#if entry.kind !== 'folder'}
-			<ContextMenu.Item class="gap-2" onclick={() => onOpen(entry)}>
+			<ContextMenu.Item
+				disabled={entry.storageAvailable === false}
+				class="gap-2"
+				onclick={() => onOpen(entry)}
+			>
 				<Eye class="size-4 stroke-2" />
-				Pratinjau
+				{locale.language === 'id' ? 'Pratinjau' : 'Preview'}
 			</ContextMenu.Item>
-			<ContextMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
+			<ContextMenu.Item
+				disabled={entry.storageAvailable === false}
+				class="gap-2"
+				onclick={() => onDownload(entry)}
+			>
 				<Download class="size-4 stroke-2" />
-				Unduh
+				{locale.t('action.download')}
 			</ContextMenu.Item>
 		{:else}
 			<ContextMenu.Item class="gap-2" onclick={() => onOpen(entry)}>
 				<Eye class="size-4 stroke-2" />
-				Buka
+				{locale.t('action.open')}
 			</ContextMenu.Item>
 			<ContextMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 				<Download class="size-4 stroke-2" />
-				Unduh
+				{locale.t('action.download')}
 			</ContextMenu.Item>
 		{/if}
-		<ContextMenu.Item class="gap-2" onclick={() => onRename(entry)}>
+		{#if onCompress}
+			<ContextMenu.Item
+				disabled={entry.kind !== 'folder' && entry.storageAvailable === false}
+				class="gap-2"
+				onclick={() => onCompress?.(entry)}
+				data-testid="context-action-compress"
+			>
+				<Archive class="size-4 stroke-2" />
+				{locale.t('action.compress')}
+			</ContextMenu.Item>
+		{/if}
+		<ContextMenu.Item
+			disabled={entry.kind !== 'folder' && entry.storageAvailable === false}
+			class="gap-2"
+			onclick={() => onRename(entry)}
+		>
 			<Pencil class="size-4 stroke-2" />
-			Ganti nama
+			{locale.t('action.rename')}
 		</ContextMenu.Item>
-		<ContextMenu.Item class="gap-2" onclick={() => onMove(entry)}>
+		<ContextMenu.Item
+			disabled={entry.kind !== 'folder' && entry.storageAvailable === false}
+			class="gap-2"
+			onclick={() => onMove(entry)}
+		>
 			<FolderInput class="size-4 stroke-2" />
-			Pindahkan ke
+			{locale.t('action.move')}
 		</ContextMenu.Item>
-		<ContextMenu.Item class="gap-2" onclick={() => onCopy(entry)}>
+		<ContextMenu.Item
+			disabled={entry.kind !== 'folder' && entry.storageAvailable === false}
+			class="gap-2"
+			onclick={() => onCopy(entry)}
+		>
 			<Copy class="size-4 stroke-2" />
-			Duplikat
+			{locale.t('action.copy')}
 		</ContextMenu.Item>
-		<ContextMenu.Item class="gap-2" onclick={() => onStar(entry)}>
-			<Star class={cn("size-4 stroke-2", entry.starred ? "fill-amber-400 stroke-amber-500 text-amber-500" : "")} />
-			{entry.starred ? 'Hapus Bintang' : 'Bintang'}
+		<ContextMenu.Item
+			disabled={entry.kind !== 'folder' && entry.storageAvailable === false}
+			class="gap-2"
+			onclick={() => onStar(entry)}
+		>
+			<Star
+				class={cn(
+					'size-4 stroke-2',
+					entry.starred ? 'fill-amber-400 stroke-amber-500 text-amber-500' : ''
+				)}
+			/>
+			{entry.starred
+				? locale.language === 'id'
+					? 'Hapus Bintang'
+					: 'Unstar'
+				: locale.t('action.star')}
 		</ContextMenu.Item>
 		{#if allowShare}
-			<ContextMenu.Item class="gap-2" onclick={() => onShare(entry)}>
+			<ContextMenu.Item
+				disabled={entry.kind !== 'folder' && entry.storageAvailable === false}
+				class="gap-2"
+				onclick={() => onShare(entry)}
+			>
 				<Share2 class="size-4 stroke-2" />
-				Bagikan
+				{locale.t('action.share')}
 			</ContextMenu.Item>
 		{/if}
 		<ContextMenu.Separator />
-		<ContextMenu.Item variant="destructive" class="gap-2" onclick={() => onDelete(entry)}>
+		<ContextMenu.Item
+			disabled={entry.kind !== 'folder' && entry.storageAvailable === false}
+			variant="destructive"
+			class="gap-2"
+			onclick={() => onDelete(entry)}
+		>
 			<Trash2 class="size-4 stroke-2" />
-			Hapus ke Trash
+			{locale.language === 'id' ? 'Hapus ke Trash' : 'Move to Trash'}
 		</ContextMenu.Item>
 	</ContextMenu.Content>
 </ContextMenu.Root>

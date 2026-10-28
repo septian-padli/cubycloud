@@ -4,16 +4,13 @@ export type { PlacementStrategy };
 export type AdminRole = 'super_admin' | 'user' | 'SUPER_ADMIN' | 'REGULAR';
 
 export type AdminQuotaMode =
-	| 'default'
-	| 'override_gb'
-	| 'unlimited'
-	| 'DEFAULT'
-	| 'CUSTOM'
-	| 'UNLIMITED';
+	'default' | 'override_gb' | 'unlimited' | 'DEFAULT' | 'CUSTOM' | 'UNLIMITED';
 
 export type DefaultQuotaMode = 'limited' | 'unlimited';
 
 export type AuditRetentionDays = 7 | 14 | 30 | 60 | 90;
+
+export type AdminUserStatus = 'ACTIVE' | 'PENDING_ACTIVATION';
 
 export interface AdminUser {
 	id: string;
@@ -28,6 +25,7 @@ export interface AdminUser {
 	quotaBytes?: number;
 	usedBytes?: number;
 	createdAt?: string;
+	status?: AdminUserStatus;
 }
 
 export interface DefaultQuotaPolicy {

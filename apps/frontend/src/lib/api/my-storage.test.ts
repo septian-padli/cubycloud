@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from 'bun:test';
 import { myStorageAPI } from './my-storage.js';
+import { organizationAPI } from './organization.js';
 
 const originalFetch = globalThis.fetch;
 const originalXHR = globalThis.XMLHttpRequest;
@@ -8,6 +9,33 @@ const chunkSize = 2 * 1024 * 1024;
 afterEach(() => {
 	globalThis.fetch = originalFetch;
 	globalThis.XMLHttpRequest = originalXHR;
+});
+
+test('storage-backed file availability is mapped without hiding entries; folders remain available', () => {
+	for (const adapter of [myStorageAPI, organizationAPI]) {
+		expect(
+			adapter.toEntry({
+				id: 'offline',
+				name: 'offline.txt',
+				kind: 'file',
+				size_bytes: 12,
+				parent_id: null,
+				modified_at: '2026-10-21T00:00:00Z',
+				storage_available: false
+			}).storageAvailable
+		).toBe(false);
+		expect(
+			adapter.toEntry({
+				id: 'folder',
+				name: 'folder',
+				kind: 'folder',
+				size_bytes: 0,
+				parent_id: null,
+				modified_at: '2026-10-21T00:00:00Z',
+				storage_available: false
+			}).storageAvailable
+		).toBe(true);
+	}
 });
 
 function json(body: unknown, status = 200, headers?: HeadersInit): Response {
@@ -20,7 +48,11 @@ test('S3 PUT succeeds but metadata sync fails: retain the upload intent for retr
 		const url = String(input);
 		methods.push(`${init?.method ?? 'GET'} ${url}`);
 		if (url.endsWith('/upload-intent') && init?.method === 'POST') {
-			return json({ placement: 's3', upload_id: 'intent-1', url: 'https://s3.example.test/object' });
+			return json({
+				placement: 's3',
+				upload_id: 'intent-1',
+				url: 'https://s3.example.test/object'
+			});
 		}
 		if (url.endsWith('/sync-cloud')) return json({ error: 'temporary failure' }, 503);
 		return json({}, 204);
@@ -32,18 +64,25 @@ test('S3 PUT succeeds but metadata sync fails: retain the upload intent for retr
 		onerror = () => {};
 		open() {}
 		setRequestHeader() {}
-		send() { queueMicrotask(() => this.onload()); }
+		send() {
+			queueMicrotask(() => this.onload());
+		}
 	}
 	globalThis.XMLHttpRequest = SuccessfulPut as unknown as typeof XMLHttpRequest;
 
-	await expect(myStorageAPI.upload(new File(['cloud'], 'cloud.txt'), null, () => {})).rejects.toMatchObject({ status: 503 });
+	await expect(
+		myStorageAPI.upload(new File(['cloud'], 'cloud.txt'), null, () => {})
+	).rejects.toMatchObject({ status: 503 });
 	expect(methods).toEqual([
 		'POST /api/v1/drive/my-storage/upload-intent',
 		'POST /api/v1/drive/sync-cloud'
 	]);
 });
 
-for (const [label, remoteOffset] of [['remaining chunk', chunkSize], ['terminal offset', chunkSize + 3]] as const) {
+for (const [label, remoteOffset] of [
+	['remaining chunk', chunkSize],
+	['terminal offset', chunkSize + 3]
+] as const) {
 	test(`TUS HEAD recovery continues at ${label} and returns finalized item`, async () => {
 		const patches: { offset: number; size: number }[] = [];
 		let headCount = 0;
@@ -51,11 +90,17 @@ for (const [label, remoteOffset] of [['remaining chunk', chunkSize], ['terminal 
 			const url = String(input);
 			if (url.includes('/upload-intent')) return json({ placement: 'local' });
 			if (url.includes('/upload-tus') && init?.method === 'POST') {
-				return new Response(null, { status: 201, headers: { Location: '/api/v1/drive/my-storage/upload-tus/tus-1' } });
+				return new Response(null, {
+					status: 201,
+					headers: { Location: '/api/v1/drive/my-storage/upload-tus/tus-1' }
+				});
 			}
 			if (init?.method === 'HEAD') {
 				headCount++;
-				return new Response(null, { status: 200, headers: { 'Upload-Offset': String(remoteOffset) } });
+				return new Response(null, {
+					status: 200,
+					headers: { 'Upload-Offset': String(remoteOffset) }
+				});
 			}
 			throw new Error(`Unexpected request: ${init?.method} ${url}`);
 		}) as typeof fetch;
@@ -68,21 +113,31 @@ for (const [label, remoteOffset] of [['remaining chunk', chunkSize], ['terminal 
 			private requestHeaders: Record<string, string> = {};
 			private responseHeaders: Record<string, string> = {};
 			open() {}
-			setRequestHeader(name: string, value: string) { this.requestHeaders[name] = value; }
-			getResponseHeader(name: string) { return this.responseHeaders[name] ?? null; }
+			setRequestHeader(name: string, value: string) {
+				this.requestHeaders[name] = value;
+			}
+			getResponseHeader(name: string) {
+				return this.responseHeaders[name] ?? null;
+			}
 			send(chunk: Blob) {
 				patches.push({ offset: Number(this.requestHeaders['Upload-Offset']), size: chunk.size });
 				this.status = patches.length === 1 ? 409 : 204;
 				if (this.status === 204) {
 					this.responseHeaders['Upload-Offset'] = String(chunkSize + 3);
-					this.responseHeaders['Upload-Item'] = btoa(JSON.stringify({ id: 'completed', name: 'big.bin' }));
+					this.responseHeaders['Upload-Item'] = btoa(
+						JSON.stringify({ id: 'completed', name: 'big.bin' })
+					);
 				}
 				queueMicrotask(() => this.onload());
 			}
 		}
 		globalThis.XMLHttpRequest = Patch as unknown as typeof XMLHttpRequest;
 
-		const item = await myStorageAPI.upload(new File([new Uint8Array(chunkSize + 3)], 'big.bin'), null, () => {});
+		const item = await myStorageAPI.upload(
+			new File([new Uint8Array(chunkSize + 3)], 'big.bin'),
+			null,
+			() => {}
+		);
 		expect(item.id).toBe('completed');
 		expect(headCount).toBe(1);
 		expect(patches).toEqual([
@@ -99,7 +154,10 @@ test('TUS recovery when remoteOffset equals client offset retries chunk and succ
 		const url = String(input);
 		if (url.includes('/upload-intent')) return json({ placement: 'local' });
 		if (url.includes('/upload-tus') && init?.method === 'POST') {
-			return new Response(null, { status: 201, headers: { Location: '/api/v1/drive/my-storage/upload-tus/tus-retry' } });
+			return new Response(null, {
+				status: 201,
+				headers: { Location: '/api/v1/drive/my-storage/upload-tus/tus-retry' }
+			});
 		}
 		if (init?.method === 'HEAD') {
 			headCount++;
@@ -117,21 +175,31 @@ test('TUS recovery when remoteOffset equals client offset retries chunk and succ
 		private requestHeaders: Record<string, string> = {};
 		private responseHeaders: Record<string, string> = {};
 		open() {}
-		setRequestHeader(name: string, value: string) { this.requestHeaders[name] = value; }
-		getResponseHeader(name: string) { return this.responseHeaders[name] ?? null; }
+		setRequestHeader(name: string, value: string) {
+			this.requestHeaders[name] = value;
+		}
+		getResponseHeader(name: string) {
+			return this.responseHeaders[name] ?? null;
+		}
 		send(chunk: Blob) {
 			patches.push({ offset: Number(this.requestHeaders['Upload-Offset']), size: chunk.size });
 			this.status = patches.length === 1 ? 500 : 204;
 			if (this.status === 204) {
 				this.responseHeaders['Upload-Offset'] = String(chunkSize);
-				this.responseHeaders['Upload-Item'] = btoa(JSON.stringify({ id: 'recovered', name: 'chunk.bin' }));
+				this.responseHeaders['Upload-Item'] = btoa(
+					JSON.stringify({ id: 'recovered', name: 'chunk.bin' })
+				);
 			}
 			queueMicrotask(() => this.onload());
 		}
 	}
 	globalThis.XMLHttpRequest = RetryPatch as unknown as typeof XMLHttpRequest;
 
-	const item = await myStorageAPI.upload(new File([new Uint8Array(chunkSize)], 'chunk.bin'), null, () => {});
+	const item = await myStorageAPI.upload(
+		new File([new Uint8Array(chunkSize)], 'chunk.bin'),
+		null,
+		() => {}
+	);
 	expect(item.id).toBe('recovered');
 	expect(headCount).toBe(1);
 	expect(patches).toEqual([
@@ -147,12 +215,18 @@ test('TUS recovery on final retry: network error on last PATCH response still ch
 		const url = String(input);
 		if (url.includes('/upload-intent')) return json({ placement: 'local' });
 		if (url.includes('/upload-tus') && init?.method === 'POST') {
-			return new Response(null, { status: 201, headers: { Location: '/api/v1/drive/my-storage/upload-tus/tus-last-retry' } });
+			return new Response(null, {
+				status: 201,
+				headers: { Location: '/api/v1/drive/my-storage/upload-tus/tus-last-retry' }
+			});
 		}
 		if (init?.method === 'HEAD') {
 			headCount++;
 			// HEAD returns terminal offset proving server received bytes despite network drop
-			return new Response(null, { status: 200, headers: { 'Upload-Offset': String(chunkSize + 3) } });
+			return new Response(null, {
+				status: 200,
+				headers: { 'Upload-Offset': String(chunkSize + 3) }
+			});
 		}
 		throw new Error(`Unexpected request: ${init?.method} ${url}`);
 	}) as typeof fetch;
@@ -166,8 +240,12 @@ test('TUS recovery on final retry: network error on last PATCH response still ch
 		private requestHeaders: Record<string, string> = {};
 		private responseHeaders: Record<string, string> = {};
 		open() {}
-		setRequestHeader(name: string, value: string) { this.requestHeaders[name] = value; }
-		getResponseHeader(name: string) { return this.responseHeaders[name] ?? null; }
+		setRequestHeader(name: string, value: string) {
+			this.requestHeaders[name] = value;
+		}
+		getResponseHeader(name: string) {
+			return this.responseHeaders[name] ?? null;
+		}
 		send(chunk: Blob) {
 			patches.push({ offset: Number(this.requestHeaders['Upload-Offset']), size: chunk.size });
 			if (patches.length < 3) {
@@ -180,14 +258,20 @@ test('TUS recovery on final retry: network error on last PATCH response still ch
 				// Finalizer PATCH with 0 bytes after HEAD recovered terminal offset
 				this.status = 204;
 				this.responseHeaders['Upload-Offset'] = String(chunkSize + 3);
-				this.responseHeaders['Upload-Item'] = btoa(JSON.stringify({ id: 'finalized-after-head', name: 'last.bin' }));
+				this.responseHeaders['Upload-Item'] = btoa(
+					JSON.stringify({ id: 'finalized-after-head', name: 'last.bin' })
+				);
 				queueMicrotask(() => this.onload());
 			}
 		}
 	}
 	globalThis.XMLHttpRequest = LastAttemptPatch as unknown as typeof XMLHttpRequest;
 
-	const item = await myStorageAPI.upload(new File([new Uint8Array(chunkSize + 3)], 'last.bin'), null, () => {});
+	const item = await myStorageAPI.upload(
+		new File([new Uint8Array(chunkSize + 3)], 'last.bin'),
+		null,
+		() => {}
+	);
 	expect(item.id).toBe('finalized-after-head');
 	expect(headCount).toBeGreaterThanOrEqual(1);
 	expect(patches[patches.length - 1]).toEqual({ offset: chunkSize + 3, size: 0 });

@@ -4,11 +4,16 @@
 	import favicon from '$lib/assets/favicon.svg';
 	import { theme } from '$lib/theme.svelte.js';
 	import { Toaster } from '$lib/components/ui/sonner/index.js';
+	import { locale } from '$lib/locale.svelte.js';
 
 	let { children } = $props();
 
 	onMount(() => {
 		theme.init();
+		void locale.init();
+	});
+	$effect(() => {
+		if (typeof document !== 'undefined') document.documentElement.lang = locale.language;
 	});
 </script>
 

@@ -23,11 +23,20 @@ function pdfFixture(): Buffer {
 	const xref = Buffer.byteLength(body);
 	body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
 	for (const offset of offsets.slice(1)) body += `${String(offset).padStart(10, '0')} 00000 n \n`;
-	return Buffer.from(`${body}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+	return Buffer.from(
+		`${body}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
+	);
 }
 
 const testFiles = [
-	{ name: 'thumb-image.png', mime: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR42mNk+M9QzwAEjDAGACUcA/5bH8t7AAAAAElFTkSuQmCC', 'base64') },
+	{
+		name: 'thumb-image.png',
+		mime: 'image/png',
+		buffer: Buffer.from(
+			'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR42mNk+M9QzwAEjDAGACUcA/5bH8t7AAAAAElFTkSuQmCC',
+			'base64'
+		)
+	},
 	{ name: 'thumb-video.webm', mime: 'video/webm', buffer: video },
 	{ name: 'thumb-doc.pdf', mime: 'application/pdf', buffer: pdfFixture() },
 	{ name: 'thumb-data.json', mime: 'application/json', buffer: Buffer.from('{"key":"value"}') }
@@ -36,12 +45,16 @@ const testFiles = [
 async function setup(page: Page) {
 	const status = await page.request.get('/api/v1/setup/status');
 	expect(status.ok()).toBeTruthy();
-	if (!(await status.json() as { is_setup_completed: boolean }).is_setup_completed) {
+	if (!((await status.json()) as { is_setup_completed: boolean }).is_setup_completed) {
 		const scan = await page.request.get('/api/v1/setup/scan-nodes');
-		const { nodes } = await scan.json() as { nodes: { path: string; capacity_bytes: number }[] };
+		const { nodes } = (await scan.json()) as { nodes: { path: string; capacity_bytes: number }[] };
 		const response = await page.request.post('/api/v1/setup/complete', {
 			data: {
-				admin: { ...admin, email: 'grid-thumb@example.test', recovery_key: 'ABCDE-FGHKL-MNPQR-STUVW-XYZ23-45678' },
+				admin: {
+					...admin,
+					email: 'grid-thumb@example.test',
+					recovery_key: 'ABCDE-FGHKL-MNPQR-STUVW-XYZ23-45678'
+				},
 				storage_nodes: nodes.map((node) => ({ ...node, enabled: true })),
 				placement_strategy: 'FILL_FIRST',
 				cloud: { enabled: false }
@@ -52,13 +65,15 @@ async function setup(page: Page) {
 
 	await page.context().clearCookies();
 	await page.goto('/login');
-	await page.getByLabel('Username atau Email').fill(admin.username);
-	await page.getByRole('textbox', { name: 'Password' }).fill(admin.password);
-	await page.getByRole('button', { name: 'Masuk' }).click();
+	await page.locator('#login-identifier').fill(admin.username);
+	await page.locator('#login-password').fill(admin.password);
+	await page.getByRole('button', { name: /Masuk|Sign in/i }).click();
 	await page.waitForURL('**/drive/home');
 }
 
-test('Grid mode renders client-side thumbnail preview for image, video, and PDF, with double-click opening preview modal', async ({ page }) => {
+test('Grid mode renders client-side thumbnail preview for image, video, and PDF, with double-click opening preview modal', async ({
+	page
+}) => {
 	test.setTimeout(120_000);
 	await setup(page);
 
@@ -82,9 +97,9 @@ test('Grid mode renders client-side thumbnail preview for image, video, and PDF,
 	await page.goto(`/drive/my-storage?folder=${folder.id}`);
 	await expect(page.getByText('Thumbnails Test')).toBeVisible();
 	await expect(page.getByText('thumb-image.png', { exact: true })).toBeVisible();
-	// Switch to Grid View if not already in grid view
-	const gridToggleBtn = page.getByRole('button', { name: 'Tampilan Grid' });
-	if (await gridToggleBtn.isVisible()) {
+	// Ensure grid mode; clicking an already-active toggle would switch back to list view.
+	const gridToggleBtn = page.getByRole('button', { name: 'Tampilan Kisi' });
+	if ((await gridToggleBtn.getAttribute('aria-pressed')) !== 'true') {
 		await gridToggleBtn.click();
 	}
 
@@ -93,7 +108,9 @@ test('Grid mode renders client-side thumbnail preview for image, video, and PDF,
 	await expect(imageCard).toBeVisible();
 	const imageThumb = imageCard.getByTestId('grid-image-thumbnail');
 	await expect(imageThumb).toBeVisible();
-	await expect.poll(() => imageThumb.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+	await expect
+		.poll(() => imageThumb.evaluate((img: HTMLImageElement) => img.naturalWidth))
+		.toBeGreaterThan(0);
 
 	// 2. Verify video thumbnail (static frame, paused, no inline playback)
 	const videoCard = page.locator('div[role="option"]').filter({ hasText: 'thumb-video.webm' });
@@ -121,7 +138,7 @@ test('Grid mode renders client-side thumbnail preview for image, video, and PDF,
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByText('thumb-video.webm')).toBeVisible();
 	await expect(dialog.getByTestId('video-preview')).toBeVisible();
-	await dialog.getByRole('button', { name: 'Tutup' }).click();
+	await dialog.getByRole('button', { name: 'Tutup' }).first().click();
 	await expect(dialog).not.toBeVisible();
 
 	// 6. Test double click image card opens preview modal
@@ -129,7 +146,7 @@ test('Grid mode renders client-side thumbnail preview for image, video, and PDF,
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByText('thumb-image.png')).toBeVisible();
 	await expect(dialog.getByTestId('image-preview')).toBeVisible();
-	await dialog.getByRole('button', { name: 'Tutup' }).click();
+	await dialog.getByRole('button', { name: 'Tutup' }).first().click();
 	await expect(dialog).not.toBeVisible();
 
 	// 7. Test double click PDF card opens preview modal
@@ -137,6 +154,6 @@ test('Grid mode renders client-side thumbnail preview for image, video, and PDF,
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByText('thumb-doc.pdf')).toBeVisible();
 	await expect(dialog.locator('canvas')).toBeVisible();
-	await dialog.getByRole('button', { name: 'Tutup' }).click();
+	await dialog.getByRole('button', { name: 'Tutup' }).first().click();
 	await expect(dialog).not.toBeVisible();
 });

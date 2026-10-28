@@ -1,25 +1,44 @@
 package mystorage
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
-	"github.com/cubycloud/backend/internal/storage"
-	"github.com/labstack/echo/v4"
-	"github.com/uptrace/bun"
 	"io"
 	"mime"
 	"net/http"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/cubycloud/backend/internal/database"
+	"github.com/cubycloud/backend/internal/modules/jobs"
+	"github.com/cubycloud/backend/internal/storage"
+	"github.com/labstack/echo/v4"
+	"github.com/uptrace/bun"
 )
+
+type jobEnqueuer interface {
+	Enqueue(ctx context.Context, jobType, userID string, payload any) (*database.Job, error)
+}
 
 type Handler struct {
 	service *Service
+	queue   jobEnqueuer
 }
 
-func RegisterRoutes(e *echo.Echo, db *bun.DB, driver storage.StorageDriver, jwtAuth echo.MiddlewareFunc) *Handler {
+func (h *Handler) SetQueue(q jobEnqueuer) {
+	h.queue = q
+}
+
+func RegisterRoutes(e *echo.Echo, db *bun.DB, driver storage.StorageDriver, jwtAuth echo.MiddlewareFunc, queue ...jobEnqueuer) *Handler {
 	h := &Handler{service: NewService(db, driver)}
+	if len(queue) > 0 {
+		h.queue = queue[0]
+	} else {
+		h.queue = jobs.NewQueue(db)
+	}
 	g := e.Group("/api/v1/drive/my-storage", jwtAuth)
 	g.GET("", h.list)
 	g.GET("/folders", h.folders)
@@ -30,11 +49,15 @@ func RegisterRoutes(e *echo.Echo, db *bun.DB, driver storage.StorageDriver, jwtA
 	g.POST("/upload", h.upload)
 	g.POST("/upload-intent", h.uploadIntent)
 	h.registerTusRoutes(g)
+	h.RegisterMultipartRoutes(g)
 	g.POST("/sync-cloud", h.syncCloud)
 	g.DELETE("/upload-intent/:id", h.cancelUploadIntent)
+	g.POST("/upload-intent/:id/renew-url", h.renewUploadIntentURL)
 	g.GET("/:id/download", h.download)
+	g.HEAD("/:id/download", h.download)
 	g.GET("/:id/download-url", h.downloadURL)
 	g.POST("/batch/download-zip", h.batchDownloadZip)
+	g.POST("/batch/compress-zip", h.batchCompressZip)
 	g.PATCH("/:id", h.update)
 	g.POST("/:id/duplicate", h.duplicate)
 	g.DELETE("/:id", h.delete)
@@ -117,10 +140,15 @@ func (h *Handler) download(c echo.Context) error {
 	if err != nil {
 		return respond(c, err)
 	}
-	_ = h.service.RecordAccess(c.Request().Context(), owner(c), item.ID, "my-storage")
+	if c.Request().Method != http.MethodHead {
+		_ = h.service.RecordAccess(c.Request().Context(), owner(c), item.ID, "my-storage")
+	}
 	defer r.Close()
 	if item.Kind == "file" {
 		if served, err := ServePreview(c, item.Name, r); served {
+			return err
+		}
+		if served, err := ServeFileDownload(c, item.ID, item.Name, item.SizeBytes, item.ModifiedAt, r); served {
 			return err
 		}
 	}
@@ -136,6 +164,25 @@ func (h *Handler) download(c echo.Context) error {
 		mime.FormatMediaType("attachment", map[string]string{"filename": name}),
 	)
 	return c.Stream(http.StatusOK, c.Response().Header().Get(echo.HeaderContentType), r)
+}
+
+// ServeFileDownload adds byte ranges to seekable file downloads without
+// buffering; non-seekable storage readers keep the existing streaming fallback.
+func ServeFileDownload(c echo.Context, id, name string, size int64, modified time.Time, reader io.Reader) (bool, error) {
+	seeker, ok := reader.(io.ReadSeeker)
+	if !ok {
+		return false, nil
+	}
+	etag := `"` + id + "-" + strconv.FormatInt(size, 10) + "-" + strconv.FormatInt(modified.UnixNano(), 10) + `"`
+	header := c.Response().Header()
+	header.Set(echo.HeaderContentType, echo.MIMEOctetStream)
+	header.Set(
+		echo.HeaderContentDisposition,
+		mime.FormatMediaType("attachment", map[string]string{"filename": name}),
+	)
+	header.Set("ETag", etag)
+	http.ServeContent(c.Response(), c.Request(), "", modified, seeker)
+	return true, nil
 }
 
 func (h *Handler) folders(c echo.Context) error {
@@ -340,6 +387,8 @@ func respond(c echo.Context, err error) error {
 		return echo.NewHTTPError(413, map[string]string{"error": "USER_QUOTA_EXCEEDED"})
 	case errors.Is(err, errStorageFull):
 		return echo.NewHTTPError(413, map[string]string{"error": "STORAGE_POOL_FULL"})
+	case errors.Is(err, storage.ErrUnavailable):
+		return echo.NewHTTPError(http.StatusServiceUnavailable, map[string]string{"error": "storage_unavailable"})
 	case errors.Is(err, errConflict):
 		return echo.NewHTTPError(409, map[string]string{"error": "name_conflict"})
 	case errors.Is(err, errInvalidName), errors.Is(err, errInvalidSize), errors.Is(err, errBadParent), errors.Is(err, errMoveCycle):
@@ -430,6 +479,38 @@ func (h *Handler) batchDownloadZip(c echo.Context) error {
 	return c.Stream(http.StatusOK, "application/zip", r)
 }
 
+func (h *Handler) batchCompressZip(c echo.Context) error {
+	var req struct {
+		IDs      []string `json:"ids"`
+		ParentID *string  `json:"parent_id"`
+		Name     string   `json:"name"`
+	}
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request"})
+	}
+	if len(req.IDs) == 0 {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "ids is required"})
+	}
+	if h.queue == nil {
+		h.queue = jobs.NewQueue(h.service.db)
+	}
+	userID := owner(c)
+	job, err := h.queue.Enqueue(c.Request().Context(), jobs.TypeCompressZip, userID, jobs.CompressZipPayload{
+		Scope:          "my_storage",
+		UserID:         userID,
+		ItemIDs:        req.IDs,
+		TargetParentID: req.ParentID,
+		TargetName:     req.Name,
+	})
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+	return c.JSON(http.StatusAccepted, map[string]any{
+		"job_id": job.ID,
+		"status": job.Status,
+	})
+}
+
 func (h *Handler) SyncCloud(c echo.Context) error {
 	return h.syncCloud(c)
 }
@@ -450,6 +531,14 @@ func (h *Handler) uploadIntent(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, res)
 }
+func (h *Handler) renewUploadIntentURL(c echo.Context) error {
+	res, err := h.service.RenewUploadIntentURL(c.Request().Context(), owner(c), c.Param("id"))
+	if err != nil {
+		return respond(c, err)
+	}
+	return c.JSON(http.StatusOK, res)
+}
+
 
 func (h *Handler) cancelUploadIntent(c echo.Context) error {
 	deleted, err := h.service.CancelUploadIntent(c.Request().Context(), owner(c), c.Param("id"))

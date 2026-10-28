@@ -2,6 +2,7 @@ package admin
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -182,7 +183,28 @@ func TestDownloadBackupHandler(t *testing.T) {
 		t.Errorf("expected application/octet-stream, got %s", contentType)
 	}
 	if rec.Body.Len() == 0 {
-		t.Errorf("expected non-empty database backup stream")
+		t.Fatal("expected non-empty database backup stream")
+	}
+
+	backupPath := filepath.Join(t.TempDir(), "backup.db")
+	if err := os.WriteFile(backupPath, rec.Body.Bytes(), 0o600); err != nil {
+		t.Fatalf("failed to write backup stream: %v", err)
+	}
+	backupDB, err := sql.Open("sqlite", backupPath)
+	if err != nil {
+		t.Fatalf("failed to open backup database: %v", err)
+	}
+	defer backupDB.Close()
+	var integrity string
+	if err := backupDB.QueryRow("PRAGMA integrity_check").Scan(&integrity); err != nil {
+		t.Fatalf("failed to check backup integrity: %v", err)
+	}
+	if integrity != "ok" {
+		t.Errorf("expected valid SQLite backup, integrity_check returned %q", integrity)
+	}
+	var users int
+	if err := backupDB.QueryRow("SELECT count(*) FROM users").Scan(&users); err != nil {
+		t.Fatalf("failed to query users from backup: %v", err)
 	}
 }
 
@@ -213,9 +235,42 @@ func TestUpdateSettingsHandler(t *testing.T) {
 		t.Errorf("unexpected settings response: %+v", resp)
 	}
 }
+
+type mockConcurrencyController struct {
+	concurrency int
+}
+
+func (m *mockConcurrencyController) SetConcurrency(limit int) {
+	m.concurrency = limit
+}
+
+func TestUpdateSettingsHandler_DynamicConcurrencyController(t *testing.T) {
+	db, handler, _ := setupTestAdmin(t)
+	defer db.Close()
+
+	mockCtl := &mockConcurrencyController{concurrency: 2}
+	handler.SetConcurrencyController(mockCtl)
+
+	e := echo.New()
+	body := `{"worker_concurrency":4}`
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/admin/settings", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	if err := handler.UpdateSettings(c); err != nil {
+		t.Fatalf("UpdateSettings failed: %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+	if mockCtl.concurrency != 4 {
+		t.Errorf("expected mock controller concurrency 4, got %d", mockCtl.concurrency)
+	}
+}
+
 func TestStorageNodeNamesAndUsage(t *testing.T) {
 	db, handler, dbPath := setupTestAdmin(t)
-	defer db.Close()
 	ctx := context.Background()
 
 	localPath := t.TempDir()

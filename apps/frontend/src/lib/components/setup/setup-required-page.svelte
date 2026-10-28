@@ -1,13 +1,15 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button/index.js';
 	import ThemeToggle from '$lib/components/theme-toggle.svelte';
+	import LanguagePicker from '$lib/components/language-picker.svelte';
 	import { Settings } from '@lucide/svelte';
-
+	import { locale } from '$lib/locale.svelte.js';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 	let { showHeader = true }: { showHeader?: boolean } = $props();
 </script>
 
 <svelte:head>
-	<title>Setup Diperlukan | CubyCloud</title>
+	<title>{tx('Setup Diperlukan', 'Setup Required')} | CubyCloud</title>
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
@@ -17,7 +19,10 @@
 			class="flex w-full items-center justify-between border-b border-subtle px-6 py-4 md:px-10"
 		>
 			<a href="/" class="text-sm font-semibold text-main">CubyCloud</a>
-			<ThemeToggle />
+			<div class="flex items-center gap-3">
+				<ThemeToggle />
+				<LanguagePicker />
+			</div>
 		</header>
 
 		<main
@@ -30,18 +35,20 @@
 			</div>
 
 			<div class="flex max-w-lg flex-col items-center gap-3 px-2">
-				<h1 class="text-3xl font-bold leading-tight text-main md:text-4xl">
-					Setup Belum Selesai
+				<h1 class="text-3xl leading-tight font-bold text-main md:text-4xl">
+					{tx('Setup Belum Selesai', 'Setup Not Complete')}
 				</h1>
 				<p class="text-base leading-relaxed text-muted md:text-lg">
-					CubyCloud belum dikonfigurasi. Silakan selesaikan setup awal untuk mulai menggunakan
-					sistem penyimpanan cloud Anda.
+					{tx(
+						'CubyCloud belum dikonfigurasi. Silakan selesaikan setup awal untuk mulai menggunakan sistem penyimpanan cloud Anda.',
+						'CubyCloud is not configured yet. Complete the initial setup to start using your cloud storage system.'
+					)}
 				</p>
 			</div>
 
 			<Button href="/setup" size="lg" class="gap-2">
 				<Settings class="size-4 stroke-2" aria-hidden="true" />
-				Mulai Setup
+				{tx('Mulai Setup', 'Start Setup')}
 			</Button>
 		</main>
 	</div>
@@ -56,16 +63,20 @@
 		</div>
 
 		<div class="flex max-w-lg flex-col items-center gap-3 px-2">
-			<h1 class="text-3xl font-bold leading-tight text-main md:text-4xl">Setup Belum Selesai</h1>
+			<h1 class="text-3xl leading-tight font-bold text-main md:text-4xl">
+				{tx('Setup Belum Selesai', 'Setup Not Complete')}
+			</h1>
 			<p class="text-base leading-relaxed text-muted md:text-lg">
-				CubyCloud belum dikonfigurasi. Silakan selesaikan setup awal untuk mulai menggunakan sistem
-				penyimpanan cloud Anda.
+				{tx(
+					'CubyCloud belum dikonfigurasi. Silakan selesaikan setup awal untuk mulai menggunakan sistem penyimpanan cloud Anda.',
+					'CubyCloud is not configured yet. Complete the initial setup to start using your cloud storage system.'
+				)}
 			</p>
 		</div>
 
 		<Button href="/setup" size="lg" class="gap-2">
 			<Settings class="size-4 stroke-2" aria-hidden="true" />
-			Mulai Setup
+			{tx('Mulai Setup', 'Start Setup')}
 		</Button>
 	</div>
 {/if}

@@ -1,359 +1,182 @@
-# SITEMAP.md — CubyCloud Frontend Route Tree & Navigation Guide
+# SITEMAP.md — CubyCloud Frontend Routes & Page Contracts
 
-## Document Control
+> **Project:** CubyCloud v1.0.0 · **Audience:** Frontend, UI/UX, QA  
+> Product rules: [`docs/prd.md`](../../docs/prd.md) · Visuals: [`DESIGN.md`](./DESIGN.md) · Frontend conventions: [`AGENTS.md`](./AGENTS.md)
 
-| Parameter | Detail |
-| --------- | ------ |
-| **Project** | CubyCloud v1.0.0 |
-| **Audience** | Frontend Developers (SvelteKit), UI/UX Designers, QA Engineers |
-| **Design System** | [`DESIGN.md`](./DESIGN.md) — Flat Earthy, Montserrat, Zero Arbitrary Values |
-| **Product Spec** | [`docs/prd.md`](../../docs/prd.md) |
+## How agents should use this document
 
----
+Locate the relevant route below and read its contract plus any applicable **Global contracts**. Do not reread unrelated routes for each task. Changes to route, access, URL state, or page behavior must update the appropriate section. API implementation/security rules remain owned by the backend and PRD.
 
-## 1. Route Tree Overview (`src/routes/`)
+## 1. Global contracts
 
-CubyCloud memakai **SvelteKit Route Groups** (folder dalam tanda kurung) untuk mengisolasi layout dan route guard tanpa mengubah URL di browser.
+- **Routing:** SvelteKit route groups `(onboarding)`, `(auth)`, `(drive)`, `(public)` isolate layouts/guards without changing visible URLs. `(drive)` uses the authenticated shell (sidebar, search, header upload).
+- **Health:** `GET /health` is a **public backend endpoint**, not a page. HTTP `200` only if all configured storage nodes are reachable, otherwise `503`; probe every registered node. Public response must not reveal physical node identifiers, names, paths, or credentials.
+- **Storage offline:** My Storage/Organization file records expose `storage_available` for files. Keep unavailable files and metadata listed; disable operations needing the offline node and explain using localized hover/click shadcn Popover. Folders remain navigable. Regular users must not see physical storage identifiers; badges/names are Super Admin only.
+- **Languages:** English/Indonesian. Browser locale starting `id` defaults to Indonesian, other locales default to English. Explicit preference is **browser `localStorage` only**, keyed by authenticated user ID, never persisted in backend. Translate user-facing labels, errors, toasts, dialogs, statuses, and accessible names; retain appropriate technical/product terms and user content. Global switch: Globe icon + shadcn-svelte Select showing `id` / `en`.
+- **Global search:** Header supports debounced filename/folder preview and opens `/drive/search?q=...&page=...`. Search accessible My Storage, Organization, and Shared With Me; no Trash or full-content search.
+- **Global header Upload:** Normally uploads to **My Storage root**, even when browsing a My Storage/Organization subfolder. Exception: inside an active Shared With Me **folder** with effective `Editor` rights, upload to that shared folder. Shared root/list or insufficient access (e.g., Viewer): show a denial dialog **without fallback** to My Storage. Use established upload/transfer behavior and backend authorization.
+- **Permissions:** UI visibility is not authorization. Backend validates ownership, roles, effective shared permissions, and direct URL access.
+
+## 2. Route map and navigation
 
 ```text
 src/routes/
-├── +layout.svelte                   # Global provider (theme, toast, auth store)
-├── +page.svelte                     # / (pre-launch coming soon; post-launch redirect)
-│
-├── (onboarding)/                    # First-boot guard
-│   └── setup/
-│       └── +page.svelte             # /setup
-│
-├── (auth)/                          # Auth surface (PRD: /login + /recovery)
-│   ├── login/
-│   │   └── +page.svelte             # /login
-│   └── recovery/
-│       └── +page.svelte             # /recovery
-│
-├── (drive)/                         # Authenticated + main app chrome (sidebar, header, search)
-│   ├── drive/
-│   │   ├── home/
-│   │   │   └── +page.svelte         # /drive/home (default landing)
-│   │   ├── my-storage/
-│   │   │   └── +page.svelte         # /drive/my-storage
-│   │   ├── organization/
-│   │   │   └── +page.svelte         # /drive/organization
-│   │   ├── shared/
-│   │   │   └── +page.svelte         # /drive/shared
-│   │   ├── starred/
-│   │   │   └── +page.svelte         # /drive/starred
-│   │   ├── trash/
-│   │   │   └── +page.svelte         # /drive/trash
-│   │   ├── storage-stats/
-│   │   │   └── +page.svelte         # /drive/storage-stats
-│   │   └── profile/
-│   │       └── [userId]/
-│   │           └── +page.svelte     # /drive/profile/:userId
-│   │
-│   └── admin/                       # Super Admin only (sidebar bottom)
-│       ├── storage/
-│       │   └── +page.svelte         # /admin/storage
-│       ├── settings/
-│       │   └── +page.svelte         # /admin/settings
-│       ├── users/
-│       │   └── +page.svelte         # /admin/users
-│
-└── (public)/                        # Share link viewer
-    └── s/
-        └── [token]/
-            └── +page.svelte         # /s/:token
+├── +layout.svelte, +page.svelte                   # global providers; / landing
+├── (onboarding)/setup/+page.svelte                 # /setup
+├── (auth)/login/+page.svelte                       # /login
+├── (auth)/recovery/+page.svelte                    # /recovery
+├── (drive)/drive/
+│   ├── home/+page.svelte                           # /drive/home
+│   ├── search/+page.svelte                         # /drive/search
+│   ├── my-storage/+page.svelte                     # /drive/my-storage
+│   ├── organization/+page.svelte                   # /drive/organization
+│   ├── shared/+page.svelte                         # /drive/shared
+│   ├── starred/+page.svelte                        # /drive/starred
+│   ├── trash/+page.svelte                          # /drive/trash
+│   ├── storage-stats/+page.svelte                  # /drive/storage-stats
+│   └── profile/[userId]/(+page.svelte, +page.ts)  # /drive/profile/:userId
+├── (drive)/admin/
+│   ├── storage/+page.svelte                        # /admin/storage
+│   ├── settings/+page.svelte                       # /admin/settings
+│   └── users/+page.svelte                          # /admin/users
+└── (public)/s/[token]/+page.svelte                 # /s/:token
 ```
 
----
+- `/` is prelaunch coming-soon; after launch, redirect per app configuration.
+- `(drive)` sidebar (all authenticated): **Beranda** `Home` → `/drive/home`; **My Storage** `HardDrive`; **Organization** `Building2`; **Dibagikan pada saya** `Users`; **Berbintang** `Star`; **Trash** `Trash2`; **Penyimpanan** `PieChart`. All navigate to corresponding `/drive/...` routes.
+- Quota Widget sits below drive navigation and above the Super Admin divider. Super Admin-only menu: **Penyimpanan** `HardDrive` → `/admin/storage`; **Admin Settings** `Settings` → `/admin/settings`; **Users & Quotas** `UserCog` → `/admin/users`.
 
-## 2. Sidebar Navigation Structure
+## 3. Onboarding and authentication
 
-Sidebar di layout `(drive)`. Blok Super Admin di bagian bawah, di-_render_ hanya untuk Super Admin.
+### `/setup` — first boot
 
-Di **bawah daftar menu drive** (di atas divider admin), tampilkan **Quota Widget** ringkas untuk semua authenticated user (lihat §5).
+- **Access:** unauthenticated only while `is_setup_completed === false`; after successful setup continue to `/drive/home`.
+- **Flow:** (1) Super Admin username/email/password (minimum 8 characters); (2) local disk scanner for `/app/data/storage/*`, optional Linux device, node capacity cap; (3) strategy `FILL_FIRST` / `ROUND_ROBIN` / `MOST_FREE_SPACE`; (4) optional Cloudflare R2, AWS S3, or S3-compatible endpoint/credentials; (5) generate/export Emergency Recovery Key.
+- **Modal:** Recovery Key displayed as **30 uppercase alphanumeric characters in six groups of five** (`XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`), Copy/Download and mandatory acknowledgment. Show Device Scan Error Modal on scan/mount failure.
+- **CTA:** `Selesaikan Setup & Masuk ke CubyCloud`.
 
-| Label Menu | Ikon (Lucide) | Route Target | Visibility |
-| ---------- | ------------- | ------------ | ---------- |
-| **Beranda** | `Home` | `/drive/home` | All authenticated |
-| **My Storage** | `HardDrive` | `/drive/my-storage` | All authenticated |
-| **Organization** | `Building2` | `/drive/organization` | All authenticated (badge 🏢) |
-| **Dibagikan pada saya** | `Users` | `/drive/shared` | All authenticated |
-| **Berbintang** | `Star` | `/drive/starred` | All authenticated |
-| **Trash** | `Trash2` | `/drive/trash` | All authenticated |
-| **Penyimpanan** | `PieChart` | `/drive/storage-stats` | All authenticated |
-| _(Quota Widget)_ | — | — | All authenticated |
-| _(divider)_ | — | — | Super Admin only |
-| **Penyimpanan** | `HardDrive` | `/admin/storage` | Super Admin only |
-| **Admin Settings** | `Settings` | `/admin/settings` | Super Admin only |
-| **Users & Quotas** | `UserCog` | `/admin/users` | Super Admin only |
+### `/login` — sign in
 
----
+- **Access:** unauthenticated; valid JWT session redirects to `/drive/home`.
+- **UI:** username/email and password; `Masuk`; JWT is set via HTTP-only cookie. Recovery link `Pulihkan Akses Admin` → `/recovery`; forgot-password feedback explains that v1.0 uses an Emergency Recovery Key, not SMTP.
 
-## 3. Detailed Route & Page Specification
+### `/recovery` — Super Admin password reset
 
-### A. Onboarding Module
+- **Access:** unauthenticated; accepts current 6×5 recovery key and new password; **does not support legacy 64-character hexadecimal keys** in the UI.
+- **Success:** show replacement `new_recovery_key`, require user to save it, then require login again; prior key is single-use. CTA `Reset Password Super Admin`.
 
-#### `/setup`
+## 4. Authenticated drive pages
 
-- **Path:** `/setup`
-- **Access:** Unauthenticated, first-boot only (`is_setup_completed === false`)
-- **Post-complete redirect:** `/drive/home`
-- **Embedded modals:**
-  - _Recovery Key Backup Modal_ — show the current key in six groups of five uppercase alphanumeric characters (`XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`); offer Copy/Download and require acknowledgement before continuing
-  - _Device Scan Error Modal_ — jika mount volume/device gagal dipindai
-- **Key components & actions:**
-  - **Step 1:** Super Admin form (username, email, password; validasi **minimal 8 karakter**)
-  - **Step 2:** Scanner disk lokal (`/app/data/storage/*`) + **node capacity cap**; opsional device Linux
-  - **Step 3:** Placement strategy (`FILL_FIRST` / `ROUND_ROBIN` / `MOST_FREE_SPACE`)
-  - **Step 4 (optional):** Kredensial Cloudflare R2 / AWS S3 / S3 Compatible (endpoint custom)
-  - **Step 5:** Generate and export the Recovery Key (30 characters, six groups of five)
-  - **CTA:** `Selesaikan Setup & Masuk ke CubyCloud`
+### `/drive/home` — default landing
 
----
+- **Access:** authenticated.
+- **Components:** Quick Upload Drawer to My Storage (quota applies), URL-driven File Preview Lightbox, storage summary matching sidebar quota.
+- **Quick Access:** last **five** opened files/folders for current account, newest first, persisted per account.
+- **Recent activity:** last **five distinct** files/folders with upload/change events for current account, including rename/move in My Storage and Organization; deduplicate per item.
 
-### B. Authentication Module
+### `/drive/search` — global results
 
-> PRD menyebut permukaan auth. Frontend memecahnya menjadi `/login` dan `/recovery` (bukan satu path `/auth`).
+- **URL:** `?q=query&page=number`; authenticated.
+- **Hybrid UX:** header preview + link to full paginated results here.
+- **Scope:** accessible filenames/folder names in own My Storage, Organization, and granted Shared subtrees. Exclude Trash and file-content searching.
+- **Results:** source, location, type, size, modified time. Shared paths must not expose private ancestors above the shared root.
+- **Navigation:** folder → accessible source folder; file → preview in its parent folder. Access must be revalidated on navigation.
 
-#### `/login`
+### `/drive/my-storage` — personal file manager
 
-- **Path:** `/login`
-- **Access:** Unauthenticated (redirect ke `/drive/home` jika sesi JWT aktif)
-- **Embedded modals / feedback:**
-  - _Forgot Password Info Toast_ — pemulihan sandi memakai Emergency Recovery Key (tanpa SMTP di v1.0)
-- **Key components & actions:**
-  - Form username/email + password
-  - CTA `Masuk` — JWT ke HTTP-Only Cookie
-  - Link `Pulihkan Akses Admin` → `/recovery`
+- **URL:** `?folder=folder_id&preview=file_id`; authenticated.
+- **Explorer:** category filters; list/grid according to existing view toggle; filename, size, date, actions; physical node badge **Super Admin only**.
+- **Actions:** file/folder upload via picker or drag/drop (including hierarchy and per-file errors); download; streaming ZIP download; Compress to ZIP (asynchronous persistent archive created in the folder where action was triggered, with conflict resolution and background queue progress); rename; move; recursive zero-byte-reference duplicate; delete recursively to Trash; share; star; preview image/video/text/code/PDF/audio.
+- **Conflicts:** upload/duplicate automatically get next available numeric suffix; rename/move offer suggested available name or cancel. No overwrite/merge folders.
+- **UI:** New Folder, Folder Delete Confirmation (all contents to Trash), Share Sheet, File Preview Lightbox, quota warnings/errors.
+- **Upload queue:** floating top-right below nav; progress weighted by file size and 100% only after server confirmation; expandable queued/uploading entries until dismissed or swiped right; completion toast bottom-right.
+- **Offline storage:** preserve listed metadata and folders; disable only file operations that require unavailable physical storage; show localized Popover without exposing node identity (see Global contracts).
 
-#### `/recovery`
+### `/drive/organization` — shared organization drive
 
-- **Path:** `/recovery`
-- **Access:** Unauthenticated (pemulihan sandi darurat Super Admin)
-- **Embedded modals:**
-  - _Recovery Success Modal_ — sukses lalu minta login ulang
-- **Key components & actions:**
-  - Input current 6×5 Recovery Key + new password
-  - UI accepts the current key format only; legacy 64-character hexadecimal keys are not supported by the UI
-  - On successful reset, show and require saving the replacement key returned as `new_recovery_key`; the supplied key is single-use
-  - CTA `Reset Password Super Admin`
+- **URL:** `?folder=folder_id&preview=file_id`; accessible to **all registered users** with full read/write/download/delete rights.
+- **Model:** fixed Organization tree, **not** personal folders marked by an admin. Uses shared file explorer and corresponding previews/conflict modal.
+- **Quota:** Organization items **do not count toward per-user quota**; enforce physical-node capacity.
+- **Actions & UI:** supports same upload, streaming ZIP, Compress to ZIP (archive stored in current folder), rename, move, duplicate, and delete-to-trash actions as My Storage. Hide `Bagikan` action because internal access is already shared.
 
----
+### `/drive/shared` — Shared With Me
 
-### C. Drive & Workspace Module (`(drive)` layout)
+- **URL:** `?folder=folder_id&preview=file_id`; authenticated.
+- **UI:** shared items table, owner, `Viewer`/`Editor` permission badge, Share Details Modal, previews including Viewer access.
+- **Actions:** Viewer can download/preview; Editor additionally can edit, delete, and share; actual rights enforced by backend.
+- **Header upload:** only when inside a shared folder with effective **Editor** permission; upload into that folder. Viewer or Shared list/root → **denial dialog**, no fallback (see Global contracts).
+- **Quota:** upload is charged to the **share owner**, not the recipient.
 
-#### `/drive/home` (Beranda — default landing)
+### `/drive/starred` — starred items
 
-- **Path:** `/drive/home`
-- **Access:** Authenticated
-- **Embedded modals / drawers:**
-  - _Quick Upload Drawer_ — unggah ke My Storage (enforce user quota)
-  - _File Preview Lightbox_ (`?preview=file_id`)
-- **Key components & actions:**
-  - Quick Access cards (5 berkas/folder terakhir dibuka oleh akun aktif, urut terbaru ke terlama, tersimpan per akun)
-  - Recent activities list (5 berkas/folder berbeda dengan aksi upload atau ubah terbaru oleh akun aktif, termasuk rename dan pindah folder di My Storage dan Organization; deduplikasi per berkas/folder)
-  - Storage summary widget (same data as sidebar quota)
+- **URL:** `?preview=file_id`; authenticated. Includes starred items from My Storage, Organization, and Shared; actions include unstar and Share Sheet. Double-click or `Lihat Pratinjau` opens File Preview Lightbox.
 
-#### `/drive/my-storage` (My Storage)
+### `/drive/trash` — lifecycle
 
-- **Path:** `/drive/my-storage`
-- **URL params:** `?folder=folder_id&preview=file_id`
-- **Access:** Authenticated
-- **Embedded modals / drawers:**
-  - _File Preview Lightbox_ (`?preview=file_id`) — gambar native, video Vidstack, teks/kode PrismJS, PDF.js, dan audio yang sudah ada
-  - _Name Conflict Dialog_ — upload/duplicate use the next available numeric suffix automatically; rename/move offer that name or cancel, without overwriting or merging folders
-  - _Folder Delete Confirmation_ — confirm that deleting a folder also sends all of its contents to Trash
-  - _Upload Queue Notification_ — floating top-right, below the top navigation; progress is weighted by file size and reaches 100% only after server success; expandable queued/uploading items remain until closed or swiped right, then a regular completion toast appears at bottom-right
-  - _Share Sheet_ — existing product behavior; unchanged by this file-management scope
-  - _New Folder Modal_
-  - _Quota Exceeded Toast / Modal_ — `USER_QUOTA_EXCEEDED`
-- **Key components & actions:**
-  - Category filter chips
-  - File explorer list view — Nama, ukuran, tanggal, aksi
-  - **Storage Node Badge:** tampil **hanya** jika role = Super Admin
-  - Upload file/folder via picker or drag-and-drop — process each file independently, preserve folder hierarchy, show failed items, and check user quota
-  - Download file/folder; Rename; Move; recursive Duplicate (zero-byte references); Delete to Trash recursively
-  - Preview gambar, video, teks/kode, PDF, dan audio menggunakan akses file sesuai izin; star dan share behavior tetap berlaku
+- **Access:** authenticated. Trashed files **still count toward user quota until purged**.
+- **UI:** trashed items and remaining time before **30-day auto-purge**; Restore and permanent deletion; missing parent on restore → Missing Parent Folder Modal and fallback to ROOT; permanent-delete confirmation in danger styling; `Kosongkan Sampah (Purge Trash)`.
 
-#### `/drive/organization` (Organization Drive)
+### `/drive/storage-stats` — usage
 
-- **Path:** `/drive/organization`
-- **URL params:** `?folder=folder_id&preview=file_id`
-- **Access:** All registered users — Full Access (Read, Write, Download, Delete)
-- **Model v1.0:** Pohon Organization **fixed** (bukan folder My Storage yang di-"mark" admin); semua user CRUD di route ini
-- **Quota:** **Tidak** dihitung ke user quota; tetap cek kapasitas node fisik
-- **Embedded modals / drawers:**
-  - _File Preview Lightbox_ — format dan perilaku sama dengan My Storage
-  - _Conflict Resolution Modal_
-- **Key components & actions:**
-  - Header banner + badge `[🏢 Organization]`
-  - File explorer list view (komponen sama; node badge admin-only; aksi Bagikan disembunyikan karena sudah dapat diakses bersama secara internal)
+- **Access:** authenticated. Show effective used/limit GB or `Used: X GB` for unlimited; category chart (Video, Gambar, Dokumen, Arsip, Trash); top **10 largest files**, excluding Organization; Cleanup Advisor Modal; shortcut to Trash.
 
-#### `/drive/shared` (Dibagikan pada saya)
+### `/drive/profile/:userId` — account profile
 
-- **Path:** `/drive/shared`
-- **URL params:** `?preview=file_id`
-- **Access:** Authenticated
-- **Embedded modals / drawers:**
-  - _File Preview Lightbox_ — format dan perilaku sama dengan My Storage, termasuk untuk penerima `Viewer`
-  - _Share Details Modal_ — pemilik + `Viewer` / `Editor`
-  - _Share Sheet_ — hanya jika izin `Editor`
-- **Key components & actions:**
-  - Shared files table
-  - Permission badge — `Viewer` (`secondary` / Ochre), `Editor` (`primary` / Moss)
-  - Actions: Download, Preview; Edit/Delete/**Bagikan** jika `Editor`
-  - Quota: owner pays (tidak menambah usage penerima share)
+- **Access:** authenticated. Own profile editable. **Only Super Admin** may open another user's profile, and it is **read-only**. Regular users cannot access other users' profiles.
+- **Read:** display name, email, username, role, effective quota, actual usage. Username, role, and quota are not editable here.
+- **Edit:** display name/email; changing email requires current password, valid format, and case-insensitive uniqueness.
+- **Password:** require current password, minimum-length validation, and confirmation. Success revokes **all sessions**, then login again.
 
-#### `/drive/starred` (Berbintang)
+## 5. Super Admin pages
 
-- **Path:** `/drive/starred`
-- **URL params:** `?preview=file_id`
-- **Access:** Authenticated
-- **Embedded modals / drawers:**
-  - _File Preview Lightbox_ (`?preview=file_id`)
-  - _Share Sheet_
-- **Key components & actions:**
-  - Starred files table (dari `my-storage`, `organization`, `shared`)
-  - Double-click berkas membuka _File Preview Lightbox_, menu aksi menyediakan "Lihat Pratinjau"
-  - CTA `Hapus Bintang` (Unstar)
-#### `/drive/trash` (Trash Bin)
+### `/admin/storage` — system usage
 
-- **Path:** `/drive/trash`
-- **Access:** Authenticated
-- **Quota note:** Item di Trash **tetap** dihitung ke user quota sampai purge
-- **Embedded modals:**
-  - _Missing Parent Folder Modal_ — restore ke `ROOT`
-  - _Purge Confirmation Modal_ — aksen `danger` (Rose 600)
-- **Key components & actions:**
-  - Trashed items + sisa hari sebelum auto-purge 30 hari
-  - Actions: `Restore`, `Hapus Permanen`
-  - Top CTA danger: `Kosongkan Sampah (Purge Trash)`
+- **Access:** Super Admin only.
+- **Summary:** sum registered nodes' `capacity_bytes`; physical/file usage computed from deduplicated `disk_key` `size_bytes`; show total capacity, used space, remaining capacity, node count, and usage ratio.
+- **Largest consumers:** descending user usage, avatar/username/email/role/quota, used GB and share of total; infinite pagination `limit=20`, `offset`, `has_more`, `next_offset` with Intersection Observer.
+- **UI:** loading skeleton, empty/error, refresh CTA, link to `/admin/users`.
 
-#### `/drive/storage-stats` (Penyimpanan / Stats)
+### `/admin/settings` — storage nodes and configuration
 
-- **Path:** `/drive/storage-stats`
-- **Access:** Authenticated
-- **Embedded modals:**
-  - _Cleanup Advisor Modal_
-- **Key components & actions:**
-  - **Quota detail panel** — `Used / Limit GB` atau `Used: X GB` (Unlimited)
-  - Usage chart per kategori (Video, Gambar, Dokumen, Arsip, Trash)
-  - Largest files list (top 10; exclude Organization)
-  - Shortcut `Kelola Sampah` → `/drive/trash`
+- **Access:** Super Admin only.
+- **Nodes:** capacity, physical usage, free space, critical **5%** badge; node names required and case-insensitively unique; Detach Node and Rescan Nodes modals.
+- **Settings:** default user quota in GB or Unlimited; audit log retention **7/14/30/60/90 days**, default **90**; worker concurrency default **2**.
+- **Backup CTA:** `Download DB Backup (.db)` (database backup, not necessarily complete file/content backup).
 
----
+### `/admin/users` — people and quotas
 
-### D. Super Admin Module
+- **Access:** Super Admin only. Users table: name, email, role, effective quota, used GB, actions.
+- **Actions:** Create Regular User (no password field, default password notice `12345678`, default quota inheritance); Edit Quota (GB, Unlimited, Reset to Default); Reset Password to default `12345678` with modal confirmation dialog (hidden for own account, rejected by API for self-reset); Delete User (confirmation dialog). Super Admin always Unlimited and cannot be limited.
+- **Note:** `/admin/addons` was removed. ZIP downloads and file archive functionality are core, permanently enabled.
 
-#### `/admin/storage` (Penyimpanan Sistem)
+## 6. Public sharing
 
-- **Path:** `/admin/storage`
-- **Access:** Super Admin only
-- **Key components & actions:**
-  - **Detail Kuota & Pemakaian Sistem:** Ringkasan kapasitas akumulasi seluruh storage node yang terdaftar (`SUM capacity_bytes`) dan total pemakaian berkas pengguna (`SUM size_bytes` dedup `disk_key`).
-    - Progress bar visual persentase pemakaian sistem (`(total_used / total_capacity) * 100%`).
-    - Ringkasan statistik: Total Kapasitas Node (jumlah node), Total Pemakaian Berkas, Sisa Kapasitas Bebas.
-  - **Pengguna dengan Konsumsi Terbesar:** Ranking pengguna dengan konsumsi penyimpanan terbesar ke terkecil:
-    - Informasi pengguna: avatar, username, email, role badge (`Super Admin` / `User`), badge kuota (`Unlimited` / `GB`).
-    - Ukuran pemakaian storage (formatted byte & GB) dan persentase terhadap total pemakaian berkas sistem.
-    - Infinite scroll / pagination (`limit=20`, `offset`, `has_more`, `next_offset`) menggunakan Intersection Observer.
-    - Shortcut CTA menuju `/admin/users` untuk mengelola kuota pengguna.
-    - State: loading skeleton, empty state ("Belum ada data pemakaian pengguna"), dan error toast.
-  - Action Segarkan: Memperbarui data statistik penyimpanan secara instan.
+### `/s/:token` — public/restricted shared link
 
-#### `/admin/settings` (Storage Nodes & System Settings)
+- **URL:** `?preview=file_id`; public or restricted guest access subject to link rules.
+- **UI:** password challenge, restricted-login prompt → `/login?redirect=/s/{token}`, different expired/not-found states; single-file card or folder explorer.
+- **Actions:** direct download, authorized stream preview, built-in ZIP download, File Preview Lightbox (including PDF).
+- **Existing UI demo tokens only:** `demo-public`, `demo-folder`, `demo-password` (`demo123`), `demo-restricted`, `demo-expired`; do not treat demo tokens as production access.
 
-- **Path:** `/admin/settings`
-- **Access:** Super Admin only
-- **Embedded modals:**
-  - _Detach Node Modal_
-  - _Rescan Nodes Modal_
-- **Key components & actions:**
-  - Storage nodes grid menampilkan kapasitas, pemakaian fisik per node, free space, dan badge 5% critical; pemakaian tidak berasal dari host filesystem.
-  - Nama node dapat diedit; nama harus terisi dan unik tanpa membedakan kapitalisasi.
-  - **Default User Quota Policy** — input GB atau toggle Unlimited for new users
-  - **Audit Log Retention** — dropdown 7 / 14 / 30 / 60 / 90 hari (default: **90**)
-  - Worker concurrency (default: **2**)
-  - Database backup CTA: `Download DB Backup (.db)`
+## 7. Shared UI interaction contracts
 
-#### `/admin/users` (Users & Quotas)
+### URL-driven preview
 
-- **Path:** `/admin/users`
-- **Access:** Super Admin only
-- **Embedded modals:**
-  - _Create User Modal_
-  - _Edit Quota Modal_ — set GB, Unlimited, atau Reset to Default
-- **Key components & actions:**
-  - User table: name, email, role, effective quota, used GB, actions
-  - Super Admin rows: always Unlimited (not editable as limited)
-  - Create Regular User (inherits default quota unless overridden)
+- Opening a file uses the page's `?preview=file_id` query parameter; SvelteKit may use `goto('?preview=file_id', { keepFocus: true, noScroll: true })`.
+- Applies to My Storage, Organization, Shared, and public `/s/:token` within access limits.
+- Formats: images PNG/JPEG/WebP/GIF/SVG; MP4/WebM video via Vidstack/native media; text/code/Markdown via plain text/PrismJS; MP3/WAV/OGG audio; PDF via PDF.js (`pdfjs-dist`), always built in.
+- Preview fetches existing download endpoint with **opt-in `?preview=1`** for inline allowed MIME responses; use HTTP Range where supported. Ordinary downloads remain attachments. Page `?preview=file_id` controls lightbox state, **not** backend access rights.
+- Visual overlay/container are specified in `DESIGN.md`.
 
-> Catatan: Modul Add-ons Manager (`/admin/addons`) telah ditiadakan sepenuhnya. Fitur **Download as ZIP** dan pengarsipan berkas kini menjadi fitur core file manager yang selalu aktif dan terpasang secara bawaan tanpa memerlukan modul add-on.
----
+### Quota widget and visibility
 
-### E. Public Module
+| State                           | Display / response                                      |
+| ------------------------------- | ------------------------------------------------------- |
+| Limited                         | `My Storage`, `8.2 / 15 GB`, flat progress bar          |
+| ≥80% used                       | Warning-colored bar; warn on My Storage write attempts  |
+| At 100% / `USER_QUOTA_EXCEEDED` | Block upload; `Kuota My Storage penuh. Hubungi admin.`  |
+| Physical pool full              | `Penyimpanan server penuh.` (different from user quota) |
+| Unlimited / Super Admin         | `Used: 8.2 GB`, **no cap or limit progress bar**        |
 
-#### `/s/[token]` (Share Link & Previewer)
-
-- **Path:** `/s/[token]`
-- **URL params:** `?preview=file_id`
-- **Access:** Public atau Restricted guest
-- **Embedded modals:**
-  - _Password Challenge_ (full-page card)
-  - _Restricted login prompt_ → `/login?redirect=/s/{token}`
-  - _File Preview Lightbox_ — format yang sama, termasuk PDF tanpa add-on; akses tetap tunduk pada password/restricted link
-- **Key components & actions:**
-  - Expired / Not Found view (copy berbeda)
-  - Guest file explorer (folder) / single-file card
-  - Actions: Direct Download, Stream Preview, Download as ZIP (fitur core terpasang)
-- **Demo tokens (UI mock):** `demo-public`, `demo-folder`, `demo-password` (sandi `demo123`), `demo-restricted`, `demo-expired`
-
----
-
-## 4. URL-Driven Preview Specification (`?preview=file_id`)
-
-Lightbox previewer bersifat **URL-driven** via query parameter agar tautan ke satu berkas bisa dibagikan.
-
-### Mekanisme SvelteKit
-
-1. **Trigger lightbox:** Double-click berkas memanggil  
-   `goto('?preview=file_id', { keepFocus: true, noScroll: true })`.
-2. **Direct shared file link:**  
-   - Internal: `https://domain.com/drive/my-storage?preview=abc-123`  
-   - Publik: `https://domain.com/s/token?preview=abc-123`
-3. **Formats:** Gambar native (PNG, JPEG, WebP, GIF, SVG), Video MP4/WebM (Vidstack dengan media native), Text/Code/Markdown (teks biasa, syntax highlighting PrismJS untuk kode), Audio MP3/WAV/OGG (perilaku yang sudah ada), dan PDF (PDF.js melalui `pdfjs-dist`, selalu tersedia tanpa add-on Admin). Berlaku pada My Storage, Organization, Shared, dan `/s/[token]` sesuai izin masing-masing.
-4. **Sumber berkas:** Gunakan endpoint unduh yang sudah ada dengan opt-in `?preview=1` untuk respons inline dan MIME preview yang diizinkan; gunakan HTTP Range bila endpoint/storage mendukung. Tanpa `preview=1`, unduhan tetap attachment. Parameter `?preview=file_id` pada URL halaman tetap hanya mengendalikan lightbox; akses file tetap mengikuti otorisasi route dan password share link.
-
-### Design notes (DESIGN.md)
-
-- Overlay: `bg-black/60 backdrop-blur-none`
-- Container: `rounded-xl bg-surface border border-subtle shadow-none`
-
----
-
-## 5. Quota Widget & Enforcement (UI Contract)
-
-### Sidebar widget (all authenticated users)
-
-| State | Display |
-| ----- | ------- |
-| Limited | Label `My Storage` + `8.2 / 15 GB` + flat progress bar |
-| ≥ 80% | Bar `bg-secondary` (Ochre) + toast warning on write attempts |
-| 100% | Block My Storage upload; toast `USER_QUOTA_EXCEEDED` |
-| Unlimited | `Used: 8.2 GB` only (no bar cap / no limit number) |
-| Super Admin | Always Unlimited display |
-
-### Error copy (must differ)
-
-| Code / case | User-facing message |
-| ----------- | ------------------- |
-| `USER_QUOTA_EXCEEDED` | Kuota My Storage penuh. Hubungi admin. |
-| Physical pool full | Penyimpanan server penuh. |
-
-### Visibility rules
-
-| UI element | Regular User | Super Admin |
-| ---------- | ------------ | ----------- |
-| Storage Node Badge in explorer | Hidden | Visible |
-| Node grid in `/admin/settings` | — | Visible |
-| Organization files in user quota | Never counted | Never counted |
+- Node badges/physical node identity in explorer: **Super Admin only**. `/admin/settings` storage-node UI is Super Admin only.
+- Organization files: **never** included in personal usage/quota.

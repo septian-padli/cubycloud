@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { BreadcrumbSegment } from '$lib/types/drive.js';
 	import { ChevronRight } from '@lucide/svelte';
+	import { locale } from '$lib/locale.svelte.js';
 
 	let {
 		segments,
@@ -11,7 +12,10 @@
 	} = $props();
 </script>
 
-<nav class="flex flex-wrap items-center gap-1 text-sm" aria-label="Breadcrumb">
+<nav
+	class="flex flex-wrap items-center gap-1 text-sm"
+	aria-label={locale.language === 'id' ? 'Jejak navigasi' : 'Breadcrumb'}
+>
 	<ol class="flex flex-wrap items-center gap-1">
 		{#each segments as segment, i (segment.id ?? 'root')}
 			{@const isLast = i === segments.length - 1}

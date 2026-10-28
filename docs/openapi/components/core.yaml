@@ -1,0 +1,59 @@
+SearchItem:
+  type: object
+  required: [id, name, type, source, size_bytes, mime_type, parent_id, location, updated_at]
+  properties:
+    id: { type: string, example: 01JGF7Y8M0D6RH4M2N8K3VQZ1A }
+    name: { type: string, example: Annual report.pdf }
+    type: { type: string, enum: [file, folder], example: file }
+    source: { type: string, enum: [my-storage, organization, shared], example: organization }
+    size_bytes: { type: integer, format: int64, example: 204800 }
+    mime_type: { type: string, example: application/pdf }
+    parent_id: { type: [string, 'null'], example: null }
+    location: { type: string, example: Organization / Finance }
+    updated_at: { type: string, format: date-time, example: '2026-10-25T14:30:00Z' }
+
+SearchResponse:
+  type: object
+  required: [items, total, limit, offset]
+  properties:
+    items:
+      type: array
+      items: { $ref: '#/components/schemas/SearchItem' }
+    total: { type: integer, format: int64, example: 42 }
+    limit: { type: integer, example: 25 }
+    offset: { type: integer, example: 0 }
+
+JobResponse:
+  type: object
+  required: [id, type, status, user_id, progress, created_at]
+  properties:
+    id: { type: string, example: 01JGF83D0V2AKVGWN8W7NB9S43 }
+    type: { type: string, example: compress_zip }
+    status: { type: string, enum: [PENDING, PROCESSING, COMPLETED, FAILED], example: PROCESSING }
+    user_id: { type: string, example: 01JGF7A3JX0XG3P1NACV53B9XQ }
+    progress: { type: integer, description: Job progress value reported by the worker., example: 45 }
+    error_message: { type: [string, 'null'], example: null }
+    result: { description: Result decoded from JSON when possible, otherwise returned as a string., oneOf: [{ type: object, additionalProperties: true }, { type: array, items: {} }, { type: string }, { type: number }, { type: boolean }, { type: 'null' }], example: null }
+    created_at: { type: string, format: date-time, example: '2026-10-25T14:30:00Z' }
+    started_at: { type: [string, 'null'], format: date-time, example: '2026-10-25T14:31:00Z' }
+    completed_at: { type: [string, 'null'], format: date-time, example: null }
+
+HealthResponse:
+  type: object
+  required: [status]
+  properties:
+    status: { type: string, enum: [ok, unavailable], example: ok }
+
+SSEEventEnvelope:
+  type: object
+  required: [type, data]
+  properties:
+    type: { type: string, description: Event name used as the SSE `event` field., example: file_changed }
+    user_id: { type: string, description: Present in the internal event model when set; not included in the streamed SSE data payload., example: 01JGF7A3JX0XG3P1NACV53B9XQ }
+    data: { description: Event-specific JSON payload., type: object, additionalProperties: true, example: { item_id: 01JGF7Y8M0D6RH4M2N8K3VQZ1A } }
+
+SSEConnectedEvent:
+  type: object
+  description: "Initial SSE event sent when a client connects. Wire format is `event: connected` followed by `data: {}`."
+  properties: {}
+  example: {}

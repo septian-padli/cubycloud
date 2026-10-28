@@ -12,14 +12,29 @@ type User struct {
 	ID              string    `bun:"id,pk"`
 	Username        string    `bun:"username,notnull,unique"`
 	Email           string    `bun:"email,notnull,unique"`
-	PasswordHash    string    `bun:"password_hash,notnull"`
-	RecoveryKeyHash *string   `bun:"recovery_key_hash"`
-	Role            string    `bun:"role,notnull"`
-	QuotaMode       string    `bun:"quota_mode,notnull,default:'DEFAULT'"`
-	QuotaBytes      int64     `bun:"quota_bytes,notnull,default:-1"`
-	CreatedAt       time.Time `bun:"created_at,notnull,default:current_timestamp"`
-	UpdatedAt       time.Time `bun:"updated_at,notnull,default:current_timestamp"`
-	DeletedAt       *time.Time `bun:"deleted_at"`
+	DisplayName     string    `bun:"display_name,notnull,default:''"`
+ 	PasswordHash    string     `bun:"password_hash,notnull"`
+ 	RecoveryKeyHash *string    `bun:"recovery_key_hash"`
+ 	Role            string     `bun:"role,notnull"`
+ 	Status          string     `bun:"status,notnull,default:'ACTIVE'"`
+ 	TokenVersion    int        `bun:"token_version,notnull,default:0"`
+ 	QuotaMode       string     `bun:"quota_mode,notnull,default:'DEFAULT'"`
+ 	QuotaBytes      int64      `bun:"quota_bytes,notnull,default:-1"`
+ 	CreatedAt       time.Time  `bun:"created_at,notnull,default:current_timestamp"`
+ 	UpdatedAt       time.Time  `bun:"updated_at,notnull,default:current_timestamp"`
+ 	DeletedAt       *time.Time `bun:"deleted_at"`
+}
+
+type AuthToken struct {
+ 	bun.BaseModel `bun:"table:auth_tokens,alias:at"`
+
+ 	ID         string     `bun:"id,pk"`
+ 	UserID     string     `bun:"user_id,notnull"`
+ 	TokenHash  string     `bun:"token_hash,notnull,unique"`
+ 	TokenType  string     `bun:"token_type,notnull"`
+ 	ExpiresAt  time.Time  `bun:"expires_at,notnull"`
+ 	ConsumedAt *time.Time `bun:"consumed_at"`
+ 	CreatedAt  time.Time  `bun:"created_at,notnull,default:current_timestamp"`
 }
 
 type StorageNode struct {
@@ -113,6 +128,23 @@ type ActivityLog struct {
 	CreatedAt time.Time `bun:"created_at,notnull,default:current_timestamp"`
 }
 
+
+type AuditLog struct {
+	bun.BaseModel `bun:"table:audit_logs,alias:al"`
+
+	ID           string    `bun:"id,pk"`
+	UserID       *string   `bun:"user_id"`
+	IPAddress    *string   `bun:"ip_address"`
+	UserAgent    *string   `bun:"user_agent"`
+	Method       string    `bun:"method,notnull"`
+	Path         string    `bun:"path,notnull"`
+	StatusCode   int       `bun:"status_code,notnull"`
+	Action       string    `bun:"action,notnull"`
+	Details      *string   `bun:"details"`
+	ErrorMessage *string   `bun:"error_message"`
+	CreatedAt    time.Time `bun:"created_at,notnull,default:current_timestamp"`
+}
+
 type RecentAccess struct {
 	bun.BaseModel `bun:"table:vfs_recent_access,alias:vra"`
 
@@ -121,4 +153,20 @@ type RecentAccess struct {
 	ItemID     string    `bun:"item_id,notnull"`
 	Source     string    `bun:"source,notnull"`
 	AccessedAt time.Time `bun:"accessed_at,notnull,default:current_timestamp"`
+}
+
+type Job struct {
+	bun.BaseModel `bun:"table:jobs,alias:j"`
+
+	ID           string     `bun:"id,pk"`
+	Type         string     `bun:"type,notnull"`
+	Status       string     `bun:"status,notnull,default:'PENDING'"`
+	UserID       string     `bun:"user_id,notnull"`
+	Payload      string     `bun:"payload,notnull"`
+	Progress     int        `bun:"progress,notnull,default:0"`
+	ErrorMessage *string    `bun:"error_message"`
+	Result       *string    `bun:"result"`
+	CreatedAt    time.Time  `bun:"created_at,notnull,default:current_timestamp"`
+	StartedAt    *time.Time `bun:"started_at"`
+	CompletedAt  *time.Time `bun:"completed_at"`
 }

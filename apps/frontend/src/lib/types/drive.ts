@@ -29,7 +29,8 @@ export interface QuickAccessItem {
 	name: string;
 	kind: FileKind;
 	sizeLabel: string;
-	openedAgo: string;
+	openedAgo?: string;
+	accessedAt?: string;
 	source?: 'my-storage' | 'organization';
 }
 
@@ -37,7 +38,8 @@ export interface ActivityItem {
 	id: string;
 	action: ActivityAction;
 	fileName: string;
-	at: string;
+	at?: string;
+	createdAt?: string;
 	itemKind?: FileKind;
 	source?: 'my-storage' | 'organization';
 	itemId?: string;
@@ -51,6 +53,7 @@ export interface FileEntry {
 	modifiedAt: string;
 	starred?: boolean;
 	storageNode?: StorageNodeKind;
+	storageAvailable?: boolean;
 	parentId: string | null;
 }
 

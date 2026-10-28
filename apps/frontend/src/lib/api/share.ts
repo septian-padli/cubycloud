@@ -1,3 +1,4 @@
+import { locale } from '$lib/locale.svelte.js';
 import type { FileKind } from '$lib/types/drive.js';
 
 export function detectFileKind(name: string, kind: 'file' | 'folder'): FileKind {
@@ -88,14 +89,26 @@ export interface PublicShareResponse {
 }
 
 function shareErrorMessage(error?: string, status?: number): string {
-	if (error === 'USER_QUOTA_EXCEEDED') return 'Kuota My Storage pemilik penuh.';
-	if (error === 'STORAGE_POOL_FULL') return 'Penyimpanan server penuh.';
-	if (error === 'name already in use') return 'Nama sudah digunakan di folder tujuan.';
+	const id = locale.language === 'id';
+	if (error === 'USER_QUOTA_EXCEEDED')
+		return id ? 'Kuota My Storage pemilik penuh.' : 'The owner’s My Storage quota is full.';
+	if (error === 'STORAGE_POOL_FULL')
+		return id ? 'Penyimpanan server penuh.' : 'Server storage is full.';
+	if (error === 'name already in use')
+		return id
+			? 'Nama sudah digunakan di folder tujuan.'
+			: 'A name is already in use in the destination folder.';
 	if (error === 'PERMISSION_DENIED' || status === 403)
-		return 'Anda tidak memiliki izin untuk tindakan ini.';
-	if (status === 404) return 'Berkas atau folder tidak ditemukan.';
-	if (status === 410) return 'Tautan berbagi sudah kedaluwarsa.';
-	return error || `HTTP ${status ?? 'error'}`;
+		return id
+			? 'Anda tidak memiliki izin untuk tindakan ini.'
+			: 'You do not have permission to perform this action.';
+	if (status === 404)
+		return id ? 'Berkas atau folder tidak ditemukan.' : 'File or folder not found.';
+	if (status === 410)
+		return id ? 'Tautan berbagi sudah kedaluwarsa.' : 'This share link has expired.';
+	return locale.language === 'id'
+		? `Permintaan berbagi gagal (HTTP ${status ?? 'error'}).`
+		: `Share request failed (HTTP ${status ?? 'error'}).`;
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -106,7 +119,9 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 	const text = await response.text();
 	const body = text ? JSON.parse(text) : undefined;
 	if (!response.ok) {
-		const err = new Error(shareErrorMessage(body?.error || body?.message, response.status)) as Error & {
+		const err = new Error(
+			shareErrorMessage(body?.error || body?.message, response.status)
+		) as Error & {
 			status: number;
 		};
 		err.status = response.status;
@@ -271,10 +286,7 @@ export async function deleteSharedItem(itemId: string): Promise<void> {
  * Memindahkan berkas/subfolder di dalam shared tree (permission editor).
  * PATCH /api/v1/drive/shared/items/:id/move
  */
-export async function moveSharedItem(
-	itemId: string,
-	targetParentId: string
-): Promise<SharedItem> {
+export async function moveSharedItem(itemId: string, targetParentId: string): Promise<SharedItem> {
 	return request<SharedItem>(`/api/v1/drive/shared/items/${encodeURIComponent(itemId)}/move`, {
 		method: 'PATCH',
 		headers: { 'Content-Type': 'application/json' },

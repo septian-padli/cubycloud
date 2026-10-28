@@ -1,6 +1,7 @@
 package storage
 import (
 	"bytes"
+	"encoding/base64"
 	"context"
 	"io"
 	"net/http"
@@ -41,7 +42,12 @@ func TestWriteObjectUnknownSizeUsesS3CompatibleStreamingRequest(t *testing.T) {
 	}
 	defer db.Close()
 
-	key := []byte(filepath.Clean(dataDir))
+	keyB64 := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{3}, masterKeyLen))
+	t.Setenv("CUBYCLOUD_MASTER_KEY", keyB64)
+	key, err := InitMasterKey(dataDir, keyB64, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	access, err := EncryptCredential([]byte("access"), key)
 	if err != nil {
 		t.Fatal(err)

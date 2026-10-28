@@ -1,0 +1,131 @@
+/api/v1/drive/search:
+  get:
+    operationId: searchDrive
+    tags: [Search]
+    summary: Search drive items
+    description: Searches the authenticated user's My Storage, Organization, and Shared With Me items by name.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - name: q
+        in: query
+        description: Search text; an empty value returns no results.
+        schema:
+          type: string
+        example: annual report
+      - name: limit
+        in: query
+        description: Maximum number of results. Defaults to 25 and is capped at 100 by the service.
+        schema:
+          type: integer
+          minimum: 1
+          default: 25
+        example: 25
+      - name: offset
+        in: query
+        description: Number of results to skip. Defaults to 0.
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+        example: 0
+    responses:
+      '200':
+        description: Search results and pagination values.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchResponse'
+            example:
+              items:
+                - id: 01JGF7Y8M0D6RH4M2N8K3VQZ1A
+                  name: Annual report.pdf
+                  type: file
+                  source: organization
+                  size_bytes: 204800
+                  mime_type: application/pdf
+                  parent_id: null
+                  location: Organization / Finance
+                  updated_at: '2026-10-25T14:30:00Z'
+              total: 1
+              limit: 25
+              offset: 0
+      '401':
+        description: Authentication required.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '500':
+        description: Search failed.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+
+/api/v1/jobs/{id}:
+  get:
+    operationId: getJob
+    tags: [Jobs]
+    summary: Get background job status
+    description: Returns status and progress for a job. Access is allowed to the owning user or a Super Admin.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Job identifier.
+        schema:
+          type: string
+        example: 01JGF83D0V2AKVGWN8W7NB9S43
+    responses:
+      '200':
+        description: Job status and result.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobResponse'
+            example:
+              id: 01JGF83D0V2AKVGWN8W7NB9S43
+              type: compress_zip
+              status: PROCESSING
+              user_id: 01JGF7A3JX0XG3P1NACV53B9XQ
+              progress: 45
+              error_message: null
+              result: null
+              created_at: '2026-10-25T14:30:00Z'
+              started_at: '2026-10-25T14:31:00Z'
+              completed_at: null
+      '400':
+        description: Job ID is required.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '401':
+        description: Authentication required.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '403':
+        description: The caller is neither the job owner nor a Super Admin.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '404':
+        description: Job not found.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+      '500':
+        description: Job lookup failed.
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'

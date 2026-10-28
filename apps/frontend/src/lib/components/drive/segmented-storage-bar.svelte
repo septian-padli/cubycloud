@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { locale } from '$lib/locale.svelte.js';
 	import * as Popover from '$lib/components/ui/popover/index.js';
 	import { cn } from '$lib/utils.js';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	export interface StorageCategoryItem {
 		id: string;
@@ -28,6 +30,14 @@
 
 	let openId = $state<string | null>(null);
 	let closeTimer: ReturnType<typeof setTimeout> | null = null;
+	function getCategoryLabel(cat: StorageCategoryItem): string {
+		if (cat.id === 'image') return tx('Gambar', 'Images');
+		if (cat.id === 'document') return tx('Dokumen', 'Documents');
+		if (cat.id === 'archive') return tx('Arsip', 'Archives');
+		if (cat.id === 'trash') return tx('Sampah', 'Trash');
+		if (cat.id === 'other') return tx('Lainnya', 'Other');
+		return cat.label;
+	}
 
 	const totalCategoryUsed = $derived(categories.reduce((acc, c) => acc + c.usedGb, 0));
 	const effectiveUsedGb = $derived(rawUsedGb ?? totalCategoryUsed);
@@ -56,20 +66,21 @@
 	}
 
 	function formatStorage(valGb: number): string {
-		if (valGb <= 0) return '0 GB';
+		const decimal = locale.language === 'id' ? ',' : '.';
+		if (valGb <= 0) return '0 GiB';
 		if (valGb >= 1024) {
 			const tb = valGb / 1024;
-			const formatted = Number.isInteger(tb) ? String(tb) : tb.toFixed(2).replace('.', ',');
-			return `${formatted} TB`;
+			const formatted = Number.isInteger(tb) ? String(tb) : tb.toFixed(2).replace('.', decimal);
+			return `${formatted} TiB`;
 		}
 		if (valGb < 0.1) {
 			const mb = Math.round(valGb * 1024);
-			return `${mb} MB`;
+			return `${mb} MiB`;
 		}
 		const formatted = Number.isInteger(valGb)
 			? String(valGb)
-			: valGb.toFixed(valGb < 10 ? 1 : 2).replace('.', ',');
-		return `${formatted} GB`;
+			: valGb.toFixed(valGb < 10 ? 1 : 2).replace('.', decimal);
+		return `${formatted} GiB`;
 	}
 
 	const usedLabel = $derived(formatStorage(effectiveUsedGb));
@@ -94,10 +105,13 @@
 			.map((cat, index) => {
 				const displayUsedGb = cat.usedGb * scaleFactor;
 				const rawQuotaPct = baseLimit > 0 ? (displayUsedGb / baseLimit) * 100 : 0;
+				const decimal = locale.language === 'id' ? ',' : '.';
 				const quotaPctLabel =
 					rawQuotaPct < 0.1 && rawQuotaPct > 0
-						? '< 0,1'
-						: (Math.round(rawQuotaPct * 10) / 10).toString().replace('.', ',');
+						? locale.language === 'id'
+							? '< 0,1'
+							: '< 0.1'
+						: (Math.round(rawQuotaPct * 10) / 10).toString().replace('.', decimal);
 				return {
 					cat,
 					index,
@@ -143,10 +157,12 @@
 				{usedLabel}
 			</span>
 			{#if unlimited}
-				<span class="text-sm font-normal text-muted sm:text-base"> telah digunakan </span>
+				<span class="text-sm font-normal text-muted sm:text-base"
+					>{tx(' telah digunakan ', ' used')}</span
+				>
 			{:else}
 				<span class="text-sm font-normal text-muted sm:text-base">
-					dari {limitLabel} telah digunakan
+					{tx(`dari ${limitLabel} telah digunakan`, `of ${limitLabel} used`)}
 				</span>
 			{/if}
 		</div>
@@ -156,7 +172,7 @@
 	<div
 		class="relative flex h-3.5 w-full items-center overflow-hidden rounded-full bg-black/10 dark:bg-white/10"
 		role="img"
-		aria-label="Pemakaian kuota penyimpanan My Storage"
+		aria-label={tx('Pemakaian kuota penyimpanan My Storage', 'My Storage quota usage')}
 	>
 		{#if totalFilledPct > 0}
 			<div
@@ -182,7 +198,7 @@
 										openId === cat.id && 'z-10 brightness-110'
 									)}
 									style="flex: 0 0 {(cat.usedGb / totalCategoryUsed) * 100}%;"
-									aria-label="{cat.label}: {formatStorage(displayUsedGb)}"
+									aria-label={`${getCategoryLabel(cat)}: ${formatStorage(displayUsedGb)}`}
 									onmouseenter={() => openCategory(cat.id)}
 									onmouseleave={() => scheduleClose(cat.id)}
 									onclick={() => toggleCategory(cat.id)}
@@ -203,7 +219,7 @@
 									class={cn('size-2.5 shrink-0 rounded-full', getCategoryColor(cat, index))}
 									aria-hidden="true"
 								></span>
-								<span class="font-semibold text-main">{cat.label}</span>
+								<span class="font-semibold text-main">{getCategoryLabel(cat)}</span>
 							</div>
 
 							<!-- Size terpakai (besar & align center) -->
@@ -217,7 +233,11 @@
 							<div
 								class="flex items-center justify-between border-t border-subtle pt-2 text-xs text-muted"
 							>
-								<span>{unlimited ? 'Proporsi pemakaian' : 'Proporsi kuota'}</span>
+								<span
+									>{unlimited
+										? tx('Proporsi pemakaian', 'Usage proportion')
+										: tx('Proporsi kuota', 'Quota proportion')}</span
+								>
 								<span class="font-semibold text-main">
 									{quotaPctLabel}%
 								</span>
@@ -247,7 +267,7 @@
 						class={cn('size-2.5 shrink-0 rounded-full', getCategoryColor(cat, index))}
 						aria-hidden="true"
 					></span>
-					<span>{cat.label}</span>
+					<span>{getCategoryLabel(cat)}</span>
 				</button>
 			{/each}
 		</div>

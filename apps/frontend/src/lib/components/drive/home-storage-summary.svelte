@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { locale } from '$lib/locale.svelte.js';
 	import type { QuotaState } from '$lib/types/drive.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import QuotaWidget from './quota-widget.svelte';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	let {
 		quota
@@ -11,18 +13,16 @@
 </script>
 
 <section class="space-y-3">
-	<h2 class="text-sm font-semibold text-main">Ringkasan Penyimpanan</h2>
+	<h2 class="text-sm font-semibold text-main">{tx('Ringkasan Penyimpanan', 'Storage summary')}</h2>
 	<Card.Root class="rounded-xl border-subtle bg-surface py-0 shadow-none">
 		<Card.Content class="p-0">
-			<QuotaWidget
-				usedGb={quota.usedGb}
-				limitGb={quota.limitGb}
-				class="border-t-0"
-			/>
+			<QuotaWidget usedGb={quota.usedGb} limitGb={quota.limitGb} class="border-t-0" />
 			<div class="border-t border-subtle px-4 py-3">
 				<p class="text-xs text-muted">
-					Kuota My Storage tidak menghitung berkas Organization. Trash tetap dihitung sampai
-					dihapus permanen.
+					{tx(
+						'Kuota My Storage tidak menghitung berkas Organization. Trash tetap dihitung sampai dihapus permanen.',
+						'My Storage quota excludes Organization files. Trash items continue to count until permanently deleted.'
+					)}
 				</p>
 			</div>
 		</Card.Content>

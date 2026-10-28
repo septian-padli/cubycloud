@@ -102,11 +102,59 @@ func TestAvailableOnNodeDeduplicatesAcrossStorageTables(t *testing.T) {
 	}
 	defer tx.Rollback()
 
+	availableInTx, err := AvailableOnNodeTx(ctx, tx, nil, "node")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if availableInTx != 8550 {
+		t.Fatalf("available in transaction = %d, want 8550", availableInTx)
+	}
+
 	// Remaining capacity: 1000 - 50 (5% reserve) - 900 (used) = 50 bytes.
 	if err := CheckNodeCapacityTx(ctx, tx, nil, "local-node", 40); err != nil {
 		t.Fatalf("expected CheckNodeCapacityTx(40) to succeed, got %v", err)
 	}
 	if err := CheckNodeCapacityTx(ctx, tx, nil, "local-node", 60); err == nil {
 		t.Fatalf("expected CheckNodeCapacityTx(60) to fail due to pool full")
+	}
+}
+
+func TestInstanceIDAndBlobKey(t *testing.T) {
+	dataDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dataDir, "db"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	db, err := database.Connect(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	first, err := InstanceID(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := InstanceID(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != second || len(first) != 32 {
+		t.Fatalf("instance IDs = %q, %q; want same 32-character hex ID", first, second)
+	}
+	key := BuildBlobKey(first, "node", "blob")
+	want := "cubycloud/" + first + "/node/blobs/blob"
+	if key != want {
+		t.Fatalf("blob key = %q, want %q", key, want)
+	}
+	gotInstance, gotNode, gotBlob, ok := ParseBlobKey(key)
+	if !ok || gotInstance != first || gotNode != "node" || gotBlob != "blob" {
+		t.Fatalf("ParseBlobKey(%q) = %q, %q, %q, %v", key, gotInstance, gotNode, gotBlob, ok)
+	}
+	if _, _, _, ok := ParseBlobKey("cubycloud/other/node/blobs/blob/extra"); ok {
+		t.Fatal("ParseBlobKey accepted a malformed key")
+	}
+	if _, _, _, ok := ParseBlobKey("cubycloud/instance/node/blobs/../outside"); ok {
+		t.Fatal("ParseBlobKey accepted a path traversal key")
 	}
 }

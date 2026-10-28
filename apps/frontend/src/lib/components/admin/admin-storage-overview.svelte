@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CheckCircle2, FolderArchive, HardDrive } from '@lucide/svelte';
+	import { locale } from '$lib/locale.svelte.js';
 	import type { AdminStorageStats } from '$lib/types/admin.js';
 	import SegmentedStorageBar, {
 		type StorageCategoryItem
@@ -7,6 +7,7 @@
 	import { formatSize } from '$lib/mocks/file-tree.js';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { cn } from '$lib/utils.js';
+	import { CheckCircle2, FolderArchive, HardDrive } from '@lucide/svelte';
 
 	let {
 		stats,
@@ -35,17 +36,19 @@
 			id: c.id,
 			label: c.label,
 			usedGb: c.used_gb,
-			description: `${c.label}: ${c.used_gb < 0.1 && c.used_gb > 0 ? '< 0,1' : c.used_gb.toFixed(2)} GB`
+			description: `${c.label}: ${c.used_gb < 0.1 && c.used_gb > 0 ? '< 0,1' : c.used_gb.toFixed(2)} GiB`
 		}))
 	);
 </script>
 
 <section class={cn('space-y-3', className)}>
-	<h2 class="text-sm font-semibold text-main">Detail kuota & pemakaian sistem</h2>
+	<h2 class="text-sm font-semibold text-main">
+		{locale.language === 'id' ? 'Detail kuota & pemakaian sistem' : 'System quota & usage details'}
+	</h2>
 	<Card.Root class="rounded-xl border-subtle bg-surface shadow-none">
 		<Card.Content class="space-y-6 p-5">
 			{#if loading && !stats}
-				<div class="space-y-4 animate-pulse">
+				<div class="animate-pulse space-y-4">
 					<div class="h-8 w-48 rounded bg-muted/20"></div>
 					<div class="h-3.5 w-full rounded-full bg-muted/20"></div>
 					<div class="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-3">
@@ -74,9 +77,14 @@
 								<HardDrive class="size-5" />
 							</div>
 							<div class="min-w-0">
-								<p class="text-xs font-medium text-muted">Total Kapasitas Node</p>
+								<p class="text-xs font-medium text-muted">
+									{locale.language === 'id' ? 'Total Kapasitas Node' : 'Total node capacity'}
+								</p>
 								<p class="truncate text-base font-semibold text-main">{capLabel}</p>
-								<p class="text-[11px] text-muted">{nodesCount} node terdaftar</p>
+								<p class="text-[11px] text-muted">
+									{nodesCount}
+									{locale.language === 'id' ? 'node terdaftar' : 'registered nodes'}
+								</p>
 							</div>
 						</div>
 
@@ -87,9 +95,15 @@
 								<FolderArchive class="size-5" />
 							</div>
 							<div class="min-w-0">
-								<p class="text-xs font-medium text-muted">Total Pemakaian Berkas</p>
+								<p class="text-xs font-medium text-muted">
+									{locale.language === 'id' ? 'Total Pemakaian Berkas' : 'Total file usage'}
+								</p>
 								<p class="truncate text-base font-semibold text-main">{usedLabel}</p>
-								<p class="text-[11px] text-muted">{usedPercent.toFixed(1)}% dari kapasitas</p>
+								<p class="text-[11px] text-muted">
+									{usedPercent.toFixed(1)}% {locale.language === 'id'
+										? 'dari kapasitas'
+										: 'of capacity'}
+								</p>
 							</div>
 						</div>
 
@@ -100,9 +114,15 @@
 								<CheckCircle2 class="size-5" />
 							</div>
 							<div class="min-w-0">
-								<p class="text-xs font-medium text-muted">Sisa Kapasitas Bebas</p>
+								<p class="text-xs font-medium text-muted">
+									{locale.language === 'id' ? 'Sisa Kapasitas Bebas' : 'Available free capacity'}
+								</p>
 								<p class="truncate text-base font-semibold text-main">{freeLabel}</p>
-								<p class="text-[11px] text-muted">{(100 - usedPercent).toFixed(1)}% tersedia</p>
+								<p class="text-[11px] text-muted">
+									{(100 - usedPercent).toFixed(1)}% {locale.language === 'id'
+										? 'tersedia'
+										: 'available'}
+								</p>
 							</div>
 						</div>
 					</div>
@@ -110,12 +130,17 @@
 
 				<div class="border-t border-subtle pt-3">
 					<p class="text-xs text-muted">
-						Kapasitas dihitung dari akumulasi seluruh storage node yang terdaftar. Pemakaian
-						mencakup seluruh berkas pengguna.
+						{locale.language === 'id'
+							? 'Kapasitas dihitung dari akumulasi seluruh storage node yang terdaftar. Pemakaian mencakup seluruh berkas pengguna.'
+							: 'Capacity is calculated from all registered storage nodes. Usage includes all user files.'}
 					</p>
 				</div>
 			{:else}
-				<p class="text-sm text-muted">Data statistik penyimpanan belum tersedia.</p>
+				<p class="text-sm text-muted">
+					{locale.language === 'id'
+						? 'Data statistik penyimpanan belum tersedia.'
+						: 'Storage statistics are not available yet.'}
+				</p>
 			{/if}
 		</Card.Content>
 	</Card.Root>

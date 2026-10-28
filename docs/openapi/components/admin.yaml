@@ -1,0 +1,247 @@
+SystemSettings:
+  type: object
+  required: [default_quota, audit_retention_days, worker_concurrency, placement_strategy]
+  properties:
+    default_quota:
+      $ref: '#/components/schemas/AdminQuotaPolicy'
+    audit_retention_days:
+      type: integer
+      enum: [7, 14, 30, 60, 90]
+      example: 90
+    worker_concurrency:
+      type: integer
+      minimum: 1
+      maximum: 10
+      example: 2
+    placement_strategy:
+      type: string
+      enum: [FILL_FIRST, ROUND_ROBIN, MOST_FREE_SPACE]
+      example: FILL_FIRST
+AdminQuotaPolicy:
+  type: object
+  required: [mode, gb]
+  properties:
+    mode:
+      type: string
+      enum: [limited, unlimited]
+      example: limited
+    gb:
+      type: integer
+      description: Quota in GB when mode is limited; zero when unlimited.
+      example: 50
+UpdateSystemSettingsRequest:
+  type: object
+  description: All fields are optional; supplied fields update the corresponding setting.
+  properties:
+    default_quota:
+      $ref: '#/components/schemas/AdminQuotaPolicy'
+    audit_retention_days:
+      type: integer
+      enum: [7, 14, 30, 60, 90]
+    worker_concurrency:
+      type: integer
+      minimum: 1
+      maximum: 10
+    placement_strategy:
+      type: string
+      enum: [FILL_FIRST, ROUND_ROBIN, MOST_FREE_SPACE]
+  example:
+    default_quota: {mode: limited, gb: 50}
+    audit_retention_days: 90
+    worker_concurrency: 2
+    placement_strategy: FILL_FIRST
+StorageNode:
+  type: object
+  required: [id, type, name, path, kind, total_gb, free_gb, capacity_cap_gb, used_bytes, enabled, safe_to_disconnect]
+  properties:
+    id: {type: string, example: node-01}
+    type: {type: string, example: local}
+    name: {type: string, example: Primary disk}
+    path: {type: string, example: /srv/cubycloud}
+    kind: {type: string, description: Storage medium kind (for example SSD, HDD, or S3)., example: SSD}
+    endpoint: {type: string, example: https://s3.example.com}
+    bucket: {type: string, example: cubycloud-data}
+    region: {type: string, example: us-east-1}
+    total_gb: {type: integer, format: int64, example: 1000}
+    free_gb: {type: integer, format: int64, example: 720}
+    capacity_cap_gb: {type: integer, format: int64, example: 1000}
+    used_bytes: {type: integer, format: int64, example: 300647710720}
+    enabled: {type: boolean, example: true}
+    safe_to_disconnect: {type: boolean, example: false}
+    migration_status: {type: string, example: in_progress}
+    migration_job_id: {type: string, example: job-123}
+StorageNodesList:
+  type: object
+  required: [nodes]
+  properties:
+    nodes:
+      type: array
+      items: {$ref: '#/components/schemas/StorageNode'}
+CreateLocalStorageNodeRequest:
+  type: object
+  required: [name, path, capacity_cap_gb, enabled]
+  properties:
+    name: {type: string, example: Primary disk}
+    path: {type: string, example: /srv/cubycloud}
+    capacity_cap_gb: {type: integer, format: int64, example: 1000}
+    enabled: {type: boolean, example: true}
+CreateCloudStorageNodeRequest:
+  type: object
+  required: [name, endpoint, bucket, region, access_key, secret_key, capacity_cap_gb, enabled]
+  properties:
+    name: {type: string, example: Offsite backup}
+    endpoint: {type: string, example: https://s3.example.com}
+    bucket: {type: string, example: cubycloud-data}
+    region: {type: string, example: us-east-1}
+    access_key: {type: string, example: AKIAIOSFODNN7EXAMPLE}
+    secret_key: {type: string, format: password, example: example-secret-key}
+    capacity_cap_gb: {type: integer, format: int64, example: 2000}
+    enabled: {type: boolean, example: true}
+UpdateStorageNodeRequest:
+  type: object
+  description: Fields are optional; update only the supplied node properties.
+  properties:
+    name: {type: string, example: Archive disk}
+    capacity_cap_gb: {type: integer, format: int64, example: 1500}
+    enabled: {type: boolean, example: true}
+DetachStorageNodeRequest:
+  type: object
+  properties:
+    target_node_id:
+      type: string
+      description: Optional target node ID for the physical migration.
+      example: node-02
+DetachStorageNodeResponse:
+  type: object
+  required: [message, safe_to_disconnect]
+  properties:
+    message: {type: string, example: Storage node detach started}
+    job_id: {type: string, example: job-123}
+    safe_to_disconnect: {type: boolean, example: false}
+AdminUser:
+  type: object
+  required: [id, username, email, role, status, quota_mode, quota_bytes, used_bytes, used_gb, created_at]
+  properties:
+    id: {type: string, example: user-123}
+    username: {type: string, example: alice}
+    email: {type: string, format: email, example: alice@example.com}
+    role: {type: string, example: REGULAR}
+    status: {type: string, enum: [ACTIVE, PENDING_ACTIVATION], example: ACTIVE}
+    quota_mode: {type: string, example: DEFAULT}
+    quota_bytes: {type: integer, format: int64, description: Quota limit in bytes; -1 denotes unlimited., example: 53687091200}
+    quota_gb: {type: number, format: double, example: 50}
+    used_bytes: {type: integer, format: int64, example: 1073741824}
+    used_gb: {type: number, format: double, example: 1}
+    created_at: {type: string, format: date-time, example: '2026-01-15T10:30:00Z'}
+    invitation_token: {type: string, example: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+    invitation_url: {type: string, example: /set-password#token=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+AdminUserInvitationResponse:
+  type: object
+  required: [invitation_token, invitation_url, expires_at]
+  properties:
+    invitation_token: {type: string, example: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+    invitation_url: {type: string, example: /set-password#token=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+    expires_at: {type: string, format: date-time, example: '2026-01-16T10:30:00Z'}
+AdminUserResetPasswordResponse:
+  type: object
+  required: [reset_token, reset_url, expires_at, message]
+  properties:
+    reset_token: {type: string, example: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+    reset_url: {type: string, example: /set-password#token=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+    expires_at: {type: string, format: date-time, example: '2026-01-15T11:00:00Z'}
+    message: {type: string, example: password reset link generated}
+AdminUsersList:
+  type: object
+  required: [users]
+  properties:
+    users:
+      type: array
+      items: {$ref: '#/components/schemas/AdminUser'}
+CreateAdminUserRequest:
+  type: object
+  required: [username, email, quota_mode]
+  properties:
+    username: {type: string, example: alice}
+    email: {type: string, format: email, example: alice@example.com}
+    quota_mode: {type: string, example: DEFAULT}
+    quota_gb: {type: number, format: double, example: 50}
+UpdateAdminUserQuotaRequest:
+  type: object
+  required: [quota_mode]
+  properties:
+    quota_mode: {type: string, example: CUSTOM}
+    quota_gb: {type: number, format: double, example: 100}
+DeleteAdminUserRequest:
+  type: object
+  required: [email]
+  properties:
+    email: {type: string, format: email, example: alice@example.com}
+AdminStorageCategoryUsage:
+  type: object
+  required: [id, label, bytes, used_gb]
+  properties:
+    id: {type: string, example: video}
+    label: {type: string, example: Video}
+    bytes: {type: integer, format: int64, example: 1073741824}
+    used_gb: {type: number, format: double, example: 1}
+AdminStorageStats:
+  type: object
+  required: [total_capacity_bytes, total_capacity_gb, total_used_bytes, total_used_gb, free_bytes, free_gb, nodes_count, categories]
+  properties:
+    total_capacity_bytes: {type: integer, format: int64, example: 1073741824000}
+    total_capacity_gb: {type: number, format: double, example: 1000}
+    total_used_bytes: {type: integer, format: int64, example: 322122547200}
+    total_used_gb: {type: number, format: double, example: 300}
+    free_bytes: {type: integer, format: int64, example: 751619276800}
+    free_gb: {type: number, format: double, example: 700}
+    nodes_count: {type: integer, example: 2}
+    categories:
+      type: array
+      items: {$ref: '#/components/schemas/AdminStorageCategoryUsage'}
+AdminTopStorageUser:
+  type: object
+  required: [id, username, email, role, quota_mode, quota_bytes, used_bytes, used_gb, created_at]
+  properties:
+    id: {type: string, example: user-123}
+    username: {type: string, example: alice}
+    email: {type: string, format: email, example: alice@example.com}
+    role: {type: string, example: REGULAR}
+    quota_mode: {type: string, example: DEFAULT}
+    quota_bytes: {type: integer, format: int64, description: Quota limit in bytes; -1 denotes unlimited., example: 53687091200}
+    quota_gb: {type: number, format: double, example: 50}
+    used_bytes: {type: integer, format: int64, example: 1073741824}
+    used_gb: {type: number, format: double, example: 1}
+    created_at: {type: string, format: date-time, example: '2026-01-15T10:30:00Z'}
+AdminTopStorageUsers:
+  type: object
+  required: [items, total, has_more, next_offset]
+  properties:
+    items:
+      type: array
+      items: {$ref: '#/components/schemas/AdminTopStorageUser'}
+    total: {type: integer, format: int64, example: 42}
+    has_more: {type: boolean, example: true}
+    next_offset: {type: integer, example: 20}
+AuditLog:
+  type: object
+  required: [id, method, path, status_code, action, created_at]
+  properties:
+    id: {type: string, example: log-123}
+    user_id: {type: string, nullable: true, example: user-123}
+    ip_address: {type: string, nullable: true, example: 192.0.2.10}
+    user_agent: {type: string, nullable: true, example: Mozilla/5.0}
+    method: {type: string, example: PUT}
+    path: {type: string, example: /api/v1/admin/settings}
+    status_code: {type: integer, example: 200}
+    action: {type: string, example: settings.update}
+    details: {type: string, nullable: true, example: Updated worker concurrency}
+    error_message: {type: string, nullable: true, example: null}
+    created_at: {type: string, example: '2026-01-15T10:30:00Z'}
+AuditLogs:
+  type: array
+  items: {$ref: '#/components/schemas/AuditLog'}
+AdminMessageResponse:
+  type: object
+  required: [message]
+  properties:
+    message: {type: string, example: Operation completed successfully}

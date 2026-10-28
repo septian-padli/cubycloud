@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { locale } from '$lib/locale.svelte.js';
 	import type { TrashFileItem } from '$lib/types/drive.js';
 	import { formatSize } from '$lib/mocks/file-tree.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
@@ -7,6 +8,7 @@
 	import { MoreVertical, RotateCcw, Trash2 } from '@lucide/svelte';
 	import DriveListRow from './drive-list-row.svelte';
 	import FileKindIcon from './explorer/file-kind-icon.svelte';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	let {
 		entry,
@@ -33,9 +35,15 @@
 				<p class="truncate text-sm font-medium text-main">{entry.name}</p>
 				<p class="text-xs text-muted">
 					{#if entry.kind === 'folder'}
-						Folder · Dihapus {entry.deletedAt} · sisa {entry.daysRemaining} hari
+						Folder · {tx('Dihapus', 'Deleted')}
+						{locale.formatDate(entry.deletedAt)} · {tx('sisa', 'remaining')}
+						{entry.daysRemaining}
+						{tx('hari', 'days')}
 					{:else}
-						{formatSize(entry.sizeBytes)} · Dihapus {entry.deletedAt} · sisa {entry.daysRemaining} hari
+						{formatSize(entry.sizeBytes)} · {tx('Dihapus', 'Deleted')}
+						{locale.formatDate(entry.deletedAt)} · {tx('sisa', 'remaining')}
+						{entry.daysRemaining}
+						{tx('hari', 'days')}
 					{/if}
 				</p>
 			{/snippet}
@@ -54,7 +62,7 @@
 								variant="ghost"
 								size="icon"
 								class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
-								aria-label="Aksi trash"
+								aria-label={tx('Aksi trash', 'Trash actions')}
 								onclick={(e: MouseEvent) => e.stopPropagation()}
 							>
 								<MoreVertical class="size-4 stroke-2" />
@@ -64,16 +72,12 @@
 					<DropdownMenu.Content align="end" class="min-w-48">
 						<DropdownMenu.Item class="gap-2" onclick={() => onRestore(entry)}>
 							<RotateCcw class="size-4 stroke-2" />
-							Pulihkan
+							{tx('Pulihkan', 'Restore')}
 						</DropdownMenu.Item>
 						<DropdownMenu.Separator />
-						<DropdownMenu.Item
-							variant="destructive"
-							class="gap-2"
-							onclick={() => onPurge(entry)}
-						>
+						<DropdownMenu.Item variant="destructive" class="gap-2" onclick={() => onPurge(entry)}>
 							<Trash2 class="size-4 stroke-2" />
-							Hapus permanen
+							{tx('Hapus permanen', 'Delete permanently')}
 						</DropdownMenu.Item>
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
@@ -83,12 +87,12 @@
 	<ContextMenu.Content class="min-w-48">
 		<ContextMenu.Item class="gap-2" onclick={() => onRestore(entry)}>
 			<RotateCcw class="size-4 stroke-2" />
-			Pulihkan
+			{tx('Pulihkan', 'Restore')}
 		</ContextMenu.Item>
 		<ContextMenu.Separator />
 		<ContextMenu.Item variant="destructive" class="gap-2" onclick={() => onPurge(entry)}>
 			<Trash2 class="size-4 stroke-2" />
-			Hapus permanen
+			{tx('Hapus permanen', 'Delete permanently')}
 		</ContextMenu.Item>
 	</ContextMenu.Content>
 </ContextMenu.Root>

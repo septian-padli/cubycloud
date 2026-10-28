@@ -1,3 +1,4 @@
+import { locale } from '$lib/locale.svelte.js';
 import type { TrashFileItem, FileEntry } from '$lib/types/drive.js';
 
 const base = '/api/v1/drive/trash';
@@ -41,20 +42,6 @@ function mapCategory(name: string, kind: 'file' | 'folder'): FileEntry['kind'] {
 	return 'document';
 }
 
-function formatDeletedDate(isoString: string): string {
-	try {
-		const date = new Date(isoString);
-		if (isNaN(date.getTime())) return isoString;
-		return new Intl.DateTimeFormat('id-ID', {
-			day: 'numeric',
-			month: 'short',
-			year: 'numeric'
-		}).format(date);
-	} catch {
-		return isoString;
-	}
-}
-
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
 	const response = await fetch(`${base}${path}`, { ...init, credentials: 'include' });
 	if (response.status === 204) {
@@ -63,7 +50,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 	const text = await response.text();
 	const body = text ? JSON.parse(text) : undefined;
 	if (!response.ok) {
-		const err = new Error(body?.error || `HTTP ${response.status}`);
+		const err = new Error(
+			locale.language === 'id'
+				? `Permintaan Trash gagal (HTTP ${response.status})`
+				: `Trash request failed (HTTP ${response.status})`
+		);
 		throw err;
 	}
 	return body as T;
@@ -78,7 +69,7 @@ export const trashAPI = {
 			kind: mapCategory(item.name, item.kind),
 			sizeBytes: item.size_bytes,
 			modifiedAt: item.modified_at,
-			deletedAt: formatDeletedDate(item.deleted_at),
+			deletedAt: item.deleted_at,
 			daysRemaining: item.days_remaining,
 			originalParentId: item.parent_id,
 			originalParentMissing: item.original_parent_missing,

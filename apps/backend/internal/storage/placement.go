@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"io"
 	"time"
 
@@ -13,34 +14,56 @@ import (
 var ErrPoolFull=errors.New("storage pool full")
 type Placement struct{ ID,Type,Path string; Available int64 }
 
-func AvailableOnNode(ctx context.Context,db *bun.DB,driver StorageDriver,nodeID string)(int64,error){
- var n Placement;var capacity int64;var enabled bool
- err:=db.QueryRowContext(ctx,`SELECT id,type,COALESCE(path,''),capacity_bytes,enabled FROM storage_nodes WHERE id=?`,nodeID).Scan(&n.ID,&n.Type,&n.Path,&capacity,&enabled)
- if err!=nil{return 0,err};if !enabled{return 0,ErrPoolFull}
- used,err:=NodeUsedBytes(ctx,db.DB,nodeID)
- if err!=nil{return 0,err}
- var free int64
- if capacity <= 0 {
-  free = 1000 * 1024 * 1024 * 1024 - used
- } else {
-  free = capacity - capacity/20 - used
-  if capacity%20 != 0 {
-   free--
-  }
- }
- if n.Type=="LOCAL" && driver!=nil {
-  total,physicalFree,err:=driver.StatLocal(ctx,n.Path)
-  if err!=nil{return 0,err}
-  if total>0 {
-   reserve:=total/20
-   if total%20!=0{reserve++}
-   if physicalFree-reserve<free{free=physicalFree-reserve}
-  }
- }
- reserved:=GetNodeReserved(nodeID)
- free -= reserved
- if free<0{free=0}
- return free,nil
+func AvailableOnNode(ctx context.Context, db *bun.DB, driver StorageDriver, nodeID string) (int64, error) {
+	return AvailableOnNodeTx(ctx, db.DB, driver, nodeID)
+}
+
+// AvailableOnNodeTx calculates node capacity using the caller's query
+// connection, so capacity checks inside a SQLite transaction do not acquire
+// the database's sole connection a second time.
+func AvailableOnNodeTx(ctx context.Context, q QueryRunner, driver StorageDriver, nodeID string) (int64, error) {
+	var n Placement
+	var capacity int64
+	var enabled bool
+	err := q.QueryRowContext(ctx, `SELECT id,type,COALESCE(path,''),capacity_bytes,enabled FROM storage_nodes WHERE id=?`, nodeID).Scan(&n.ID, &n.Type, &n.Path, &capacity, &enabled)
+	if err != nil {
+		return 0, err
+	}
+	if !enabled {
+		return 0, ErrPoolFull
+	}
+	used, err := NodeUsedBytes(ctx, q, nodeID)
+	if err != nil {
+		return 0, err
+	}
+	if capacity <= 0 {
+		capacity = 1000 * 1024 * 1024 * 1024
+	}
+	reserve := capacity / 20
+	if capacity%20 != 0 {
+		reserve++
+	}
+	free := capacity - reserve - used
+	if n.Type == "LOCAL" && driver != nil {
+		total, physicalFree, statErr := driver.StatLocal(ctx, n.Path)
+		if statErr != nil {
+			return 0, statErr
+		}
+		if total > 0 {
+			physicalReserve := total / 20
+			if total%20 != 0 {
+				physicalReserve++
+			}
+			if physicalFree <= physicalReserve {
+				return 0, ErrPoolFull
+			}
+		}
+	}
+	free -= GetNodeReserved(nodeID)
+	if free < 0 {
+		free = 0
+	}
+	return free, nil
 }
 
 func SelectPlacement(ctx context.Context,db *bun.DB,driver StorageDriver,size int64)(Placement,error){
@@ -87,8 +110,27 @@ func ReadBlob(ctx context.Context,db *bun.DB,driver StorageDriver,table,key stri
  var nodeID,path sql.NullString
  err:=db.QueryRowContext(ctx,`SELECT i.storage_node_id,sn.path FROM `+table+` i LEFT JOIN storage_nodes sn ON sn.id=i.storage_node_id WHERE i.disk_key=? ORDER BY i.storage_node_id IS NULL LIMIT 1`,key).Scan(&nodeID,&path)
  if err!=nil&& !errors.Is(err,sql.ErrNoRows){return nil,err}
- if nodeID.Valid {var kind string;if err=db.QueryRowContext(ctx,`SELECT type FROM storage_nodes WHERE id=?`,nodeID.String).Scan(&kind);err!=nil{return nil,err};if kind=="S3" {cloud,ok:=driver.(CloudStorageDriver);if !ok{return nil,errors.New("cloud driver unavailable")};return cloud.ReadObject(ctx,nodeID.String,key)}}
- return driver.ReadLocal(ctx,path.String,key)
+	if nodeID.Valid {
+		if _, ok := driver.(NodeProber); ok && !NodeAvailable(ctx, driver, nodeID.String) {
+			return nil, fmt.Errorf("%w: storage read failed", ErrUnavailable)
+		}
+		var kind string
+		if err = db.QueryRowContext(ctx, `SELECT type FROM storage_nodes WHERE id=?`, nodeID.String).Scan(&kind); err != nil {
+			return nil, err
+		}
+		if kind == "S3" {
+			cloud, ok := driver.(CloudStorageDriver)
+			if !ok {
+				return nil, errors.New("cloud driver unavailable")
+			}
+			return cloud.ReadObject(ctx, nodeID.String, key)
+		}
+	}
+	reader, err := driver.ReadLocal(ctx, path.String, key)
+	if err != nil {
+		return nil, err
+	}
+	return reader, nil
 }
 
 func DeleteBlob(ctx context.Context,db *bun.DB,driver StorageDriver,nodeID,nodePath,key string)error{

@@ -1,0 +1,209 @@
+LoginRequest:
+  type: object
+  required:
+    - identifier
+    - password
+  properties:
+    identifier:
+      type: string
+      description: Username or email address.
+      example: admin
+    password:
+      type: string
+      format: password
+      description: Account password.
+      example: correct-horse-battery
+LoginResponse:
+  type: object
+  required:
+    - user
+    - message
+  properties:
+    user:
+      $ref: '#/components/schemas/AuthUser'
+    message:
+      type: string
+      example: login successful
+AuthUser:
+  type: object
+  required:
+    - id
+    - username
+    - email
+    - display_name
+    - role
+    - quota_bytes
+    - used_bytes
+  properties:
+    id:
+      type: string
+      description: User identifier.
+      example: 01J8X2K6R5G4M3N2P1Q0ABCDEFG
+    username:
+      type: string
+      example: admin
+    email:
+      type: string
+      format: email
+      example: admin@example.com
+    display_name:
+      type: string
+      example: System Administrator
+    role:
+      type: string
+      description: Assigned user role.
+      example: SUPER_ADMIN
+    quota_bytes:
+      type: integer
+      format: int64
+      description: Quota in bytes; SUPER_ADMIN accounts are returned with -1 for unlimited quota.
+      example: -1
+    used_bytes:
+      type: integer
+      format: int64
+      description: Deduplicated file usage in bytes.
+      example: 1073741824
+LogoutResponse:
+  type: object
+  required:
+    - message
+  properties:
+    message:
+      type: string
+      example: logout successful
+ResetPasswordRequest:
+  type: object
+  required:
+    - recovery_key
+    - new_password
+  properties:
+    username:
+      type: string
+      description: Username of the account to reset. Defaults to admin when omitted.
+      example: admin
+    recovery_key:
+      type: string
+      description: Recovery key containing 30 alphanumeric characters, optionally separated into six groups of five; whitespace and hyphens are ignored. A legacy 64-character hexadecimal key is also accepted.
+      example: ABCDE-FGHIJ-KLMNP-QRSTU-VWXYZ-23456
+    new_password:
+      type: string
+      format: password
+      minLength: 8
+      description: New password; the handler enforces a minimum of 8 characters.
+      example: new-secure-password
+ResetPasswordResponse:
+  type: object
+  required:
+    - message
+    - new_recovery_key
+  properties:
+    message:
+      type: string
+      example: password reset successful
+    new_recovery_key:
+      type: string
+      description: Newly generated recovery key. Save it because the previous recovery key is consumed.
+      example: ABCDE-FGHIJ-KLMNP-QRSTU-VWXYZ-23456
+UpdateProfileRequest:
+  type: object
+  description: Supply display_name and/or email to update. Null or omitted fields are not changed; changing email requires current_password.
+  properties:
+    display_name:
+      type: string
+      description: New display name, 1 to 100 characters after trimming.
+      example: Alex Example
+    email:
+      type: string
+      format: email
+      description: New email address. Changing it requires current_password; the current value can be supplied without a password and causes no email update.
+      example: alex@example.com
+    current_password:
+      type: string
+      format: password
+      description: Required and verified only when changing the email address.
+      example: current-secure-password
+ChangePasswordRequest:
+  type: object
+  required:
+    - current_password
+    - new_password
+    - confirm_password
+  properties:
+    current_password:
+      type: string
+      format: password
+      description: Current account password.
+      example: current-secure-password
+    new_password:
+      type: string
+      format: password
+      minLength: 8
+      maxLength: 72
+      description: New password, at least 8 characters and at most 72 bytes as enforced by the backend.
+      example: replacement-password
+    confirm_password:
+      type: string
+      format: password
+      description: Must exactly match new_password.
+      example: replacement-password
+PasswordChangedResponse:
+  type: object
+  required:
+    - message
+  properties:
+    message:
+      type: string
+      example: password changed successfully
+SetupPasswordValidation:
+  type: object
+  required:
+    - valid
+    - token_type
+    - username
+    - email
+  properties:
+    valid:
+      type: boolean
+      example: true
+    token_type:
+      type: string
+      enum: [INVITATION, PASSWORD_RESET]
+      example: INVITATION
+    username:
+      type: string
+      example: alice
+    email:
+      type: string
+      format: email
+      example: alice@example.com
+SetupPasswordRequest:
+  type: object
+  required:
+    - token
+    - password
+    - confirm_password
+  properties:
+    token:
+      type: string
+      description: Plaintext invitation or reset token.
+      example: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    password:
+      type: string
+      format: password
+      minLength: 15
+      maxLength: 72
+      description: New user password (minimum 15 characters, maximum 72 bytes).
+      example: secure-passphrase-at-least-15-characters
+    confirm_password:
+      type: string
+      format: password
+      description: Confirmation password matching password.
+      example: secure-passphrase-at-least-15-characters
+SetupPasswordResponse:
+  type: object
+  required:
+    - message
+  properties:
+    message:
+      type: string
+      example: password setup successful

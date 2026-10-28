@@ -1,8 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 
 const superAdminUsername = 'storage-e2e-admin';
-const superAdminPassword = 'SuperAdminPassword123!';
-const recoveryKey = 'A1B2C-D3E4F-G5H6J-K7L8M-P9Q0R-S1T2U';
+const superAdminPassword = 'StorageE2E-password-2026';
+const recoveryKey = 'ABCDE-FGHKL-MNPQR-STUVW-XYZ23-45678';
 
 const userHomeA = {
 	username: 'alice-home',
@@ -23,7 +23,9 @@ async function ensureSetup(page: Page) {
 		if (!json.is_setup_completed) {
 			const scan = await page.request.get('/api/v1/setup/scan-nodes');
 			expect(scan.ok()).toBeTruthy();
-			const { nodes } = (await scan.json()) as { nodes: { path: string; capacity_bytes: number }[] };
+			const { nodes } = (await scan.json()) as {
+				nodes: { path: string; capacity_bytes: number }[];
+			};
 			const setup = await page.request.post('/api/v1/setup/complete', {
 				data: {
 					admin: {
@@ -45,13 +47,18 @@ async function ensureSetup(page: Page) {
 async function loginUser(page: Page, username: string, password: string) {
 	await page.context().clearCookies();
 	await page.goto('/login');
-	await page.getByLabel('Username atau Email').fill(username);
-	await page.getByRole('textbox', { name: 'Password' }).fill(password);
-	await page.getByRole('button', { name: 'Masuk' }).click();
+	await page.locator('#login-identifier').fill(username);
+	await page.locator('#login-password').fill(password);
+	await page.getByRole('button', { name: /Masuk|Sign in/i }).click();
 	await page.waitForURL('**/drive/home');
 }
 
-async function uploadFileBrowser(page: Page, baseUrl: string, fileName: string, content = 'isi berkas contoh') {
+async function uploadFileBrowser(
+	page: Page,
+	baseUrl: string,
+	fileName: string,
+	content = 'isi berkas contoh'
+) {
 	const url = `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}filename=${encodeURIComponent(fileName)}`;
 	return page.evaluate(
 		async ({ url, fileName, content }) => {
@@ -115,11 +122,23 @@ test.describe('Drive Home Page (/drive/home)', () => {
 		await loginUser(page, userHomeA.username, userHomeA.password);
 
 		// 1. Upload 6 files into My Storage via authenticated browser session
-		const fileNames = ['item-1.txt', 'item-2.txt', 'item-3.txt', 'item-4.txt', 'item-5.txt', 'item-6.txt'];
+		const fileNames = [
+			'item-1.txt',
+			'item-2.txt',
+			'item-3.txt',
+			'item-4.txt',
+			'item-5.txt',
+			'item-6.txt'
+		];
 		const fileIDs: string[] = [];
 
 		for (const name of fileNames) {
-			const res = await uploadFileBrowser(page, '/api/v1/drive/my-storage/upload', name, `Isi berkas ${name}`);
+			const res = await uploadFileBrowser(
+				page,
+				'/api/v1/drive/my-storage/upload',
+				name,
+				`Isi berkas ${name}`
+			);
 			expect(res.ok).toBeTruthy();
 			fileIDs.push(res.json.id);
 		}
@@ -148,7 +167,9 @@ test.describe('Drive Home Page (/drive/home)', () => {
 
 		// 4. Click item-6.txt in Quick Access -> should navigate to preview URL
 		await quickAccess.getByText('item-6.txt').click();
-		await page.waitForURL((url) => url.pathname.includes('/drive/my-storage') && url.searchParams.has('preview'));
+		await page.waitForURL(
+			(url) => url.pathname.includes('/drive/my-storage') && url.searchParams.has('preview')
+		);
 	});
 
 	test('Recent Activities displays 5 latest upload/edit actions with deduplication and user isolation in Organization', async ({
@@ -158,7 +179,12 @@ test.describe('Drive Home Page (/drive/home)', () => {
 		await loginUser(page, userHomeA.username, userHomeA.password);
 
 		// Action 1: Upload a doc
-		const up1 = await uploadFileBrowser(page, '/api/v1/drive/my-storage/upload', 'dokumen-awal.txt', 'draft awal');
+		const up1 = await uploadFileBrowser(
+			page,
+			'/api/v1/drive/my-storage/upload',
+			'dokumen-awal.txt',
+			'draft awal'
+		);
 		expect(up1.ok).toBeTruthy();
 		const doc1 = up1.json;
 
@@ -183,7 +209,12 @@ test.describe('Drive Home Page (/drive/home)', () => {
 		expect(mov1.ok).toBeTruthy();
 
 		// Action 5: Upload an image in My Storage
-		const img1 = await uploadFileBrowser(page, '/api/v1/drive/my-storage/upload', 'foto-liburan.jpg', 'image bytes');
+		const img1 = await uploadFileBrowser(
+			page,
+			'/api/v1/drive/my-storage/upload',
+			'foto-liburan.jpg',
+			'image bytes'
+		);
 		expect(img1.ok).toBeTruthy();
 
 		// Action 6: Upload in Organization by Alice

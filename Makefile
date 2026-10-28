@@ -1,4 +1,4 @@
-.PHONY: help dev dev-backend dev-frontend build build-frontend build-backend sync-embed test test-backend test-frontend clean
+.PHONY: help dev dev-backend dev-frontend build build-frontend build-backend sync-embed test test-backend test-frontend test-e2e docs-bundle docs-check clean
 
 SHELL := /bin/bash
 
@@ -18,10 +18,13 @@ help:
 	@echo "  make build-backend  Build single Go binary (apps/backend/bin/cubycloud)"
 	@echo ""
 	@echo "Testing & Quality:"
-	@echo "  make test           Run all tests (backend + frontend)"
+	@echo "  make test           Run all standard tests (backend + frontend)"
 	@echo "  make test-backend   Run Go backend tests"
-	@echo "  make test-frontend  Run frontend type check & linter"
+	@echo "  make test-frontend  Run frontend type check & unit tests"
+	@echo "  make test-e2e       Run Playwright end-to-end browser tests"
 	@echo ""
+	@echo "  make docs-bundle    Bundle OpenAPI fragments into docs/openapi.yaml & backend"
+	@echo "  make docs-check     Validate OpenAPI specification and route coverage"
 	@echo "Reset & Cleanup:"
 	@echo "  make reset-setup    Reset SQLite database & processes for fresh onboarding setup"
 	@echo "  make clean          Remove build artifacts and temporary test data"
@@ -73,6 +76,20 @@ test-frontend:
 	@echo "==> Running frontend type check and unit tests..."
 	@cd apps/frontend && bun run check && bun test src
 
+# Run Playwright E2E browser tests
+test-e2e:
+	@echo "==> Running Playwright end-to-end tests..."
+	@cd apps/frontend && bun run test:e2e
+
+# Bundle OpenAPI 3.1 modular specification
+docs-bundle:
+	@echo "==> Bundling OpenAPI specification..."
+	@cd apps/backend && go run ./cmd/openapi-bundler -source ../../docs/openapi -output ../../docs/openapi.yaml -backend-copy internal/modules/docs/openapi.yaml
+
+# Check OpenAPI 3.1 specification freshness and route coverage
+docs-check:
+	@echo "==> Validating OpenAPI specification and route coverage..."
+	@cd apps/backend && go test -v -run "TestOpenAPI|TestValidateIndividualYamlFiles" ./cmd/...
 # Reset setup for clean test
 reset-setup:
 	@./scripts/reset-setup.sh

@@ -1,6 +1,8 @@
 <script lang="ts">
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
+	import { locale } from '$lib/locale.svelte.js';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	let {
 		open = $bindable(false),
@@ -16,13 +18,18 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="bg-surface text-main">
 		<Dialog.Header>
-			<Dialog.Title>Folder asal tidak ditemukan</Dialog.Title>
+			<Dialog.Title>{tx('Folder asal tidak ditemukan', 'Original folder not found')}</Dialog.Title>
 			<Dialog.Description>
-				Folder induk “{fileName}” sudah tidak ada. Pulihkan ke root My Storage?
+				{tx(
+					`Folder induk “${fileName}” sudah tidak ada. Pulihkan ke root My Storage?`,
+					`The parent folder for “${fileName}” no longer exists. Restore to the My Storage root?`
+				)}
 			</Dialog.Description>
 		</Dialog.Header>
 		<Dialog.Footer>
-			<Button type="button" variant="secondary" onclick={() => (open = false)}>Batal</Button>
+			<Button type="button" variant="secondary" onclick={() => (open = false)}
+				>{tx('Batal', 'Cancel')}</Button
+			>
 			<Button
 				type="button"
 				onclick={() => {
@@ -30,7 +37,7 @@
 					open = false;
 				}}
 			>
-				Pulihkan ke Root
+				{tx('Pulihkan ke Root', 'Restore to root')}
 			</Button>
 		</Dialog.Footer>
 	</Dialog.Content>

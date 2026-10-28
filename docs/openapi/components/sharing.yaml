@@ -1,0 +1,174 @@
+SharePermission:
+  type: string
+  enum: [viewer, editor]
+  description: Access level granted by a user grant or share link.
+  example: viewer
+ShareUser:
+  type: object
+  required: [id, username, email]
+  properties:
+    id: {type: string, example: usr_01JABCDEF}
+    username: {type: string, example: alex}
+    email: {type: string, format: email, example: alex@example.com}
+ShareUserSearchResponse:
+  type: object
+  required: [users]
+  properties:
+    users:
+      type: array
+      items: {$ref: '#/components/schemas/ShareUser'}
+ShareGrant:
+  type: object
+  required: [id, user_id, username, email, permission]
+  properties:
+    id: {type: string, example: 01JABCDEF1234567890ABCDEFA}
+    user_id: {type: string, example: usr_01JABCDEF}
+    username: {type: string, example: alex}
+    email: {type: string, format: email, example: alex@example.com}
+    permission: {$ref: '#/components/schemas/SharePermission'}
+ShareLink:
+  type: object
+  required: [id, token, permission, has_password, expires_at, created_at]
+  properties:
+    id: {type: string, example: 01JABCDEF1234567890ABCDEFA}
+    token: {type: string, example: sh_7Kp4mN2x}
+    permission: {$ref: '#/components/schemas/SharePermission'}
+    has_password: {type: boolean, example: true}
+    expires_at: {type: [string, 'null'], format: date-time, example: '2026-11-01T12:00:00Z'}
+    created_at: {type: string, format: date-time, example: '2026-10-25T12:00:00Z'}
+    url: {type: string, format: uri, description: Present when included by the server., example: https://cloud.example.com/s/sh_7Kp4mN2x}
+ItemShares:
+  type: object
+  required: [grants, links]
+  properties:
+    grants:
+      type: array
+      items: {$ref: '#/components/schemas/ShareGrant'}
+    links:
+      type: array
+      items: {$ref: '#/components/schemas/ShareLink'}
+PutShareGrantsRequest:
+  type: object
+  required: [grants]
+  properties:
+    grants:
+      type: array
+      items:
+        type: object
+        required: [user_id, permission]
+        properties:
+          user_id: {type: string, example: usr_01JABCDEF}
+          permission: {$ref: '#/components/schemas/SharePermission'}
+CreateShareLinkRequest:
+  type: object
+  required: [permission]
+  properties:
+    permission: {$ref: '#/components/schemas/SharePermission'}
+    password: {type: string, description: Optional plaintext password; the server stores a hash., example: spring-river-42}
+    expires_days:
+      type: [integer, 'null']
+      description: Expiry in days; supported values are 1, 7, 30, or 90. Null or omitted means no expiry.
+      enum: [1, 7, 30, 90, null]
+      example: 7
+CreateShareLinkResponse:
+  type: object
+  required: [link]
+  properties:
+    link: {$ref: '#/components/schemas/ShareLink'}
+ShareSuccessResponse:
+  type: object
+  required: [success]
+  properties:
+    success: {type: boolean, example: true}
+SharedItem:
+  type: object
+  required: [id, name, kind, size_bytes, modified_at, owner_id, owner_name, permission]
+  properties:
+    id: {type: string, example: item_01JABCDEF}
+    name: {type: string, example: Project plan.pdf}
+    kind: {type: string, example: file}
+    size_bytes: {type: integer, format: int64, example: 245760}
+    modified_at: {type: string, format: date-time, example: '2026-10-24T16:30:00Z'}
+    owner_id: {type: string, example: usr_01JOWNER}
+    owner_name: {type: string, example: sam}
+    permission: {$ref: '#/components/schemas/SharePermission'}
+SharedItemsResponse:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: {$ref: '#/components/schemas/SharedItem'}
+SharedNode:
+  type: object
+  required: [id, name, kind, size_bytes, parent_id, modified_at]
+  properties:
+    id: {type: string, example: item_01JABCDEF}
+    name: {type: string, example: Design assets}
+    kind: {type: string, example: folder}
+    size_bytes: {type: integer, format: int64, example: 0}
+    parent_id: {type: [string, 'null'], example: item_01JPARENT}
+    modified_at: {type: string, format: date-time, example: '2026-10-24T16:30:00Z'}
+SharedFolderResponse:
+  type: object
+  required: [root_id, permission, items, breadcrumbs]
+  properties:
+    root_id: {type: string, example: item_01JROOT}
+    permission: {$ref: '#/components/schemas/SharePermission'}
+    items:
+      type: array
+      items: {$ref: '#/components/schemas/SharedNode'}
+    breadcrumbs:
+      type: array
+      items: {$ref: '#/components/schemas/Breadcrumb'}
+SharedItemListResponse:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: {$ref: '#/components/schemas/SharedNode'}
+SharedFolderCreateRequest:
+  type: object
+  required: [name]
+  properties:
+    name: {type: string, example: Reports}
+SharedItemRenameRequest:
+  type: object
+  required: [name]
+  properties:
+    name: {type: string, example: Final report.pdf}
+MoveSharedItemRequest:
+  type: object
+  required: [target_parent_id]
+  properties:
+    target_parent_id: {type: string, example: item_01JDESTINATION}
+PublicShareResponse:
+  type: object
+  required: [token, permission, has_password, unlocked]
+  properties:
+    token: {type: string, example: sh_7Kp4mN2x}
+    permission: {$ref: '#/components/schemas/SharePermission'}
+    has_password: {type: boolean, example: true}
+    unlocked: {type: boolean, example: false}
+    item_name: {type: string, description: Included when the link is password-locked., example: Shared project}
+    expires_at: {type: [string, 'null'], format: date-time, example: '2026-11-01T12:00:00Z'}
+    item: {$ref: '#/components/schemas/SharedNode'}
+    children:
+      type: array
+      items: {$ref: '#/components/schemas/SharedNode'}
+    breadcrumbs:
+      type: array
+      items: {$ref: '#/components/schemas/Breadcrumb'}
+PublicUnlockRequest:
+  type: object
+  required: [password]
+  properties:
+    password: {type: string, example: spring-river-42}
+PublicUnlockResponse:
+  type: object
+  required: [success, unlocked, token]
+  properties:
+    success: {type: boolean, example: true}
+    unlocked: {type: boolean, example: true}
+    token: {type: string, example: sh_7Kp4mN2x}

@@ -1,0 +1,111 @@
+/api/v1/drive/items/{id}/move:
+  patch:
+    operationId: moveDriveItem
+    summary: Move a Drive item
+    description: Moves the item in the current user's Drive scope.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/MoveItemRequest' }, example: { target_parent_id: null } } } }
+    responses:
+      '200': { description: Moved item., content: { application/json: { schema: { $ref: '#/components/schemas/ItemResponse' } } } }
+      '400': { description: Invalid parent or circular move., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+      '404': { description: Item not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+      '409': { description: "Name conflict; may include suggested_name.", content: { application/json: { schema: { type: object, properties: { error: { type: string }, suggested_name: { type: string } } } } } }
+
+/api/v1/drive/items/{id}/star:
+  parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+  post:
+    operationId: toggleDriveItemStarPost
+    summary: Toggle a Drive item star
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Star state.
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StarResponse' }
+      '404':
+        description: Item not found.
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ErrorResponse' }
+  put:
+    operationId: toggleDriveItemStarPut
+    summary: Toggle a Drive item star
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Star state.
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StarResponse' }
+      '404':
+        description: Item not found.
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ErrorResponse' }
+
+/api/v1/drive/starred:
+  get:
+    operationId: listDriveStarredItems
+    summary: List starred Drive items
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Starred item list.
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ItemListResponse' }
+      '401':
+        description: Authentication required.
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ErrorResponse' }
+/api/v1/drive/sync-cloud:
+  post:
+    operationId: syncDriveCloudUpload
+    summary: Finalize a cloud upload
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UploadSyncRequest' }, example: { upload_id: "01JQ2Z5X7K9M3N4P6R8T0V1W2Y" } } } }
+    responses:
+      '201': { description: Created file item., content: { application/json: { schema: { $ref: '#/components/schemas/ItemResponse' } } } }
+      '400': { description: Missing upload_id., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+/api/v1/drive/home:
+  get:
+    operationId: getDriveHome
+    summary: Get recent Drive items and activities
+    description: Returns recent-access items and recent upload or edit activities for the authenticated user.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200': { description: Home data., content: { application/json: { schema: { $ref: '#/components/schemas/DriveHomeResponse' } } } }
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+      '500': { description: Failed to retrieve home data., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+/api/v1/drive/access:
+  post:
+    operationId: recordDriveItemAccess
+    summary: Record item access
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content: { application/json: { schema: { $ref: '#/components/schemas/AccessRequest' }, example: { item_id: "01JQ2Z5X7K9M3N4P6R8T0V1W2Y", source: my-storage } } }
+    responses:
+      '200': { description: Access recorded., content: { application/json: { schema: { $ref: '#/components/schemas/AccessResponse' } } } }
+      '400': { description: Invalid item ID or source., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+      '500': { description: Failed to record access., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }

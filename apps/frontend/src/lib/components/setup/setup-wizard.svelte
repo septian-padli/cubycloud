@@ -24,6 +24,8 @@
 	import StepCloud from './steps/step-cloud.svelte';
 	import StepRecovery from './steps/step-recovery.svelte';
 	import { Info } from '@lucide/svelte';
+	import { locale } from '$lib/locale.svelte.js';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	let currentStep = $state<SetupStepId>(1);
 	let successOpen = $state(false);
@@ -40,18 +42,19 @@
 	let strategy = $state<PlacementStrategy>('FILL_FIRST');
 	let cloud = $state<CloudForm>({
 		enabled: false,
-		provider: 'R2',
+		provider: 'S3_COMPATIBLE',
+		nodeName: '',
 		endpoint: '',
+		region: '',
 		bucket: '',
 		accessKey: '',
-		secretKey: ''
+		secretKey: '',
+		capacityCapGb: null
 	});
 	let recoveryKey = $state('');
 	let recoveryDownloaded = $state(false);
 
-	const activeNodeCount = $derived(
-		nodes.filter((n) => n.enabled).length + (cloud.enabled ? 1 : 0)
-	);
+	const activeNodeCount = $derived(nodes.filter((n) => n.enabled).length + (cloud.enabled ? 1 : 0));
 
 	// Per-step validation — each rule surfaces in its own tab, never only at submit.
 	const adminValid = $derived(
@@ -60,12 +63,22 @@
 			admin.password.length >= 8 &&
 			admin.password === admin.confirmPassword
 	);
+	const cloudCapValid = $derived(
+		cloud.capacityCapGb === null ||
+			cloud.capacityCapGb === undefined ||
+			cloud.capacityCapGb === '' ||
+			(Number(cloud.capacityCapGb) >= 1 &&
+				Math.floor(Number(cloud.capacityCapGb)) === Number(cloud.capacityCapGb))
+	);
 	const cloudValid = $derived(
 		!cloud.enabled ||
-			(cloud.endpoint.trim() !== '' &&
+			(cloud.nodeName.trim() !== '' &&
+				cloud.endpoint.trim() !== '' &&
+				cloud.region.trim() !== '' &&
 				cloud.bucket.trim() !== '' &&
 				cloud.accessKey.trim() !== '' &&
-				cloud.secretKey.trim() !== '')
+				cloud.secretKey.trim() !== '' &&
+				cloudCapValid)
 	);
 
 	const canNext = $derived.by(() => {
@@ -97,22 +110,21 @@
 		if (step < currentStep) currentStep = step;
 	}
 
-
 	async function goNext() {
 		if (!canNext) return;
-		
+
 		// Step 4 → Step 5: Generate recovery key
 		if (currentStep === 4) {
 			generateRecoveryKey();
 			currentStep = 5;
 			return;
 		}
-		
+
 		if (currentStep < 5) {
 			currentStep = (currentStep + 1) as SetupStepId;
 			return;
 		}
-		
+
 		// Step 5: submit with pre-generated recovery key
 		try {
 			const req: CompleteSetupRequest = {
@@ -126,19 +138,23 @@
 					.filter((n) => n.enabled)
 					.map((n) => ({
 						path: n.path,
-					capacity_bytes: n.capacityCapGb * 1e9,
+						capacity_bytes: n.capacityCapGb * 1024 ** 3,
 						enabled: true
 					})),
 				placement_strategy: strategy
 			};
 			if (cloud.enabled) {
+				const capNum = cloud.capacityCapGb ? Math.floor(Number(cloud.capacityCapGb)) : 0;
 				req.cloud = {
 					enabled: true,
 					provider: cloud.provider,
-					endpoint: cloud.endpoint,
-					bucket: cloud.bucket,
-					access_key: cloud.accessKey,
-					secret_key: cloud.secretKey
+					node_name: cloud.nodeName.trim(),
+					endpoint: cloud.endpoint.trim(),
+					region: cloud.region.trim(),
+					bucket: cloud.bucket.trim(),
+					access_key: cloud.accessKey.trim(),
+					secret_key: cloud.secretKey.trim(),
+					capacity_cap_gb: capNum > 0 ? capNum : 0
 				};
 			}
 			await completeSetup(req);
@@ -147,13 +163,13 @@
 			goto('/drive/home');
 		} catch (err: any) {
 			if (err.status === 409) {
-				toast.error('Setup already completed');
+				toast.error(tx('Setup sudah selesai', 'Setup already completed'));
 			} else if (err.status === 400) {
-				toast.error(err.message || 'Validation error');
+				toast.error(err.message || tx('Kesalahan validasi', 'Validation error'));
 			} else if (err.status === 500) {
-				toast.error('Server error. Please try again.');
+				toast.error(tx('Kesalahan server. Silakan coba lagi.', 'Server error. Please try again.'));
 			} else {
-				toast.error('Cannot connect to server');
+				toast.error(tx('Tidak dapat terhubung ke server', 'Cannot connect to server'));
 			}
 		}
 	}
@@ -172,10 +188,13 @@
 		cloud = {
 			...cloud,
 			enabled: false,
+			nodeName: '',
 			endpoint: '',
+			region: '',
 			bucket: '',
 			accessKey: '',
-			secretKey: ''
+			secretKey: '',
+			capacityCapGb: null
 		};
 		currentStep = 4;
 	}
@@ -213,7 +232,7 @@
 			};
 			localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
 		} catch (err) {
-			console.error('Failed to save draft:', err);
+			console.error(tx('Gagal menyimpan draf:', 'Failed to save draft:'), err);
 		}
 	}
 
@@ -225,7 +244,7 @@
 			if (!saved) return false;
 
 			const draft = JSON.parse(saved);
-			
+
 			// Expire after 24 hours
 			const age = Date.now() - (draft.timestamp || 0);
 			if (age > 24 * 60 * 60 * 1000) {
@@ -248,11 +267,12 @@
 				cloud.bucket = draft.cloud.bucket || '';
 			}
 
-			toast.success('Draft restored from previous session');
+			toast.success(
+				tx('Draf dipulihkan dari sesi sebelumnya', 'Draft restored from previous session')
+			);
 			return true;
 		} catch (err) {
-			console.error('Failed to restore draft:', err);
-			localStorage.removeItem(STORAGE_KEY);
+			console.error(tx('Gagal memulihkan draf:', 'Failed to restore draft:'), err);
 			return false;
 		}
 	}
@@ -263,7 +283,7 @@
 		try {
 			localStorage.removeItem(STORAGE_KEY);
 		} catch (err) {
-			console.error('Failed to clear draft:', err);
+			console.error(tx('Gagal menghapus draf:', 'Failed to clear draft:'), err);
 		}
 	}
 
@@ -297,14 +317,16 @@
 				id: `node-${i}`,
 				name: n.path.split('/').pop() || n.path,
 				path: n.path,
-				kind: (n.kind === 'SSD' || n.kind === 'HDD' ? n.kind : 'HDD') as 'SSD' | 'HDD',
-				totalGb: Math.round(n.capacity_bytes / 1e9),
-				freeGb: Math.round(n.free_bytes / 1e9),
+				kind: (n.kind === 'SSD' || n.kind === 'HDD' || n.kind === 'UNKNOWN'
+					? n.kind
+					: 'UNKNOWN') as 'SSD' | 'HDD' | 'UNKNOWN',
+				totalGb: Math.round(n.capacity_bytes / 1024 ** 3),
+				freeGb: Math.round(n.free_bytes / 1024 ** 3),
 				enabled: true,
 				usedBytes: 0,
-				capacityCapGb: Math.round(n.capacity_bytes / 1e9)
+				capacityCapGb: Math.round(n.capacity_bytes / 1024 ** 3)
 			}));
-			
+
 			// Merge: keep restored enabled state if paths match
 			if (restored && nodes.length > 0) {
 				scannedNodes.forEach((scanned) => {
@@ -317,7 +339,7 @@
 			}
 			nodes = scannedNodes;
 		} catch {
-			toast.error('Failed to scan storage nodes');
+			toast.error(tx('Gagal memindai node penyimpanan', 'Failed to scan storage nodes'));
 		} finally {
 			loadingNodes = false;
 		}
@@ -329,12 +351,21 @@
 
 	<div class="min-w-0 flex-1 space-y-4">
 		<div>
-			<h1 class="text-2xl font-bold leading-tight text-main">Setup CubyCloud</h1>
+			<h1 class="text-2xl leading-tight font-bold text-main">
+				{tx('Setup CubyCloud', 'CubyCloud Setup')}
+			</h1>
 			<p class="mt-1 text-sm text-muted">
-				{SETUP_STEPS[currentStep - 1]?.description}
+				{locale.language === 'id'
+					? SETUP_STEPS[currentStep - 1]?.description
+					: [
+							'Create the first administrator account.',
+							'Choose local storage nodes.',
+							'Connect cloud storage.',
+							'Choose a file placement strategy.',
+							'Save your recovery key.'
+						][currentStep - 1]}
 			</p>
 		</div>
-
 
 		{#if currentStep === 1}
 			<StepAdmin bind:admin />
@@ -348,11 +379,18 @@
 			<StepRecovery bind:recoveryKey bind:downloaded={recoveryDownloaded} />
 			{#if !adminValid || !cloudValid}
 				<Alert.Root>
-					<Alert.Title>Data belum lengkap</Alert.Title>
+					<Info class="size-4 stroke-2" />
+					<Alert.Title>{tx('Data belum lengkap', 'Incomplete information')}</Alert.Title>
 					<Alert.Description>
 						{!adminValid
-							? 'Lengkapi dulu data akun (username, email, password) di Langkah 1.'
-							: 'Lengkapi dulu kredensial cloud di Langkah 3.'}
+							? tx(
+									'Lengkapi dulu data akun (nama pengguna, email, kata sandi) di Langkah 1.',
+									'Complete the account details (username, email, password) in Step 1 first.'
+								)
+							: tx(
+									'Lengkapi dulu kredensial cloud di Langkah 3.',
+									'Complete the cloud credentials in Step 3 first.'
+								)}
 					</Alert.Description>
 				</Alert.Root>
 			{/if}
@@ -364,7 +402,7 @@
 				{canNext}
 				isLast={currentStep === 5}
 				showSkip={currentStep === 3}
-				nextLabel="Selesaikan Setup & Masuk ke CubyCloud"
+				nextLabel={tx('Selesaikan Setup & Masuk ke CubyCloud', 'Complete Setup & Enter CubyCloud')}
 				onBack={goBack}
 				onNext={goNext}
 				onSkip={skipCloud}

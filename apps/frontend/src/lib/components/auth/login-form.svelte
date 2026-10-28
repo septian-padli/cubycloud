@@ -9,8 +9,10 @@
 	import PasswordInput from '$lib/components/password-input.svelte';
 	import { authAPI } from '$lib/api/auth.js';
 	import { setMockLoggedIn } from '$lib/mocks/auth-session.js';
+	import { locale } from '$lib/locale.svelte.js';
 	import { toast } from 'svelte-sonner';
 	import { KeyRound } from '@lucide/svelte';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	let identifier = $state('');
 	let password = $state('');
@@ -34,15 +36,18 @@
 			const res = await authAPI.login(identifier.trim(), password);
 			if (res.error) {
 				errorMessage = res.error;
-				toast.error('Gagal masuk', { description: res.error });
+				toast.error(tx('Gagal masuk', 'Sign-in failed'), { description: res.error });
 				return;
 			}
 
+			locale.setAccount(res.data?.user.id ?? null);
 			setMockLoggedIn(true);
-			toast.success('Berhasil masuk');
+			toast.success(tx('Berhasil masuk', 'Signed in successfully'));
 			const redirect = page.url.searchParams.get('redirect');
 			const safe =
-				redirect && redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/drive/home';
+				redirect && redirect.startsWith('/') && !redirect.startsWith('//')
+					? redirect
+					: '/drive/home';
 			void goto(safe);
 		} finally {
 			loading = false;
@@ -52,41 +57,48 @@
 
 <Card.Root class="rounded-xl border-subtle bg-surface shadow-none">
 	<Card.Header>
-		<Card.Title class="text-lg font-semibold text-main">Masuk</Card.Title>
+		<Card.Title class="text-lg font-semibold text-main">{tx('Masuk', 'Sign in')}</Card.Title>
 		<Card.Description class="text-sm text-muted">
-			Masuk ke CubyCloud dengan username atau email dan password.
+			{tx(
+				'Masuk ke CubyCloud dengan nama pengguna atau email dan kata sandi.',
+				'Sign in to CubyCloud with your username or email and password.'
+			)}
 		</Card.Description>
 	</Card.Header>
 	<Card.Content class="space-y-4">
 		{#if forgotInfo}
 			<Alert.Root variant="default">
 				<KeyRound class="size-4 stroke-2" />
-				<Alert.Title>Pemulihan tanpa email</Alert.Title>
+				<Alert.Title>{tx('Pemulihan tanpa email', 'Recovery without email')}</Alert.Title>
 				<Alert.Description>
-					CubyCloud v1.0 tidak mengirim reset password lewat SMTP. Super Admin memulihkan akses
-					dengan Emergency Recovery Key di halaman Pulihkan Akses.
+					{tx(
+						'CubyCloud v1.0 tidak mengirim email untuk pengaturan ulang kata sandi melalui SMTP. Super Admin memulihkan akses dengan Emergency Recovery Key di halaman Pulihkan Akses.',
+						'CubyCloud v1.0 does not send password resets by email. The Super Admin can restore access with the Emergency Recovery Key on the Access Recovery page.'
+					)}
 				</Alert.Description>
 			</Alert.Root>
 		{/if}
 
 		<form class="space-y-4" onsubmit={onSubmit}>
 			<div class="space-y-2">
-				<Label for="login-identifier">Username atau Email</Label>
+				<Label for="login-identifier">{tx('Nama pengguna atau email', 'Username or email')}</Label>
 				<Input
 					id="login-identifier"
 					autocomplete="username"
 					bind:value={identifier}
-					placeholder="admin atau admin@contoh.local"
+					placeholder={tx('admin atau admin@contoh.local', 'admin or admin@example.local')}
 					aria-invalid={identifierEmpty}
 				/>
 				{#if identifierEmpty}
-					<p class="text-xs text-danger">Username atau email wajib diisi.</p>
+					<p class="text-xs text-danger">
+						{tx('Nama pengguna atau email wajib diisi.', 'Username or email is required.')}
+					</p>
 				{/if}
 			</div>
 
 			<div class="space-y-2">
 				<div class="flex items-center justify-between gap-2">
-					<Label for="login-password">Password</Label>
+					<Label for="login-password">{tx('Kata sandi', 'Password')}</Label>
 					<button
 						type="button"
 						class="text-xs font-medium text-primary hover:underline"
@@ -94,7 +106,7 @@
 							forgotInfo = !forgotInfo;
 						}}
 					>
-						Lupa password?
+						{tx('Lupa kata sandi?', 'Forgot password?')}
 					</button>
 				</div>
 				<PasswordInput
@@ -104,7 +116,9 @@
 					aria-invalid={passwordEmpty}
 				/>
 				{#if passwordEmpty}
-					<p class="text-xs text-danger">Password wajib diisi.</p>
+					<p class="text-xs text-danger">
+						{tx('Kata sandi wajib diisi.', 'Password is required.')}
+					</p>
 				{/if}
 			</div>
 
@@ -113,13 +127,15 @@
 			{/if}
 
 			<Button type="submit" class="w-full" disabled={loading}>
-				{loading ? 'Sedang masuk...' : 'Masuk'}
+				{loading ? tx('Sedang masuk...', 'Signing in...') : tx('Masuk', 'Sign in')}
 			</Button>
 		</form>
 
 		<p class="text-center text-sm text-muted">
-			Lupa akses Super Admin?
-			<a href="/recovery" class="font-medium text-primary hover:underline">Pulihkan Akses Admin</a>
+			{tx('Lupa akses Super Admin?', 'Forgot Super Admin access?')}
+			<a href="/recovery" class="font-medium text-primary hover:underline"
+				>{tx('Pulihkan Akses Admin', 'Recover Admin Access')}</a
+			>
 		</p>
 	</Card.Content>
 </Card.Root>

@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Select as SelectPrimitive } from "bits-ui";
-	import { Check } from "@lucide/svelte";
-	import { cn } from "$lib/utils.js";
+	import { Select as SelectPrimitive } from 'bits-ui';
+	import { Check } from '@lucide/svelte';
+	import { cn } from '$lib/utils.js';
 
 	let {
 		ref = $bindable(null),
@@ -19,7 +19,7 @@
 	{value}
 	{label}
 	class={cn(
-		"relative flex w-full cursor-pointer items-center gap-2 rounded-lg py-1.5 ps-8 pe-2 text-sm text-main outline-none select-none data-disabled:pointer-events-none data-disabled:opacity-50 hover:bg-muted/15 focus:bg-muted/15 data-highlighted:bg-muted/15",
+		'relative flex w-full cursor-pointer items-center gap-2 rounded-lg py-1.5 ps-8 pe-2 text-sm text-main outline-none select-none hover:bg-muted/15 focus:bg-muted/15 data-disabled:pointer-events-none data-disabled:opacity-50 data-highlighted:bg-muted/15',
 		className
 	)}
 	{...restProps}

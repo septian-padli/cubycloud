@@ -20,7 +20,9 @@
 	import { ConfirmDialog } from '$lib/components/ui/confirm-dialog/index.js';
 	import { Download, Eye, FolderOpen, Loader2, MoreVertical, Star, Trash2 } from '@lucide/svelte';
 	import { cn } from '$lib/utils.js';
+	import { locale } from '$lib/locale.svelte.js';
 
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 	let items = $state<FileEntry[]>([]);
 	let loading = $state(true);
 	let selectedId = $state<string | null>(null);
@@ -29,9 +31,7 @@
 	let deleteTargetEntry = $state<FileEntry | null>(null);
 
 	const previewId = $derived(page.url.searchParams.get('preview'));
-	const previewEntry = $derived(
-		previewId ? (items.find((e) => e.id === previewId) ?? null) : null
-	);
+	const previewEntry = $derived(previewId ? (items.find((e) => e.id === previewId) ?? null) : null);
 	const previewOpen = $derived(!!previewEntry);
 
 	function syncPreview(id: string | null) {
@@ -52,7 +52,11 @@
 			const nodes = await getStarredItems();
 			items = nodes.map((node) => myStorageAPI.toEntry(node));
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Gagal memuat berkas berbintang');
+			toast.error(
+				error instanceof Error
+					? error.message
+					: tx('Gagal memuat berkas berbintang', 'Failed to load starred files')
+			);
 		} finally {
 			loading = false;
 		}
@@ -84,9 +88,15 @@
 		if (previewId === entry.id) syncPreview(null);
 		try {
 			await toggleStar(entry.id);
-			toast.success(`Bintang dihapus dari “${entry.name}”`);
+			toast.success(
+				tx(`Bintang dihapus dari “${entry.name}”`, `Removed star from “${entry.name}”`)
+			);
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Gagal menghapus bintang');
+			toast.error(
+				error instanceof Error
+					? error.message
+					: tx('Gagal menghapus bintang', 'Failed to remove star')
+			);
 			void loadStarred();
 		}
 	}
@@ -95,7 +105,11 @@
 		try {
 			await myStorageAPI.download(entry.id, entry.name);
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Gagal mengunduh berkas');
+			toast.error(
+				error instanceof Error
+					? error.message
+					: tx('Gagal mengunduh berkas', 'Failed to download file')
+			);
 		}
 	}
 
@@ -112,25 +126,35 @@
 			items = items.filter((e) => e.id !== entry.id);
 			if (selectedId === entry.id) selectedId = null;
 			if (previewId === entry.id) syncPreview(null);
-			toast.success(`“${entry.name}” dipindahkan ke Trash`);
+			toast.success(tx(`“${entry.name}” dipindahkan ke Trash`, `Moved “${entry.name}” to Trash`));
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Gagal memindahkan ke Trash');
+			toast.error(
+				error instanceof Error
+					? error.message
+					: tx('Gagal memindahkan ke Trash', 'Failed to move to Trash')
+			);
 		}
 	}
 </script>
 
 <svelte:head>
-	<title>Berbintang — CubyCloud</title>
+	<title>{tx('Berbintang', 'Starred')} — CubyCloud</title>
 	<meta
 		name="description"
-		content="Akses cepat ke berkas dan folder yang Anda tandai dengan bintang."
+		content={tx(
+			'Akses cepat ke berkas dan folder yang Anda tandai dengan bintang.',
+			'Quick access to files and folders you have starred.'
+		)}
 	/>
 </svelte:head>
 
 <div class="flex flex-col gap-6">
 	<DrivePageHeader
-		title="Berbintang"
-		description="Akses cepat ke berkas dan folder yang Anda tandai dengan bintang."
+		title={tx('Berbintang', 'Starred')}
+		description={tx(
+			'Akses cepat ke berkas dan folder yang Anda tandai dengan bintang.',
+			'Quick access to files and folders you have starred.'
+		)}
 	>
 		{#snippet actions()}
 			<DriveViewToggle />
@@ -142,19 +166,24 @@
 			class="flex items-center justify-center rounded-xl border border-subtle bg-surface px-4 py-16 text-muted"
 		>
 			<Loader2 class="size-6 animate-spin" />
-			<span class="ms-2 text-sm font-medium">Memuat berkas berbintang...</span>
+			<span class="ms-2 text-sm font-medium">
+				{tx('Memuat berkas berbintang...', 'Loading starred files...')}
+			</span>
 		</div>
 	{:else if items.length === 0}
-		<div
-			class="overflow-hidden rounded-xl border border-subtle bg-surface px-4 py-12 text-center"
-		>
-			<p class="text-sm font-medium text-main">Belum ada berkas berbintang</p>
+		<div class="overflow-hidden rounded-xl border border-subtle bg-surface px-4 py-12 text-center">
+			<p class="text-sm font-medium text-main">
+				{tx('Belum ada berkas berbintang', 'No starred files yet')}
+			</p>
 			<p class="mt-1 text-xs text-muted">
-				Tandai berkas atau folder dengan bintang dari My Storage.
+				{tx(
+					'Tandai berkas atau folder dengan bintang dari My Storage.',
+					'Star files or folders from My Storage.'
+				)}
 			</p>
 		</div>
 	{:else if driveView.mode === 'grid'}
-		<DriveFileGrid label="Berkas berbintang">
+		<DriveFileGrid label={tx('Berkas berbintang', 'Starred files')}>
 			{#each items as entry (entry.id)}
 				<ContextMenu.Root>
 					<ContextMenu.Trigger class="block w-full">
@@ -162,8 +191,8 @@
 							kind={entry.kind}
 							name={entry.name}
 							subtitle={entry.kind === 'folder'
-								? `Folder · ${entry.modifiedAt}`
-								: `${formatSize(entry.sizeBytes)} · ${entry.modifiedAt}`}
+								? `${tx('Folder', 'Folder')} · ${locale.formatDate(entry.modifiedAt)}`
+								: `${formatSize(entry.sizeBytes)} · ${locale.formatDate(entry.modifiedAt)}`}
 							previewUrl={entry.kind !== 'folder' ? previewUrl('my-storage', entry.id) : undefined}
 							selected={selectedId === entry.id}
 							onSelect={() => handleItemClick(entry)}
@@ -172,15 +201,17 @@
 							{#snippet star()}
 								<button
 									type="button"
-									class="inline-flex size-7 items-center justify-center rounded-lg bg-surface/80 p-1 backdrop-blur-sm transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
-									title="Hapus Bintang"
-									aria-label="Hapus Bintang"
+									class="inline-flex size-7 items-center justify-center rounded-lg bg-surface/80 p-1 backdrop-blur-sm transition-colors hover:bg-surface focus-visible:ring-1 focus-visible:ring-primary focus-visible:outline-none"
+									title={tx('Hapus Bintang', 'Remove Star')}
+									aria-label={tx('Hapus Bintang', 'Remove Star')}
 									onclick={(e) => {
 										e.stopPropagation();
 										onUnstar(entry);
 									}}
 								>
-									<Star class="size-4 fill-amber-400 stroke-amber-500 text-amber-500 transition-colors" />
+									<Star
+										class="size-4 fill-amber-400 stroke-amber-500 text-amber-500 transition-colors"
+									/>
 								</button>
 							{/snippet}
 							{#snippet menu()}
@@ -193,7 +224,7 @@
 												variant="ghost"
 												size="icon"
 												class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
-												aria-label="Aksi berkas"
+												aria-label={tx('Aksi berkas', 'File actions')}
 												onclick={(e: MouseEvent) => e.stopPropagation()}
 											>
 												<MoreVertical class="size-4 stroke-2" />
@@ -204,24 +235,25 @@
 										{#if entry.kind === 'folder'}
 											<DropdownMenu.Item
 												class="gap-2"
-												onclick={() => goto(`/drive/my-storage?folder=${encodeURIComponent(entry.id)}`)}
+												onclick={() =>
+													goto(`/drive/my-storage?folder=${encodeURIComponent(entry.id)}`)}
 											>
 												<FolderOpen class="size-4 stroke-2" />
-												Buka Folder
+												{tx('Buka Folder', 'Open Folder')}
 											</DropdownMenu.Item>
 										{:else}
 											<DropdownMenu.Item class="gap-2" onclick={() => syncPreview(entry.id)}>
 												<Eye class="size-4 stroke-2" />
-												Lihat Pratinjau
+												{tx('Lihat Pratinjau', 'Preview')}
 											</DropdownMenu.Item>
 											<DropdownMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 												<Download class="size-4 stroke-2" />
-												Unduh
+												{tx('Unduh', 'Download')}
 											</DropdownMenu.Item>
 										{/if}
 										<DropdownMenu.Item class="gap-2" onclick={() => onUnstar(entry)}>
 											<Star class="size-4 fill-amber-400 stroke-amber-500 text-amber-500" />
-											Hapus Bintang
+											{tx('Hapus Bintang', 'Remove Star')}
 										</DropdownMenu.Item>
 										<DropdownMenu.Separator />
 										<DropdownMenu.Item
@@ -230,7 +262,7 @@
 											onclick={() => onDelete(entry)}
 										>
 											<Trash2 class="size-4 stroke-2" />
-											Hapus ke Trash
+											{tx('Hapus ke Trash', 'Move to Trash')}
 										</DropdownMenu.Item>
 									</DropdownMenu.Content>
 								</DropdownMenu.Root>
@@ -244,30 +276,26 @@
 								onclick={() => goto(`/drive/my-storage?folder=${encodeURIComponent(entry.id)}`)}
 							>
 								<FolderOpen class="size-4 stroke-2" />
-								Buka Folder
+								{tx('Buka Folder', 'Open Folder')}
 							</ContextMenu.Item>
 						{:else}
 							<ContextMenu.Item class="gap-2" onclick={() => syncPreview(entry.id)}>
 								<Eye class="size-4 stroke-2" />
-								Lihat Pratinjau
+								{tx('Lihat Pratinjau', 'Preview')}
 							</ContextMenu.Item>
 							<ContextMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 								<Download class="size-4 stroke-2" />
-								Unduh
+								{tx('Unduh', 'Download')}
 							</ContextMenu.Item>
 						{/if}
 						<ContextMenu.Item class="gap-2" onclick={() => onUnstar(entry)}>
 							<Star class="size-4 fill-amber-400 stroke-amber-500 text-amber-500" />
-							Hapus Bintang
+							{tx('Hapus Bintang', 'Remove Star')}
 						</ContextMenu.Item>
 						<ContextMenu.Separator />
-						<ContextMenu.Item
-							variant="destructive"
-							class="gap-2"
-							onclick={() => onDelete(entry)}
-						>
+						<ContextMenu.Item variant="destructive" class="gap-2" onclick={() => onDelete(entry)}>
 							<Trash2 class="size-4 stroke-2" />
-							Hapus ke Trash
+							{tx('Hapus ke Trash', 'Move to Trash')}
 						</ContextMenu.Item>
 					</ContextMenu.Content>
 				</ContextMenu.Root>
@@ -277,7 +305,7 @@
 		<div
 			class="overflow-hidden rounded-xl border border-subtle bg-surface"
 			role="listbox"
-			aria-label="Berkas berbintang"
+			aria-label={tx('Berkas berbintang', 'Starred files')}
 		>
 			{#each items as entry (entry.id)}
 				<ContextMenu.Root>
@@ -287,7 +315,7 @@
 							tabindex="0"
 							aria-selected={selectedId === entry.id}
 							class={cn(
-								'flex cursor-pointer items-center justify-between border-b border-subtle px-4 py-3 transition-colors hover:bg-black/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 dark:hover:bg-white/5',
+								'flex cursor-pointer items-center justify-between border-b border-subtle px-4 py-3 transition-colors hover:bg-black/5 focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none dark:hover:bg-white/5',
 								selectedId === entry.id && 'bg-primary/5'
 							)}
 							onclick={() => handleItemClick(entry)}
@@ -305,22 +333,26 @@
 										</p>
 										<button
 											type="button"
-											class="inline-flex size-6 shrink-0 items-center justify-center rounded p-0.5 text-muted hover:text-amber-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary"
-											title="Hapus Bintang"
-											aria-label="Hapus Bintang"
+											class="inline-flex size-6 shrink-0 items-center justify-center rounded p-0.5 text-muted hover:text-amber-500 focus-visible:ring-1 focus-visible:ring-primary focus-visible:outline-none"
+											title={tx('Hapus Bintang', 'Remove Star')}
+											aria-label={tx('Hapus Bintang', 'Remove Star')}
 											onclick={(e) => {
 												e.stopPropagation();
 												onUnstar(entry);
 											}}
 										>
-											<Star class="size-3.5 fill-amber-400 stroke-amber-500 text-amber-500 transition-colors" />
+											<Star
+												class="size-3.5 fill-amber-400 stroke-amber-500 text-amber-500 transition-colors"
+											/>
 										</button>
 									</div>
 									<p class="text-xs text-muted">
 										{#if entry.kind === 'folder'}
-											Folder · Diubah {entry.modifiedAt}
+											{tx('Folder', 'Folder')} · {tx('Diubah', 'Modified')}
+											{locale.formatDate(entry.modifiedAt)}
 										{:else}
-											{formatSize(entry.sizeBytes)} · Diubah {entry.modifiedAt}
+											{formatSize(entry.sizeBytes)} · {tx('Diubah', 'Modified')}
+											{locale.formatDate(entry.modifiedAt)}
 										{/if}
 									</p>
 								</div>
@@ -336,7 +368,7 @@
 												variant="ghost"
 												size="icon"
 												class="size-8 text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
-												aria-label="Aksi berkas"
+												aria-label={tx('Aksi berkas', 'File actions')}
 												onclick={(e: MouseEvent) => e.stopPropagation()}
 											>
 												<MoreVertical class="size-4 stroke-2" />
@@ -347,24 +379,25 @@
 										{#if entry.kind === 'folder'}
 											<DropdownMenu.Item
 												class="gap-2"
-												onclick={() => goto(`/drive/my-storage?folder=${encodeURIComponent(entry.id)}`)}
+												onclick={() =>
+													goto(`/drive/my-storage?folder=${encodeURIComponent(entry.id)}`)}
 											>
 												<FolderOpen class="size-4 stroke-2" />
-												Buka Folder
+												{tx('Buka Folder', 'Open Folder')}
 											</DropdownMenu.Item>
 										{:else}
 											<DropdownMenu.Item class="gap-2" onclick={() => syncPreview(entry.id)}>
 												<Eye class="size-4 stroke-2" />
-												Lihat Pratinjau
+												{tx('Lihat Pratinjau', 'Preview')}
 											</DropdownMenu.Item>
 											<DropdownMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 												<Download class="size-4 stroke-2" />
-												Unduh
+												{tx('Unduh', 'Download')}
 											</DropdownMenu.Item>
 										{/if}
 										<DropdownMenu.Item class="gap-2" onclick={() => onUnstar(entry)}>
 											<Star class="size-4 fill-amber-400 stroke-amber-500 text-amber-500" />
-											Hapus Bintang
+											{tx('Hapus Bintang', 'Remove Star')}
 										</DropdownMenu.Item>
 										<DropdownMenu.Separator />
 										<DropdownMenu.Item
@@ -373,7 +406,7 @@
 											onclick={() => onDelete(entry)}
 										>
 											<Trash2 class="size-4 stroke-2" />
-											Hapus ke Trash
+											{tx('Hapus ke Trash', 'Move to Trash')}
 										</DropdownMenu.Item>
 									</DropdownMenu.Content>
 								</DropdownMenu.Root>
@@ -387,30 +420,26 @@
 								onclick={() => goto(`/drive/my-storage?folder=${encodeURIComponent(entry.id)}`)}
 							>
 								<FolderOpen class="size-4 stroke-2" />
-								Buka Folder
+								{tx('Buka Folder', 'Open Folder')}
 							</ContextMenu.Item>
 						{:else}
 							<ContextMenu.Item class="gap-2" onclick={() => syncPreview(entry.id)}>
 								<Eye class="size-4 stroke-2" />
-								Lihat Pratinjau
+								{tx('Lihat Pratinjau', 'Preview')}
 							</ContextMenu.Item>
 							<ContextMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 								<Download class="size-4 stroke-2" />
-								Unduh
+								{tx('Unduh', 'Download')}
 							</ContextMenu.Item>
 						{/if}
 						<ContextMenu.Item class="gap-2" onclick={() => onUnstar(entry)}>
 							<Star class="size-4 fill-amber-400 stroke-amber-500 text-amber-500" />
-							Hapus Bintang
+							{tx('Hapus Bintang', 'Remove Star')}
 						</ContextMenu.Item>
 						<ContextMenu.Separator />
-						<ContextMenu.Item
-							variant="destructive"
-							class="gap-2"
-							onclick={() => onDelete(entry)}
-						>
+						<ContextMenu.Item variant="destructive" class="gap-2" onclick={() => onDelete(entry)}>
 							<Trash2 class="size-4 stroke-2" />
-							Hapus ke Trash
+							{tx('Hapus ke Trash', 'Move to Trash')}
 						</ContextMenu.Item>
 					</ContextMenu.Content>
 				</ContextMenu.Root>
@@ -421,11 +450,19 @@
 
 <ConfirmDialog
 	bind:open={deleteConfirmOpen}
-	title={deleteTargetEntry?.kind === 'folder' ? 'Pindahkan Folder ke Trash?' : 'Pindahkan Berkas ke Trash?'}
+	title={deleteTargetEntry?.kind === 'folder'
+		? tx('Pindahkan Folder ke Trash?', 'Move Folder to Trash?')
+		: tx('Pindahkan Berkas ke Trash?', 'Move File to Trash?')}
 	description={deleteTargetEntry?.kind === 'folder'
-		? `Pindahkan “${deleteTargetEntry.name}” dan semua isinya ke Trash?`
-		: `Pindahkan “${deleteTargetEntry?.name}” ke Trash?`}
-	confirmText="Hapus ke Trash"
+		? tx(
+				`Pindahkan “${deleteTargetEntry.name}” dan semua isinya ke Trash?`,
+				`Move “${deleteTargetEntry.name}” and all its contents to Trash?`
+			)
+		: tx(
+				`Pindahkan “${deleteTargetEntry?.name}” ke Trash?`,
+				`Move “${deleteTargetEntry?.name}” to Trash?`
+			)}
+	confirmText={tx('Hapus ke Trash', 'Move to Trash')}
 	variant="destructive"
 	onConfirm={executeDelete}
 />
@@ -434,6 +471,6 @@
 	open={previewOpen}
 	entry={previewEntry}
 	source="my-storage"
-	onDownload={onDownload}
+	{onDownload}
 	onClose={() => syncPreview(null)}
 />

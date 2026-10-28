@@ -5,13 +5,17 @@ import { authAPI } from '$lib/api/auth.js';
 const KEY = Symbol('cubycloud-drive-chrome');
 const QUOTA_CHANNEL_NAME = 'cubycloud-quota-sync';
 
+export type SharedUploadPermission = 'viewer' | 'editor' | null;
+
 export type DriveChrome = {
 	user: DriveUser;
 	quota: QuotaState;
+	sharedUploadContext: { folderId: string | null; permission: SharedUploadPermission };
 	setUserAndQuota: (user: DriveUser, quota: QuotaState) => void;
 	updateProfile: (patch: Pick<DriveUser, 'displayName' | 'email'>) => void;
 	requestUpload: () => void;
 	registerUploadHandler: (handler: (() => void) | null) => void;
+	setSharedUploadContext: (folderId: string | null, permission: SharedUploadPermission) => void;
 	refreshQuota: (broadcast?: boolean) => Promise<void>;
 	notifyStorageChange?: () => void;
 	registerStorageChangeHandler?: (handler: (() => void) | null) => void;
@@ -21,6 +25,10 @@ export type DriveChrome = {
 class DriveChromeState implements DriveChrome {
 	user = $state({} as DriveUser);
 	quota = $state({} as QuotaState);
+	sharedUploadContext = $state({
+		folderId: null as string | null,
+		permission: null as SharedUploadPermission
+	});
 	#uploadHandler: (() => void) | null = null;
 	#storageChangeHandler: (() => void) | null = null;
 	#channel: BroadcastChannel | null = null;
@@ -38,7 +46,8 @@ class DriveChromeState implements DriveChrome {
 					if (event.data?.type === 'QUOTA_SYNC') {
 						const { usedBytes, quotaBytes, role } = event.data;
 						const effectiveRole: DriveRole =
-							role ?? (this.user?.role?.toLowerCase() === 'super_admin' ? 'super_admin' : 'regular');
+							role ??
+							(this.user?.role?.toLowerCase() === 'super_admin' ? 'super_admin' : 'regular');
 						const limitGb =
 							effectiveRole === 'super_admin' || quotaBytes < 0
 								? null
@@ -70,8 +79,13 @@ class DriveChromeState implements DriveChrome {
 		}
 	}
 
-	updateProfile(patch: Pick<DriveUser, 'displayName' | 'email'>) {
-		this.user = { ...this.user, ...patch };
+	updateProfile(patch: Partial<Pick<DriveUser, 'displayName' | 'email'>>) {
+		if (this.user) {
+			Object.assign(this.user, patch);
+		}
+	}
+	setSharedUploadContext(folderId: string | null, permission: SharedUploadPermission) {
+		this.sharedUploadContext = { folderId, permission };
 	}
 
 	requestUpload() {
@@ -100,8 +114,7 @@ class DriveChromeState implements DriveChrome {
 			const meResp = await authAPI.getMe();
 			if (meResp.data) {
 				const u = meResp.data;
-				const role: DriveRole =
-					u.role.toLowerCase() === 'super_admin' ? 'super_admin' : 'regular';
+				const role: DriveRole = u.role.toLowerCase() === 'super_admin' ? 'super_admin' : 'regular';
 				const quota: QuotaState = {
 					usedGb: (u.used_bytes ?? 0) / (1024 * 1024 * 1024),
 					limitGb:
@@ -113,7 +126,7 @@ class DriveChromeState implements DriveChrome {
 					{
 						id: u.id,
 						username: u.username,
-						displayName: u.username,
+						displayName: u.display_name || u.username,
 						email: u.email,
 						role
 					},

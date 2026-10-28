@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cubycloud/backend/internal/modules/jobs"
 	"github.com/cubycloud/backend/internal/storage"
 	"github.com/labstack/echo/v4"
 	"github.com/uptrace/bun"
@@ -19,14 +20,17 @@ type Handler struct {
 	dataDirPath string
 }
 
-func NewHandler(db *bun.DB, storage storage.StorageDriver, dataDirPath, dbPath string) *Handler {
+func NewHandler(db *bun.DB, storage storage.StorageDriver, dataDirPath, dbPath string, queue ...*jobs.Queue) *Handler {
 	return &Handler{
-		service:     NewService(db, storage, dataDirPath),
+		service:     NewService(db, storage, dataDirPath, queue...),
 		dbPath:      dbPath,
 		dataDirPath: dataDirPath,
 	}
 }
 
+func (h *Handler) SetConcurrencyController(ctl ConcurrencyController) {
+	h.service.SetConcurrencyController(ctl)
+}
 // GetSettings returns current system settings
 func (h *Handler) GetSettings(c echo.Context) error {
 	resp, err := h.service.GetSystemSettings(c.Request().Context())
@@ -98,6 +102,30 @@ func (h *Handler) DisableStorageNode(c echo.Context) error {
 	})
 }
 
+// DetachStorageNode disables a storage node and starts physical migration
+func (h *Handler) DetachStorageNode(c echo.Context) error {
+	nodeID := c.Param("id")
+	if nodeID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{
+			"error": "node id required",
+		})
+	}
+
+	var req DetachNodeRequest
+	_ = c.Bind(&req)
+
+	actorID, _ := c.Get("user_id").(string)
+
+	resp, err := h.service.DetachStorageNode(c.Request().Context(), nodeID, req.TargetNodeID, actorID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{
+			"error": err.Error(),
+		})
+	}
+
+	return c.JSON(http.StatusOK, resp)
+}
+
 // RescanStorageNodes rescans local storage
 func (h *Handler) RescanStorageNodes(c echo.Context) error {
 	nodes, err := h.service.RescanStorageNodes(c.Request().Context())
@@ -114,11 +142,26 @@ func (h *Handler) RescanStorageNodes(c echo.Context) error {
 
 // DownloadBackup streams database backup
 func (h *Handler) DownloadBackup(c echo.Context) error {
-	_ = h.service.Checkpoint(c.Request().Context())
-	dbFile, err := os.Open(h.dbPath)
+	tmpDir, err := os.MkdirTemp(os.TempDir(), "cubycloud-backup-")
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{
-			"error": "failed to open database file",
+			"error": "failed to create temporary backup",
+		})
+	}
+	tmpPath := tmpDir + string(os.PathSeparator) + "cubycloud.db"
+	defer os.Remove(tmpPath)
+	defer os.Remove(tmpDir)
+
+	if err := h.service.BackupTo(c.Request().Context(), tmpPath); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{
+			"error": "failed to create database backup",
+		})
+	}
+
+	dbFile, err := os.Open(tmpPath)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{
+			"error": "failed to open database backup",
 		})
 	}
 	defer dbFile.Close()
@@ -126,7 +169,7 @@ func (h *Handler) DownloadBackup(c echo.Context) error {
 	stat, err := dbFile.Stat()
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{
-			"error": "failed to stat database file",
+			"error": "failed to stat database backup",
 		})
 	}
 
@@ -134,8 +177,7 @@ func (h *Handler) DownloadBackup(c echo.Context) error {
 	c.Response().Header().Set("Content-Type", "application/octet-stream")
 	c.Response().Header().Set("Content-Length", fmt.Sprintf("%d", stat.Size()))
 
-	_, err = io.Copy(c.Response().Writer, dbFile)
-	if err != nil {
+	if _, err := io.Copy(c.Response().Writer, dbFile); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{
 			"error": "failed to stream database",
 		})
@@ -163,7 +205,6 @@ func (h *Handler) CreateLocalNode(c echo.Context) error {
 	}
 	return c.JSON(http.StatusCreated, node)
 }
-
 
 // CreateCloudNode adds a new S3-compatible cloud storage node
 func (h *Handler) CreateCloudNode(c echo.Context) error {
@@ -311,6 +352,39 @@ func (h *Handler) DeleteUser(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"message": "user deleted successfully"})
 }
 
+// ResetUserPassword issues a one-time password setup link.
+func (h *Handler) ResetUserPassword(c echo.Context) error {
+	targetID := c.Param("id")
+	if targetID == "" { return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": "user ID required"}) }
+	actorID, _ := c.Get("user_id").(string)
+	token, expiresAt, err := h.service.ResetUserPassword(c.Request().Context(), actorID, targetID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") { return echo.NewHTTPError(http.StatusNotFound, map[string]string{"error": "user not found"}) }
+		if strings.Contains(err.Error(), "cannot reset") || strings.Contains(err.Error(), "required") { return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": err.Error()}) }
+		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{"error": "failed to reset user password"})
+	}
+	return c.JSON(http.StatusOK, map[string]any{"reset_token": token, "reset_url": "/set-password#token=" + token, "expires_at": expiresAt, "message": "password reset link generated"})
+}
+
+// RegenerateInvitation issues a fresh setup link for a pending user.
+func (h *Handler) RegenerateInvitation(c echo.Context) error {
+	targetID := c.Param("id")
+	if targetID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": "user ID required"})
+	}
+	token, expiresAt, err := h.service.RegenerateInvitation(c.Request().Context(), targetID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return echo.NewHTTPError(http.StatusNotFound, map[string]string{"error": "user not found"})
+		}
+		if strings.Contains(err.Error(), "required") || strings.Contains(err.Error(), "not pending") {
+			return echo.NewHTTPError(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{"error": "failed to regenerate invitation"})
+	}
+	return c.JSON(http.StatusOK, map[string]any{"invitation_token": token, "invitation_url": "/set-password#token=" + token, "expires_at": expiresAt})
+}
+
 // GetStorageStats returns system-wide storage stats for super admin
 func (h *Handler) GetStorageStats(c echo.Context) error {
 	stats, err := h.service.GetAdminStorageStats(c.Request().Context())
@@ -347,16 +421,12 @@ func (h *Handler) GetTopStorageUsers(c echo.Context) error {
 }
 
 // RegisterRoutes registers all admin endpoints with JWT auth + Super Admin guard
-func RegisterRoutes(e *echo.Echo, db *bun.DB, storage storage.StorageDriver, dataDirPath, dbPath string, jwtAuth, superAdminGuard echo.MiddlewareFunc) {
-	handler := NewHandler(db, storage, dataDirPath, dbPath)
-
-	// Admin group with JWT auth + Super Admin guard
+func RegisterRoutes(e *echo.Echo, db *bun.DB, storage storage.StorageDriver, dataDirPath, dbPath string, jwtAuth, superAdminGuard echo.MiddlewareFunc, queue ...*jobs.Queue) *Handler {
+	handler := NewHandler(db, storage, dataDirPath, dbPath, queue...)
 	admin := e.Group("/api/v1/admin", jwtAuth, superAdminGuard)
-	
-	// Settings
 	admin.GET("/settings", handler.GetSettings)
 	admin.PUT("/settings", handler.UpdateSettings)
-	
+
 	// Storage nodes
 	admin.GET("/storage-nodes", handler.GetStorageNodes)
 	admin.POST("/storage-nodes", handler.CreateLocalNode)
@@ -364,11 +434,14 @@ func RegisterRoutes(e *echo.Echo, db *bun.DB, storage storage.StorageDriver, dat
 	admin.PUT("/storage-nodes/:id", handler.UpdateNode)
 	admin.PUT("/storage-nodes/:id/disable", handler.DisableStorageNode)
 	admin.DELETE("/storage-nodes/:id", handler.DeleteNode)
+	admin.POST("/storage-nodes/:id/detach", handler.DetachStorageNode)
 	admin.POST("/storage-nodes/rescan", handler.RescanStorageNodes)
-	
+
 	// Users management
 	admin.GET("/users", handler.GetUsers)
 	admin.POST("/users", handler.CreateUser)
+	admin.POST("/users/:id/invitation", handler.RegenerateInvitation)
+	admin.POST("/users/:id/reset-password", handler.ResetUserPassword)
 	admin.PUT("/users/:id/quota", handler.UpdateUserQuota)
 	admin.DELETE("/users/:id", handler.DeleteUser)
 
@@ -376,5 +449,7 @@ func RegisterRoutes(e *echo.Echo, db *bun.DB, storage storage.StorageDriver, dat
 	admin.GET("/backup", handler.DownloadBackup)
 	// Storage stats & top users
 	admin.GET("/storage/stats", handler.GetStorageStats)
+ admin.GET("/audit-logs", handler.GetAuditLogs)
 	admin.GET("/storage/top-users", handler.GetTopStorageUsers)
+	return handler
 }

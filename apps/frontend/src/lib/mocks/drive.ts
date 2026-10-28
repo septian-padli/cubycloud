@@ -1,9 +1,4 @@
-import type {
-	ActivityItem,
-	DriveUser,
-	QuotaState,
-	QuickAccessItem
-} from '$lib/types/drive.js';
+import type { ActivityItem, DriveUser, QuotaState, QuickAccessItem } from '$lib/types/drive.js';
 
 export const MOCK_DRIVE_USER: DriveUser = {
 	id: 'user-admin',

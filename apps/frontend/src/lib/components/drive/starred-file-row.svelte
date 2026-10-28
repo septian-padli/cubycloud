@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { locale } from '$lib/locale.svelte.js';
 	import type { StarredFileItem } from '$lib/types/drive.js';
 	import { formatSize } from '$lib/mocks/file-tree.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
@@ -8,6 +9,7 @@
 	import DriveListRow from './drive-list-row.svelte';
 	import SourceBadge from './source-badge.svelte';
 	import FileKindIcon from './explorer/file-kind-icon.svelte';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	let {
 		entry,
@@ -28,11 +30,7 @@
 
 <ContextMenu.Root>
 	<ContextMenu.Trigger class="block w-full">
-		<DriveListRow
-			{selected}
-			onSelect={() => onSelect(entry)}
-			onOpen={() => onPreview(entry)}
-		>
+		<DriveListRow {selected} onSelect={() => onSelect(entry)} onOpen={() => onPreview(entry)}>
 			{#snippet leading()}
 				<FileKindIcon kind={entry.kind} />
 			{/snippet}
@@ -41,14 +39,14 @@
 					{entry.name}
 					<Star
 						class="ms-1 inline size-3.5 fill-secondary stroke-2 text-secondary"
-						aria-label="Berbintang"
+						aria-label={tx('Berbintang', 'Starred')}
 					/>
 				</p>
 				<p class="text-xs text-muted">
 					{#if entry.kind === 'folder'}
-						Folder · {entry.modifiedAt}
+						Folder · {locale.formatDate(entry.modifiedAt)}
 					{:else}
-						{formatSize(entry.sizeBytes)} · {entry.modifiedAt}
+						{formatSize(entry.sizeBytes)} · {locale.formatDate(entry.modifiedAt)}
 					{/if}
 				</p>
 			{/snippet}
@@ -63,7 +61,7 @@
 								variant="ghost"
 								size="icon"
 								class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
-								aria-label="Aksi berkas"
+								aria-label={tx('Aksi berkas', 'File actions')}
 								onclick={(e: MouseEvent) => e.stopPropagation()}
 							>
 								<MoreVertical class="size-4 stroke-2" />
@@ -74,16 +72,16 @@
 						{#if entry.kind !== 'folder'}
 							<DropdownMenu.Item class="gap-2" onclick={() => onPreview(entry)}>
 								<Eye class="size-4 stroke-2" />
-								Pratinjau
+								{tx('Pratinjau', 'Preview')}
 							</DropdownMenu.Item>
 						{/if}
 						<DropdownMenu.Item class="gap-2" onclick={() => onShare(entry)}>
 							<Share2 class="size-4 stroke-2" />
-							Bagikan
+							{tx('Bagikan', 'Share')}
 						</DropdownMenu.Item>
 						<DropdownMenu.Item class="gap-2" onclick={() => onUnstar(entry)}>
 							<Star class="size-4 stroke-2" />
-							Hapus bintang
+							{tx('Hapus bintang', 'Remove star')}
 						</DropdownMenu.Item>
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
@@ -94,16 +92,16 @@
 		{#if entry.kind !== 'folder'}
 			<ContextMenu.Item class="gap-2" onclick={() => onPreview(entry)}>
 				<Eye class="size-4 stroke-2" />
-				Pratinjau
+				{tx('Pratinjau', 'Preview')}
 			</ContextMenu.Item>
 		{/if}
 		<ContextMenu.Item class="gap-2" onclick={() => onShare(entry)}>
 			<Share2 class="size-4 stroke-2" />
-			Bagikan
+			{tx('Bagikan', 'Share')}
 		</ContextMenu.Item>
 		<ContextMenu.Item class="gap-2" onclick={() => onUnstar(entry)}>
 			<Star class="size-4 stroke-2" />
-			Hapus bintang
+			{tx('Hapus bintang', 'Remove star')}
 		</ContextMenu.Item>
 	</ContextMenu.Content>
 </ContextMenu.Root>

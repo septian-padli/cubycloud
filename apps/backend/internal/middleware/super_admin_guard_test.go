@@ -236,3 +236,61 @@ func TestJWTAuth_ExtractUserRole(t *testing.T) {
 		}
 	})
 }
+
+func TestJWTAuthRejectsDeletedAccount(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	const userID = "revoked-user-id"
+	user := &database.User{
+		ID:           userID,
+		Username:     "revoked-user",
+		Email:        "revoked@example.com",
+		PasswordHash: "dummy-hash",
+		Role:         "REGULAR",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	if _, err := db.NewInsert().Model(user).Exec(context.Background()); err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+
+	const jwtSecret = "test-secret-key"
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub":  userID,
+		"role": "REGULAR",
+		"exp":  time.Now().Add(time.Hour).Unix(),
+	})
+	tokenString, err := token.SignedString([]byte(jwtSecret))
+	if err != nil {
+		t.Fatalf("sign token: %v", err)
+	}
+	if _, err := db.ExecContext(
+		context.Background(),
+		`UPDATE users SET deleted_at = ? WHERE id = ?`,
+		time.Now().UTC(),
+		userID,
+	); err != nil {
+		t.Fatalf("revoke user: %v", err)
+	}
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/drive/organization/upload-tus/upload", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenString)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	nextCalled := false
+	next := func(c echo.Context) error {
+		nextCalled = true
+		return c.NoContent(http.StatusOK)
+	}
+
+	err = middleware.JWTAuth(jwtSecret, db)(next)(c)
+	if nextCalled {
+		t.Fatal("deleted account reached the upload handler")
+	}
+	httpErr, ok := err.(*echo.HTTPError)
+	if !ok || httpErr.Code != http.StatusUnauthorized {
+		t.Fatalf("JWTAuth error = %v, want 401 for revoked account", err)
+	}
+}

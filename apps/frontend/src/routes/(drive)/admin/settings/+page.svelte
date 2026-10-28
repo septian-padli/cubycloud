@@ -8,12 +8,15 @@
 	import DrivePageHeader from '$lib/components/drive/drive-page-header.svelte';
 	import AddStorageNodeDialog from '$lib/components/admin/add-storage-node-dialog.svelte';
 	import EditStorageNodeDialog from '$lib/components/admin/edit-storage-node-dialog.svelte';
+	import DetachNodeDialog from '$lib/components/admin/detach-node-dialog.svelte';
 	import StorageNodesGrid from '$lib/components/admin/storage-nodes-grid.svelte';
 	import AdminSystemSettings from '$lib/components/admin/admin-system-settings.svelte';
 	import { ConfirmDialog } from '$lib/components/ui/confirm-dialog/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Plus } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
+	import { locale } from '$lib/locale.svelte.js';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	let nodes = $state<StorageNode[]>([]);
 	let settings = $state<SystemSettings>({
@@ -29,7 +32,8 @@
 	let showAddNodeDialog = $state(false);
 	let showEditNodeDialog = $state(false);
 	let nodeToEdit = $state<StorageNode | null>(null);
-
+	let showDetachNodeDialog = $state(false);
+	let nodeToDetach = $state<StorageNode | null>(null);
 	// Navigation leave confirmation
 	let showLeaveConfirmDialog = $state(false);
 	let pendingNavigationUrl = $state<string | null>(null);
@@ -45,7 +49,9 @@
 		// Load system settings
 		const settingsResp = await adminAPI.getSettings();
 		if (settingsResp.error) {
-			toast.error('Gagal memuat pengaturan sistem', { description: settingsResp.error });
+			toast.error(tx('Gagal memuat pengaturan sistem', 'Failed to load system settings'), {
+				description: settingsResp.error
+			});
 		} else if (settingsResp.data) {
 			const loadedSettings: SystemSettings = {
 				defaultQuota: {
@@ -54,7 +60,8 @@
 				},
 				auditRetentionDays: settingsResp.data.audit_retention_days as AuditRetentionDays,
 				workerConcurrency: settingsResp.data.worker_concurrency,
-				placementStrategy: (settingsResp.data.placement_strategy as PlacementStrategy) || 'FILL_FIRST'
+				placementStrategy:
+					(settingsResp.data.placement_strategy as PlacementStrategy) || 'FILL_FIRST'
 			};
 			settings = {
 				...loadedSettings,
@@ -69,24 +76,28 @@
 		// Load storage nodes
 		const nodesResp = await adminAPI.getStorageNodes();
 		if (nodesResp.error) {
-			toast.error('Gagal memuat storage nodes', { description: nodesResp.error });
+			toast.error(tx('Gagal memuat storage nodes', 'Failed to load storage nodes'), {
+				description: nodesResp.error
+			});
 		} else if (nodesResp.data) {
 			nodes = nodesResp.data.nodes.map((n) => ({
 				id: n.id,
 				type: (n.type === 'S3' ? 'S3' : 'LOCAL') as 'LOCAL' | 'S3',
 				name: n.name,
 				path: n.path,
-				kind: (n.kind === 'SSD' || n.kind === 'HDD' || n.kind === 'S3' ? n.kind : 'HDD') as 'SSD' | 'HDD' | 'S3',
+				kind: (n.kind === 'SSD' || n.kind === 'HDD' || n.kind === 'S3' || n.kind === 'UNKNOWN'
+					? n.kind
+					: 'UNKNOWN') as 'SSD' | 'HDD' | 'S3' | 'UNKNOWN',
 				endpoint: n.endpoint,
 				bucket: n.bucket,
 				totalGb: n.capacity_cap_gb,
-				freeGb: Math.max(
-					(n.capacity_cap_gb * 1024 ** 3 - n.used_bytes) / 1024 ** 3,
-					0
-				),
+				freeGb: Math.max((n.capacity_cap_gb * 1024 ** 3 - n.used_bytes) / 1024 ** 3, 0),
 				usedBytes: n.used_bytes,
 				capacityCapGb: n.capacity_cap_gb,
-				enabled: n.enabled
+				enabled: n.enabled,
+				safeToDisconnect: n.safe_to_disconnect,
+				migrationStatus: n.migration_status as any,
+				migrationJobId: n.migration_job_id
 			}));
 		}
 
@@ -101,6 +112,20 @@
 		nodeToEdit = node;
 		showEditNodeDialog = true;
 	}
+
+	function handleDetachNode(node: StorageNode) {
+		nodeToDetach = node;
+		showDetachNodeDialog = true;
+	}
+
+	$effect(() => {
+		const isAnyMigrating = nodes.some((n) => n.migrationStatus === 'MIGRATING');
+		if (!isAnyMigrating) return;
+		const timer = setInterval(() => {
+			void loadData();
+		}, 2000);
+		return () => clearInterval(timer);
+	});
 
 	function handleNodeUpdated() {
 		void loadData();
@@ -165,9 +190,11 @@
 		savingSettings = false;
 
 		if (resp.error) {
-			toast.error('Gagal menyimpan pengaturan', { description: resp.error });
+			toast.error(tx('Gagal menyimpan pengaturan', 'Failed to save settings'), {
+				description: resp.error
+			});
 		} else {
-			toast.success('Pengaturan berhasil disimpan');
+			toast.success(tx('Pengaturan berhasil disimpan', 'Settings saved successfully'));
 			if (resp.data) {
 				const synced: SystemSettings = {
 					defaultQuota: {
@@ -221,27 +248,39 @@
 </script>
 
 <svelte:head>
-	<title>Admin Settings — CubyCloud</title>
-	<meta name="description" content="Kelola node penyimpanan dan pengaturan sistem CubyCloud." />
+	<title>{tx('Pengaturan Admin', 'Admin Settings')} — CubyCloud</title>
+	<meta
+		name="description"
+		content={tx(
+			'Kelola node penyimpanan dan pengaturan sistem CubyCloud.',
+			'Manage CubyCloud storage nodes and system settings.'
+		)}
+	/>
 </svelte:head>
 
 <div class="flex flex-col gap-8">
 	<DrivePageHeader
-		title="Admin Settings"
-		description="Kelola node penyimpanan, kuota default, retensi audit, dan backup basis data."
+		title={tx('Pengaturan Admin', 'Admin Settings')}
+		description={tx(
+			'Kelola node penyimpanan, kuota default, retensi audit, dan backup basis data.',
+			'Manage storage nodes, default quotas, audit retention, and database backups.'
+		)}
 	/>
 
 	{#if loading}
 		<div class="flex items-center justify-center py-12">
-			<p class="text-sm text-muted">Memuat data...</p>
+			<p class="text-sm text-muted">{tx('Memuat data...', 'Loading data...')}</p>
 		</div>
 	{:else}
 		<section class="space-y-4">
 			<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
 				<div class="space-y-1">
-					<h2 class="text-sm font-semibold text-main">Node penyimpanan</h2>
+					<h2 class="text-sm font-semibold text-main">{tx('Node penyimpanan', 'Storage nodes')}</h2>
 					<p class="text-xs text-muted">
-						Kapasitas fisik, ruang bebas, dan status kritis (&lt;5% bebas).
+						{tx(
+							'Kapasitas fisik, ruang bebas, dan status kritis (&lt;5% bebas).',
+							'Physical capacity, free space, and critical status (&lt;5% free).'
+						)}
 					</p>
 				</div>
 				<Button
@@ -252,10 +291,10 @@
 					data-testid="btn-add-storage-node"
 				>
 					<Plus class="size-3.5 stroke-2" />
-					Tambah Node
+					{tx('Tambah Node', 'Add Node')}
 				</Button>
 			</div>
-			<StorageNodesGrid {nodes} onEdit={handleEditNode} />
+			<StorageNodesGrid {nodes} onEdit={handleEditNode} onDetach={handleDetachNode} />
 		</section>
 
 		<section>
@@ -273,14 +312,25 @@
 </div>
 
 <AddStorageNodeDialog bind:open={showAddNodeDialog} onAdded={handleNodeUpdated} />
-<EditStorageNodeDialog bind:open={showEditNodeDialog} node={nodeToEdit} onUpdated={handleNodeUpdated} />
-
+<EditStorageNodeDialog
+	bind:open={showEditNodeDialog}
+	node={nodeToEdit}
+	onUpdated={handleNodeUpdated}
+/>
+<DetachNodeDialog
+	bind:open={showDetachNodeDialog}
+	node={nodeToDetach}
+	onDetach={() => loadData()}
+/>
 <ConfirmDialog
 	bind:open={showLeaveConfirmDialog}
-	title="Tinggalkan Halaman?"
-	description="Pengaturan yang Anda ubah belum disimpan. Perubahan akan hilang jika Anda meninggalkan halaman ini."
-	confirmText="Tinggalkan"
-	cancelText="Tetap di Sini"
+	title={tx('Tinggalkan Halaman?', 'Leave this page?')}
+	description={tx(
+		'Pengaturan yang Anda ubah belum disimpan. Perubahan akan hilang jika Anda meninggalkan halaman ini.',
+		'Your changes to the settings haven’t been saved. They will be lost if you leave this page.'
+	)}
+	confirmText={tx('Tinggalkan', 'Leave')}
+	cancelText={tx('Tetap di Sini', 'Stay on this page')}
 	onConfirm={handleConfirmLeave}
 	onCancel={handleCancelLeave}
 />

@@ -5,6 +5,7 @@
 	import { cn } from '$lib/utils.js';
 	import type { HTMLInputAttributes } from 'svelte/elements';
 
+	import { locale } from '$lib/locale.svelte.js';
 	let {
 		value = $bindable(''),
 		id,
@@ -49,7 +50,13 @@
 		size="icon-sm"
 		class="absolute end-1 top-1/2 -translate-y-1/2 text-muted"
 		{disabled}
-		aria-label={visible ? 'Sembunyikan password' : 'Tampilkan password'}
+		aria-label={locale.language === 'id'
+			? visible
+				? 'Sembunyikan kata sandi'
+				: 'Tampilkan kata sandi'
+			: visible
+				? 'Hide password'
+				: 'Show password'}
 		aria-pressed={visible}
 		onclick={() => {
 			visible = !visible;

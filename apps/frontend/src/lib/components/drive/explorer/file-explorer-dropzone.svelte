@@ -2,6 +2,7 @@
 	import { Upload } from '@lucide/svelte';
 	import { cn } from '$lib/utils.js';
 	import type { Snippet } from 'svelte';
+	import { locale } from '$lib/locale.svelte.js';
 
 	let {
 		active = false,
@@ -22,7 +23,7 @@
 
 <div
 	role="region"
-	aria-label="Zona unggah berkas"
+	aria-label={locale.language === 'id' ? 'Zona unggah berkas' : 'File upload drop zone'}
 	class={cn('relative rounded-xl', active && 'border border-primary')}
 	{ondragenter}
 	{ondragover}
@@ -45,8 +46,16 @@
 					<Upload class="size-8 stroke-2" />
 				</div>
 				<div class="text-center">
-					<p class="text-base font-semibold text-primary">Lepas berkas di mana saja untuk mengunggah</p>
-					<p class="mt-1 text-xs text-muted">Berkas akan diunggah ke lokasi folder saat ini</p>
+					<p class="text-base font-semibold text-primary">
+						{locale.language === 'id'
+							? 'Lepas berkas di mana saja untuk mengunggah'
+							: 'Drop files anywhere to upload'}
+					</p>
+					<p class="mt-1 text-xs text-muted">
+						{locale.language === 'id'
+							? 'Berkas akan diunggah ke lokasi folder saat ini'
+							: 'Files will be uploaded to the current folder'}
+					</p>
 				</div>
 			</div>
 		</div>

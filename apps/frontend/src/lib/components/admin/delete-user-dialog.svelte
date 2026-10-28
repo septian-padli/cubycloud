@@ -5,7 +5,7 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { AlertTriangle, LoaderCircle } from '@lucide/svelte';
 	import { toast } from 'svelte-sonner';
-
+	import { locale } from '$lib/locale.svelte.js';
 	let {
 		open = $bindable(false),
 		user,
@@ -31,12 +31,20 @@
 
 	function handlePaste(e: ClipboardEvent) {
 		e.preventDefault();
-		toast.warning('Pencegahan keamanan: Menempel (paste) tidak diizinkan. Silakan ketik email secara manual.');
+		toast.warning(
+			locale.language === 'id'
+				? 'Pencegahan keamanan: Menempel (paste) tidak diizinkan. Silakan ketik email secara manual.'
+				: 'Security notice: Pasting is disabled. Please type the email manually.'
+		);
 	}
 
 	function handleDrop(e: DragEvent) {
 		e.preventDefault();
-		toast.warning('Pencegahan keamanan: Menjatuhkan teks tidak diizinkan.');
+		toast.warning(
+			locale.language === 'id'
+				? 'Pencegahan keamanan: Menjatuhkan teks tidak diizinkan.'
+				: 'Security notice: Dropping text is disabled.'
+		);
 	}
 
 	async function handleSubmit() {
@@ -58,33 +66,67 @@
 		<Dialog.Header>
 			<div class="flex items-center gap-2 text-destructive">
 				<AlertTriangle class="size-5 stroke-2" />
-				<Dialog.Title class="text-destructive">Hapus Pengguna</Dialog.Title>
+				<Dialog.Title class="text-destructive"
+					>{locale.language === 'id' ? 'Hapus Pengguna' : 'Delete user'}</Dialog.Title
+				>
 			</div>
 			<Dialog.Description class="pt-2 text-sm text-muted">
-				Tindakan ini tidak dapat dibatalkan. Mohon baca peringatan di bawah ini dengan saksama.
+				{locale.language === 'id'
+					? 'Tindakan ini tidak dapat dibatalkan. Mohon baca peringatan di bawah ini dengan saksama.'
+					: 'This action cannot be undone. Please read the warning below carefully.'}
 			</Dialog.Description>
 		</Dialog.Header>
 
 		{#if user}
 			<div class="flex flex-col gap-4 py-2">
-				<div class="rounded-lg border border-destructive bg-white p-3.5 text-xs leading-relaxed text-destructive dark:bg-surface">
-					<p class="font-semibold text-destructive">Konsekuensi Penghapusan Akun:</p>
+				<div
+					class="rounded-lg border border-destructive bg-white p-3.5 text-xs leading-relaxed text-destructive dark:bg-surface"
+				>
+					<p class="font-semibold text-destructive">
+						{locale.language === 'id'
+							? 'Konsekuensi Penghapusan Akun:'
+							: 'Account deletion consequences:'}
+					</p>
 					<ul class="mt-1.5 list-disc space-y-1 pl-4 text-destructive">
 						<li>
-							Seluruh berkas dan folder di <span class="font-semibold">My Storage</span> pribadi (termasuk yang ada di <span class="font-semibold">Trash</span>) akan <span class="font-semibold underline">dihapus permanen</span>.
+							{locale.language === 'id'
+								? 'Seluruh berkas dan folder di'
+								: 'All files and folders in'} <span class="font-semibold">My Storage</span>
+							{locale.language === 'id' ? 'pribadi (termasuk yang ada di' : ' (including those in'}
+							<span class="font-semibold">Trash</span>) {locale.language === 'id'
+								? 'akan'
+								: 'will be'}
+							<span class="font-semibold underline"
+								>{locale.language === 'id' ? 'dihapus permanen' : 'permanently deleted'}</span
+							>.
 						</li>
 						<li>
-							Berkas di ruang <span class="font-semibold">Organization</span> akan <span class="font-semibold">tetap tersimpan</span> dan status pembuat diubah menjadi <span class="font-semibold font-mono">“deleted user”</span>.
+							{locale.language === 'id' ? 'Berkas di ruang' : 'Files in the'}
+							<span class="font-semibold">Organization</span>
+							{locale.language === 'id' ? 'akan' : 'will'}
+							<span class="font-semibold"
+								>{locale.language === 'id' ? 'tetap tersimpan' : 'remain stored'}</span
+							>
+							{locale.language === 'id'
+								? 'dan status pembuat diubah menjadi'
+								: 'and the creator will be marked as'}
+							<span class="font-mono font-semibold">“deleted user”</span>.
 						</li>
 						<li>
-							Akun <span class="font-semibold">{user.username}</span> akan dinonaktifkan (tombstone) dan seluruh sesi aktifnya langsung dibatalkan.
+							{locale.language === 'id' ? 'Akun' : 'The account'}
+							<span class="font-semibold">{user.username}</span>
+							{locale.language === 'id'
+								? 'akan dinonaktifkan (tombstone) dan seluruh sesi aktifnya langsung dibatalkan.'
+								: 'will be disabled (tombstoned), and all active sessions will be immediately revoked.'}
 						</li>
 					</ul>
 				</div>
 
 				<div class="flex flex-col gap-2">
 					<label for="confirm-email-input" class="block text-xs leading-normal text-muted">
-						Ketik ulang email pengguna <span class="font-bold text-main">{user.email}</span> persis sama untuk konfirmasi:
+						{locale.language === 'id' ? 'Ketik ulang email pengguna' : 'Re-enter the user email'}
+						<span class="font-bold text-main">{user.email}</span>
+						{locale.language === 'id' ? 'persis sama untuk konfirmasi:' : 'exactly to confirm:'}
 					</label>
 					<Input
 						id="confirm-email-input"
@@ -96,35 +138,29 @@
 						spellcheck={false}
 						onpaste={handlePaste}
 						ondrop={handleDrop}
-						class="bg-surface border-subtle focus:border-destructive focus:ring-destructive font-mono"
+						class="border-subtle bg-surface font-mono focus:border-destructive focus:ring-destructive"
 					/>
 					{#if confirmEmail.length > 0 && !isEmailExactMatch}
-						<p class="text-xs text-destructive">Email yang Anda ketik belum cocok persis.</p>
+						<p class="text-xs text-destructive">
+							{locale.language === 'id'
+								? 'Email yang Anda ketik belum cocok persis.'
+								: 'The email you entered does not match exactly.'}
+						</p>
 					{/if}
 				</div>
 			</div>
 		{/if}
 
 		<Dialog.Footer class="gap-2 sm:gap-0">
-			<Button
-				type="button"
-				variant="outline"
-				disabled={loading}
-				onclick={() => (open = false)}
-			>
-				Batal
+			<Button type="button" variant="outline" disabled={loading} onclick={() => (open = false)}>
+				{locale.language === 'id' ? 'Batal' : 'Cancel'}
 			</Button>
-			<Button
-				type="button"
-				variant="destructive"
-				disabled={!canSubmit}
-				onclick={handleSubmit}
-			>
+			<Button type="button" variant="destructive" disabled={!canSubmit} onclick={handleSubmit}>
 				{#if loading}
 					<LoaderCircle class="size-4 animate-spin stroke-2" />
-					Menghapus...
+					{locale.language === 'id' ? 'Menghapus...' : 'Deleting...'}
 				{:else}
-					Hapus Pengguna
+					{locale.language === 'id' ? 'Hapus Pengguna' : 'Delete user'}
 				{/if}
 			</Button>
 		</Dialog.Footer>

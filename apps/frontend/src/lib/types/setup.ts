@@ -8,15 +8,19 @@ export interface StorageNode {
 	id: string;
 	name: string;
 	path: string;
-	kind: 'SSD' | 'HDD' | 'S3';
+	kind: 'SSD' | 'HDD' | 'S3' | 'UNKNOWN';
 	type?: 'LOCAL' | 'S3';
 	endpoint?: string;
 	bucket?: string;
+	region?: string;
 	totalGb: number;
 	freeGb: number;
 	usedBytes: number;
 	enabled: boolean;
 	capacityCapGb: number;
+	safeToDisconnect?: boolean;
+	migrationStatus?: 'MIGRATING' | 'COMPLETED' | 'FAILED' | 'IDLE';
+	migrationJobId?: string;
 }
 
 export interface LinuxDevice {
@@ -37,10 +41,13 @@ export interface AdminForm {
 export interface CloudForm {
 	enabled: boolean;
 	provider: CloudProvider;
+	nodeName: string;
 	endpoint: string;
+	region: string;
 	bucket: string;
 	accessKey: string;
 	secretKey: string;
+	capacityCapGb?: number | string | null;
 }
 
 export interface SetupWizardState {
@@ -62,7 +69,7 @@ export interface SetupStepMeta {
 export const SETUP_STEPS: SetupStepMeta[] = [
 	{ id: 1, title: 'Akun Super Admin', description: 'Buat akun administrator pertama' },
 	{ id: 2, title: 'Penyimpanan Lokal', description: 'Pilih node penyimpanan' },
-	{ id: 3, title: 'Cloud', description: 'Hubungkan R2, S3, atau S3 Compatible' },
+	{ id: 3, title: 'Cloud', description: 'Hubungkan penyimpanan S3 Compatible' },
 	{ id: 4, title: 'Strategi Penempatan', description: 'Atur alokasi berkas' },
 	{ id: 5, title: 'Konfirmasi', description: 'Tinjau konfigurasi dan selesaikan setup' }
 ];
@@ -96,21 +103,9 @@ export const PROVIDER_OPTIONS: {
 	endpointPlaceholder: string;
 }[] = [
 	{
-		value: 'R2',
-		label: 'Cloudflare R2',
-		description: 'Object storage S3-compatible dari Cloudflare.',
-		endpointPlaceholder: 'https://xxxx.r2.cloudflarestorage.com'
-	},
-	{
-		value: 'S3',
-		label: 'AWS S3',
-		description: 'Amazon S3 regional atau endpoint custom AWS.',
-		endpointPlaceholder: 'https://s3.amazonaws.com'
-	},
-	{
 		value: 'S3_COMPATIBLE',
 		label: 'S3 Compatible',
-		description: 'MinIO, Wasabi, Backblaze B2, dan penyedia S3 API lain.',
-		endpointPlaceholder: 'https://minio.contoh.local'
+		description: 'MinIO, Wasabi, Backblaze B2, Cloudflare R2, AWS S3, dan penyedia S3 API lain.',
+		endpointPlaceholder: 'https://s3.example.com'
 	}
 ];

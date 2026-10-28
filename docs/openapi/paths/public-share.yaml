@@ -1,0 +1,280 @@
+/api/v1/s/{token}:
+  parameters:
+    - name: token
+      in: path
+      required: true
+      description: Public share link token.
+      schema: {type: string}
+      example: sh_7Kp4mN2x
+  get:
+    operationId: getPublicShare
+    summary: Get public share metadata and contents
+    description: Public token access; authentication is not required. For a password-protected link without a valid unlock cookie, returns metadata with has_password true, unlocked false, and item_name, omitting item contents. When unlocked, returns the item and folder contents where applicable. The optional unlock cookie is set by the unlock endpoint.
+    security: []
+    parameters:
+      - name: folder_id
+        in: query
+        required: false
+        description: ID of a folder within the shared tree to retrieve. Ignored while the link is locked.
+        schema: {type: string}
+        example: item_01JSUBFOLDER
+    responses:
+      '200':
+        description: Public link metadata, either password-locked or unlocked.
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PublicShareResponse'}
+            examples:
+              passwordRequired:
+                summary: Password-protected link before unlock
+                value: {token: sh_7Kp4mN2x, permission: viewer, has_password: true, unlocked: false, item_name: Shared project}
+              unlockedFolder:
+                summary: Unlocked folder share
+                value:
+                  token: sh_7Kp4mN2x
+                  permission: viewer
+                  has_password: true
+                  unlocked: true
+                  expires_at: '2026-11-01T12:00:00Z'
+                  item: {id: item_01JROOT, name: Shared project, kind: folder, size_bytes: 0, parent_id: null, modified_at: '2026-10-24T16:30:00Z'}
+                  children: [{id: item_01JFILE, name: overview.pdf, kind: file, size_bytes: 245760, parent_id: item_01JROOT, modified_at: '2026-10-24T16:30:00Z'}]
+                  breadcrumbs: [{id: item_01JROOT, name: Shared project}]
+      '404': {description: Share link or requested folder not found, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '410': {description: Share link has expired, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to retrieve share, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+
+/api/v1/s/{token}/unlock:
+  parameters:
+    - name: token
+      in: path
+      required: true
+      description: Public share link token.
+      schema: {type: string}
+      example: sh_7Kp4mN2x
+  post:
+    operationId: unlockPublicShare
+    summary: Unlock a password-protected share
+    description: Public token access; submit the share password to receive an HttpOnly unlock cookie scoped to this token. The endpoint is rate limited to 10 requests per minute.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/PublicUnlockRequest'}
+          example: {password: spring-river-42}
+    responses:
+      '200':
+        description: "Share unlocked; a scoped HttpOnly cookie is set when the link is password-protected, expiring no later than the link itself."
+        headers:
+          Set-Cookie: {schema: {type: string}, description: "Unlock cookie scoped to /api/v1/s/{token}."}
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/PublicUnlockResponse'}
+            example: {success: true, unlocked: true, token: sh_7Kp4mN2x}
+      '400': {description: Invalid request body, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Invalid password, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: Share link not found, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '410': {description: Share link has expired, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '429': {description: Rate limit exceeded (10 requests per minute)}
+      '500': {description: Failed to unlock share, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+
+/api/v1/s/{token}/download:
+  parameters:
+    - name: token
+      in: path
+      required: true
+      description: Public share link token.
+      schema: {type: string}
+      example: sh_7Kp4mN2x
+    - name: file_id
+      in: query
+      required: false
+      description: ID of a file within the shared tree. If omitted, downloads the link's root item.
+      schema: {type: string}
+      example: item_01JFILE
+  get:
+    operationId: downloadPublicShareFile
+    summary: Download a file from a public share
+    description: Public token access; no login is required. Password-protected links require the unlock cookie. Returns file bytes (or a ZIP if the selected root item is a folder), with Content-Disposition and Content-Length when known for non-empty files.
+    security: []
+    responses:
+      '200':
+        description: File content or ZIP archive for a folder root.
+        headers:
+          Content-Disposition: {schema: {type: string}, description: Attachment filename.}
+          Content-Length: {schema: {type: integer}, description: Present for non-empty file downloads when known.}
+        content:
+          application/octet-stream: {schema: {type: string, format: binary}}
+          application/zip: {schema: {type: string, format: binary}}
+      '401': {description: Password required or unlock cookie invalid, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: Share link or requested file not found in the shared tree, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '410': {description: Share link has expired, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Download failed, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+
+/api/v1/s/{token}/download-zip:
+  parameters:
+    - name: token
+      in: path
+      required: true
+      description: Public share link token.
+      schema: {type: string}
+      example: sh_7Kp4mN2x
+    - name: folder_id
+      in: query
+      required: false
+      description: ID of a folder within the shared tree to download as a ZIP. If omitted, downloads the shared root.
+      schema: {type: string}
+      example: item_01JSUBFOLDER
+  get:
+    operationId: downloadPublicShareZip
+    summary: Download a public shared folder as ZIP
+    description: Public token access; no login is required. Password-protected links require the unlock cookie. Streams the selected folder as a ZIP attachment.
+    security: []
+    responses:
+      '200':
+        description: ZIP archive.
+        headers:
+          Content-Disposition: {schema: {type: string}, description: Attachment filename.}
+        content:
+          application/zip: {schema: {type: string, format: binary}}
+      '401': {description: Password required or unlock cookie invalid, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: Share link or requested folder not found in the shared tree, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '410': {description: Share link has expired, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Download failed, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+
+/api/v1/s/{token}/upload:
+  parameters:
+    - name: token
+      in: path
+      required: true
+      description: Public share link token.
+      schema: {type: string}
+      example: sh_7Kp4mN2x
+  post:
+    operationId: uploadPublicShareFile
+    summary: Upload to a public shared folder
+    description: Requires an authenticated session, an editor-permission link, and an unlock cookie if the link is password-protected. Uploads the first file part. Optional parent_id chooses a folder inside the shared tree; omitted parent_id targets the share root.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - name: parent_id
+        in: query
+        required: false
+        description: Destination folder ID within the shared tree; defaults to the shared root.
+        schema: {type: string}
+        example: item_01JSUBFOLDER
+      - name: filename
+        in: query
+        required: false
+        description: Optional filename override.
+        schema: {type: string}
+        example: notes.txt
+      - name: unique_name
+        in: query
+        required: false
+        description: When exactly true, request a unique filename.
+        schema: {type: boolean, default: false}
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            required: [file]
+            properties:
+              file: {type: string, format: binary}
+    responses:
+      '201': {description: Uploaded item, content: {application/json: {schema: {$ref: '#/components/schemas/SharedNode'}}}}
+      '400': {description: Missing file or malformed multipart request, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, invalid unlock, or password required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: The share link does not grant editor permission, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: Share link or destination folder not found, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '410': {description: Share link has expired, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Upload failed, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+
+/api/v1/s/{token}/folders:
+  parameters:
+    - name: token
+      in: path
+      required: true
+      description: Public share link token.
+      schema: {type: string}
+      example: sh_7Kp4mN2x
+  post:
+    operationId: createPublicShareFolder
+    summary: Create a folder in a public share
+    description: Requires an authenticated session, an editor-permission link, and an unlock cookie if the link is password-protected. Optional parent_id selects the destination folder; omitted or null parent_id targets the shared root.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name: {type: string, example: Reports}
+              parent_id: {type: [string, 'null'], example: item_01JSUBFOLDER}
+          example: {name: Reports, parent_id: item_01JSUBFOLDER}
+    responses:
+      '201': {description: Folder created, content: {application/json: {schema: {$ref: '#/components/schemas/SharedNode'}}}}
+      '400': {description: Folder name is required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, invalid unlock, or password required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: The share link does not grant editor permission, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: Share link or destination folder not found, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '410': {description: Share link has expired, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Folder creation failed, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+
+/api/v1/s/{token}/items/{itemId}:
+  parameters:
+    - name: token
+      in: path
+      required: true
+      description: Public share link token.
+      schema: {type: string}
+      example: sh_7Kp4mN2x
+    - name: itemId
+      in: path
+      required: true
+      description: ID of an item within the shared tree.
+      schema: {type: string}
+      example: item_01JFILE
+  patch:
+    operationId: renamePublicShareItem
+    summary: Rename an item in a public share
+    description: Requires an authenticated session, an editor-permission link, and an unlock cookie if the link is password-protected. The shared root item cannot be renamed.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/SharedItemRenameRequest'}
+          example: {name: Revised notes.txt}
+    responses:
+      '200': {description: Renamed item, content: {application/json: {schema: {$ref: '#/components/schemas/SharedNode'}}}}
+      '400': {description: Name is required or the shared root cannot be renamed, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, invalid unlock, or password required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: The share link does not grant editor permission, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: Share link or item not found in the shared tree, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '410': {description: Share link has expired, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Rename failed, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+  delete:
+    operationId: deletePublicShareItem
+    summary: Delete an item in a public share
+    description: Requires an authenticated session, an editor-permission link, and an unlock cookie if the link is password-protected. The shared root item cannot be deleted.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '204': {description: Item deleted}
+      '400': {description: The shared root cannot be deleted, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, invalid unlock, or password required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: The share link does not grant editor permission, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: Share link or item not found in the shared tree, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '410': {description: Share link has expired, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Delete failed, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}

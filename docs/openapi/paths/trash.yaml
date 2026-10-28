@@ -1,0 +1,47 @@
+/api/v1/drive/trash:
+  get:
+    operationId: listTrash
+    summary: List trashed items
+    description: Returns trashed items owned by the authenticated user, ordered by deletion time.
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    responses:
+      '200': { description: Trash item list., content: { application/json: { schema: { $ref: '#/components/schemas/TrashListResponse' } } } }
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+  delete:
+    operationId: purgeAllTrash
+    summary: Permanently delete all trashed items
+    description: Purges all trash items and returns no content.
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    responses:
+      '204': { description: Trash purged. }
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+/api/v1/drive/trash/{id}:
+  parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+  delete:
+    operationId: purgeTrashItem
+    summary: Permanently delete a trashed item
+    description: Permanently removes one item from trash.
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    responses:
+      '204': { description: Item permanently deleted. }
+      '404': { description: Item not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+
+/api/v1/drive/trash/{id}/restore:
+  post:
+    operationId: restoreTrashItem
+    summary: Restore an item from trash
+    description: Restore to the original parent unless to_root is true in the query or request body.
+    security: [{ CookieAuth: [], BearerAuth: [] }]
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+      - { name: to_root, in: query, schema: { type: boolean, default: false }, description: Force restoration into the root folder. }
+    requestBody:
+      required: false
+      content: { application/json: { schema: { $ref: '#/components/schemas/TrashRestoreRequest' }, example: { to_root: true } } }
+    responses:
+      '200': { description: Restored item and whether it was restored to root., content: { application/json: { schema: { $ref: '#/components/schemas/TrashRestoreResponse' } } } }
+      '400': { description: Invalid restore request., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+      '404': { description: Item not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+      '409': { description: Name conflict., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }

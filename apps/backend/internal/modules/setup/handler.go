@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/cubycloud/backend/internal/httputil"
 	"github.com/cubycloud/backend/internal/middleware"
 	"github.com/cubycloud/backend/internal/storage"
 	"github.com/golang-jwt/jwt/v5"
@@ -46,14 +47,25 @@ func (h *Handler) CompleteSetup(c echo.Context) error {
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   c.Request().TLS != nil,
-		MaxAge:   7 * 24 * 3600, // 7 days
+		Secure:   httputil.IsSecureCookie(c),
+		MaxAge:   24 * 3600, // 24 hours
 	}
 	c.SetCookie(cookie)
 
 	return c.JSON(http.StatusOK, resp)
 }
 
+
+func (h *Handler) TestCloud(c echo.Context) error {
+	var cloud CloudConfig
+	if err := c.Bind(&cloud); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+	if err := h.service.TestCloud(c.Request().Context(), cloud); err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, map[string]string{"message": "cloud connection successful"})
+}
 func (h *Handler) GetStatus(c echo.Context) error {
 	resp, err := h.service.GetSetupStatus(c.Request().Context())
 	if err != nil {
@@ -74,7 +86,7 @@ func (h *Handler) generateJWT(userID string) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub":  userID,
 		"role": "SUPER_ADMIN",
-		"exp":  time.Now().Add(7 * 24 * time.Hour).Unix(),
+		"exp":  time.Now().Add(24 * time.Hour).Unix(),
 	})
 	return token.SignedString([]byte(h.jwtSecret))
 }
@@ -87,4 +99,5 @@ func RegisterRoutes(e *echo.Echo, db *bun.DB, storage storage.StorageDriver, set
 	
 	setupGroup := e.Group("/api/v1/setup", setupGuard.Middleware())
 	setupGroup.POST("/complete", h.CompleteSetup)
+	setupGroup.POST("/test-cloud", h.TestCloud)
 }

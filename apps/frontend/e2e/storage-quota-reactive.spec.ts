@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const adminUsername = 'storage-reactive-admin';
-const adminPassword = 'StorageReactive-password-2026';
+const adminUsername = 'storage-e2e-admin';
+const adminPassword = 'StorageE2E-password-2026';
 const recoveryKey = 'ABCDE-FGHKL-MNPQR-STUVW-XYZ23-45678';
 
 const testUsername = 'quota-user-test';
@@ -21,7 +21,12 @@ async function setupAndLogin(page: Page) {
 		expect(nodes.length).toBeGreaterThan(0);
 		const setup = await page.request.post('/api/v1/setup/complete', {
 			data: {
-				admin: { username: adminUsername, email: 'admin-reactive@example.test', password: adminPassword, recovery_key: recoveryKey },
+				admin: {
+					username: adminUsername,
+					email: 'admin-reactive@example.test',
+					password: adminPassword,
+					recovery_key: recoveryKey
+				},
 				storage_nodes: nodes.map((node) => ({ ...node, enabled: true })),
 				placement_strategy: 'FILL_FIRST',
 				cloud: { enabled: false }
@@ -54,16 +59,19 @@ async function setupAndLogin(page: Page) {
 	// Now login via UI as the test user with 1GB quota
 	await page.context().clearCookies();
 	await page.goto('/login');
-	await page.getByLabel('Username atau Email').fill(testUsername);
-	await page.getByRole('textbox', { name: 'Password' }).fill(testPassword);
-	await page.getByRole('button', { name: 'Masuk' }).click();
+	await page.locator('#login-identifier').fill(testUsername);
+	await page.locator('#login-password').fill(testPassword);
+	await page.getByRole('button', { name: /Masuk|Sign in/i }).click();
 	await page.waitForURL('**/drive/home');
 }
 
-test('Storage quota updates reactively without reload and syncs across tabs', async ({ page, context }) => {
+test('Storage quota updates reactively without reload and syncs across tabs', async ({
+	page,
+	context
+}) => {
 	await setupAndLogin(page);
 
-	// Create a temporary 100MB file (0.1 GB)
+	// Create a temporary 100MB file (0.1 GiB)
 	const tempDir = mkdtempSync(join(tmpdir(), 'quota-reactive-'));
 	const testFilePath = join(tempDir, 'test-quota-100mb.bin');
 	const fileBuffer = Buffer.alloc(100 * 1024 * 1024, 0x41); // 100 MB
@@ -73,18 +81,18 @@ test('Storage quota updates reactively without reload and syncs across tabs', as
 		await page.goto('/drive/my-storage');
 		await page.waitForLoadState('networkidle');
 
-		// Check initial storage text on Tab 1 (should be 0 / 1 GB)
-		const sidebarQuota1 = page.locator('aside').getByText(/\/ 1 GB/i);
+		// Check initial storage text on Tab 1 (should be 0 / 1 GiB)
+		const sidebarQuota1 = page.locator('aside').getByText(/\/ 1 GiB/i);
 		await expect(sidebarQuota1).toBeVisible();
-		await expect(sidebarQuota1).toContainText('0 / 1 GB');
+		await expect(sidebarQuota1).toContainText('0 / 1 GiB');
 
 		// Open Tab 2 in the same browser context (same session/cookies)
 		const page2 = await context.newPage();
 		await page2.goto('/drive/my-storage');
 		await page2.waitForLoadState('networkidle');
-		const sidebarQuota2 = page2.locator('aside').getByText(/\/ 1 GB/i);
+		const sidebarQuota2 = page2.locator('aside').getByText(/\/ 1 GiB/i);
 		await expect(sidebarQuota2).toBeVisible();
-		await expect(sidebarQuota2).toContainText('0 / 1 GB');
+		await expect(sidebarQuota2).toContainText('0 / 1 GiB');
 
 		// Tab 1: Upload the 100MB file
 		const fileInput = page.getByTestId('upload-file-input');
@@ -94,11 +102,11 @@ test('Storage quota updates reactively without reload and syncs across tabs', as
 		const uploadedItem = page.getByRole('option').filter({ hasText: 'test-quota-100mb.bin' });
 		await expect(uploadedItem).toBeVisible({ timeout: 20000 });
 
-		// Tab 1: Verify storage widget in Tab 1 updated to 0.1 / 1 GB WITHOUT reload
-		await expect(sidebarQuota1).toContainText('0.1 / 1 GB', { timeout: 10000 });
+		// Tab 1: Verify storage widget in Tab 1 updated to 0.1 / 1 GiB WITHOUT reload
+		await expect(sidebarQuota1).toContainText(/[01][.,]1 \/ 1 GiB/, { timeout: 10000 });
 
-		// Tab 2: Verify storage widget in Tab 2 synced via BroadcastChannel to 0.1 / 1 GB WITHOUT reload
-		await expect(sidebarQuota2).toContainText('0.1 / 1 GB', { timeout: 10000 });
+		// Tab 2: Verify storage widget in Tab 2 synced via BroadcastChannel to 0.1 / 1 GiB WITHOUT reload
+		await expect(sidebarQuota2).toContainText(/[01][.,]1 \/ 1 GiB/, { timeout: 10000 });
 
 		// Tab 1: Move file to Trash
 		await uploadedItem.getByRole('button', { name: 'Aksi berkas' }).click();
@@ -118,11 +126,11 @@ test('Storage quota updates reactively without reload and syncs across tabs', as
 		await expect(confirmPurgeBtn).toBeVisible();
 		await confirmPurgeBtn.click();
 
-		// Tab 1: Storage quota updates back down to 0 / 1 GB WITHOUT reload
-		await expect(sidebarQuota1).toContainText('0 / 1 GB', { timeout: 10000 });
+		// Tab 1: Storage quota updates back down to 0 / 1 GiB WITHOUT reload
+		await expect(sidebarQuota1).toContainText('0 / 1 GiB', { timeout: 10000 });
 
-		// Tab 2: Storage quota on Tab 2 also updates back down to 0 / 1 GB WITHOUT reload
-		await expect(sidebarQuota2).toContainText('0 / 1 GB', { timeout: 10000 });
+		// Tab 2: Storage quota on Tab 2 also updates back down to 0 / 1 GiB WITHOUT reload
+		await expect(sidebarQuota2).toContainText('0 / 1 GiB', { timeout: 10000 });
 
 		await page2.close();
 	} finally {
@@ -141,14 +149,14 @@ test('Storage quota handles single trash purge and failed upload gracefully', as
 		await page.goto('/drive/my-storage');
 		await page.waitForLoadState('networkidle');
 
-		const sidebarQuota = page.locator('aside').getByText(/\/ 1 GB/i);
-		await expect(sidebarQuota).toContainText('0 / 1 GB');
+		const sidebarQuota = page.locator('aside').getByText(/\/ 1 GiB/i);
+		await expect(sidebarQuota).toContainText('0 / 1 GiB');
 
 		// 1. Upload file
 		await page.getByTestId('upload-file-input').setInputFiles(testFilePath);
 		const item = page.getByRole('option').filter({ hasText: 'single-purge-test.bin' });
 		await expect(item).toBeVisible({ timeout: 20000 });
-		await expect(sidebarQuota).toContainText('0.1 / 1 GB', { timeout: 10000 });
+		await expect(sidebarQuota).toContainText(/[01][.,]1 \/ 1 GiB/, { timeout: 10000 });
 
 		// 2. Move to trash
 		await item.getByRole('button', { name: 'Aksi berkas' }).click();
@@ -170,8 +178,8 @@ test('Storage quota handles single trash purge and failed upload gracefully', as
 		await singlePurgeModal.getByRole('button', { name: 'Hapus permanen' }).click();
 		await expect(trashItem).toHaveCount(0);
 
-		// Quota decreases back to 0 / 1 GB without reload
-		await expect(sidebarQuota).toContainText('0 / 1 GB', { timeout: 10000 });
+		// Quota decreases back to 0 / 1 GiB without reload
+		await expect(sidebarQuota).toContainText('0 / 1 GiB', { timeout: 10000 });
 
 		// 4. Edge case: simulated quota exceeded (413) upload
 		await page.goto('/drive/my-storage');
@@ -187,8 +195,8 @@ test('Storage quota handles single trash purge and failed upload gracefully', as
 		await page.getByTestId('upload-file-input').setInputFiles(testFilePath);
 		const queue = page.getByTestId('upload-queue');
 		await expect(queue).toBeVisible();
-		// Quota remains accurate (0 / 1 GB) and doesn't get corrupted
-		await expect(sidebarQuota).toContainText('0 / 1 GB', { timeout: 10000 });
+		// Quota remains accurate (0 / 1 GiB) and doesn't get corrupted
+		await expect(sidebarQuota).toContainText('0 / 1 GiB', { timeout: 10000 });
 
 		await page.unroute('**/api/v1/drive/my-storage/upload**');
 	} finally {

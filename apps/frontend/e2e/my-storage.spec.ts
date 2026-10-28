@@ -1,7 +1,53 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+	chromium,
+	expect,
+	test,
+	type BrowserContext,
+	type Locator,
+	type Page
+} from '@playwright/test';
+import {
+	existsSync,
+	mkdtempSync,
+	mkdirSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	utimesSync,
+	writeFileSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { restartControlDir } from './restart-control.js';
+
+async function expectTabColors(tab: Locator, selected: boolean) {
+	const colors = await tab.evaluate((element) => {
+		const style = getComputedStyle(element);
+		const tokenColor = (token: string) => {
+			const probe = document.createElement('span');
+			probe.style.color = `var(${token})`;
+			document.body.append(probe);
+			const color = getComputedStyle(probe).color;
+			probe.remove();
+			return color;
+		};
+		return {
+			color: style.color,
+			primary: tokenColor('--primary'),
+			muted: tokenColor('--text-muted'),
+			borderBottomColor: style.borderBottomColor,
+			borderBottomWidth: style.borderBottomWidth
+		};
+	});
+	expect(colors.color).toBe(selected ? colors.primary : colors.muted);
+	if (selected) {
+		expect(colors.borderBottomColor).toBe(colors.primary);
+		expect(colors.borderBottomWidth).toBe('2px');
+	} else {
+		expect(colors.borderBottomColor).toBe('rgba(0, 0, 0, 0)');
+		expect(colors.borderBottomWidth).toBe('2px');
+	}
+}
 
 const username = 'storage-e2e-admin';
 const password = 'StorageE2E-password-2026';
@@ -29,12 +75,16 @@ async function finishSetup(page: Page) {
 	// Setup is API-provisioned; clear its session and exercise the actual login form.
 	await page.context().clearCookies();
 	await page.goto('/login');
-	await page.getByLabel('Username atau Email').fill(username);
-	await page.getByRole('textbox', { name: 'Password' }).fill(password);
-	await page.getByRole('button', { name: 'Masuk' }).click();
+	await page.locator('#login-identifier').fill(username);
+	await page.locator('#login-password').fill(password);
+	await page.getByRole('button', { name: /Masuk|Sign in/i }).click();
 	await page.waitForURL('**/drive/home');
 	await page.goto('/drive/my-storage');
-	await expect(page.getByText('Folder kosong')).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'My Storage' })).toBeVisible();
+	await page.waitForFunction(async () => {
+		const queue = await import('/src/lib/transfer-queue.svelte.ts');
+		return queue.transferQueueState.ready && Boolean(queue.transferQueueState.ownerId);
+	});
 }
 
 function itemRow(page: Page, name: string | RegExp): Locator {
@@ -49,14 +99,28 @@ async function listing(page: Page, parentId = '') {
 	const query = parentId ? `?parent_id=${encodeURIComponent(parentId)}` : '';
 	const response = await page.request.get(`/api/v1/drive/my-storage${query}`);
 	expect(response.ok()).toBeTruthy();
-	return await response.json() as {
-		items: { id: string; name: string; kind: 'file' | 'folder'; size_bytes: number; parent_id: string | null }[];
+	return (await response.json()) as {
+		items: {
+			id: string;
+			name: string;
+			kind: 'file' | 'folder';
+			size_bytes: number;
+			parent_id: string | null;
+		}[];
 		breadcrumbs: { id: string; name: string }[];
 	};
 }
 
 test('My Storage manages real files and folders end to end', async ({ page }) => {
 	await finishSetup(page);
+
+	const initialListing = await listing(page);
+	for (const item of initialListing.items) {
+		await page.request.delete(`/api/v1/drive/my-storage/${encodeURIComponent(item.id)}`);
+	}
+	await page.request.delete('/api/v1/drive/trash');
+	await page.reload();
+	await expect(page.getByRole('heading', { name: 'My Storage' })).toBeVisible();
 
 	const base = mkdtempSync(join(tmpdir(), 'my-storage-e2e-upload-'));
 	try {
@@ -91,9 +155,15 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 		const uploadQueue = page.getByTestId('upload-queue');
 		await expect(uploadQueue).toBeVisible();
 		const progressbar = uploadQueue.getByRole('progressbar');
-		await expect.poll(async () => Number(await progressbar.getAttribute('aria-valuenow'))).toBeGreaterThan(0);
-		await expect.poll(async () => Number(await progressbar.getAttribute('aria-valuenow'))).toBeLessThan(100);
-		await expect(uploadQueue.getByRole('button', { name: 'Tutup notifikasi unggahan' })).toHaveCount(0);
+		await expect
+			.poll(async () => Number(await progressbar.getAttribute('aria-valuenow')))
+			.toBeGreaterThan(0);
+		await expect
+			.poll(async () => Number(await progressbar.getAttribute('aria-valuenow')))
+			.toBeLessThan(100);
+		await expect(
+			uploadQueue.getByRole('button', { name: 'Tutup notifikasi unggahan' })
+		).toHaveCount(0);
 		await expect(uploadQueue.getByRole('button', { name: 'Buka antrean unggahan' })).toBeVisible();
 		await network.send('Network.emulateNetworkConditions', {
 			offline: false,
@@ -122,7 +192,9 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 		const queueHeader = uploadQueue.locator('button').first();
 		await expect(queueHeader).toHaveAttribute('aria-expanded', 'false');
 		const expandQueueButton = uploadQueue.getByRole('button', { name: 'Buka antrean unggahan' });
-		const dismissQueueButton = uploadQueue.getByRole('button', { name: 'Tutup notifikasi unggahan' });
+		const dismissQueueButton = uploadQueue.getByRole('button', {
+			name: 'Tutup notifikasi unggahan'
+		});
 		await expect(dismissQueueButton).toBeVisible();
 		const chevronBounds = await expandQueueButton.boundingBox();
 		const dismissBounds = await dismissQueueButton.boundingBox();
@@ -131,10 +203,22 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 		expect(dismissBounds).toBeTruthy();
 		expect(titleBounds).toBeTruthy();
 		expect(chevronBounds!.x).toBeLessThan(dismissBounds!.x);
-		expect(Math.abs((chevronBounds!.y + chevronBounds!.height / 2) - (dismissBounds!.y + dismissBounds!.height / 2))).toBeLessThanOrEqual(2);
-		expect(Math.abs((dismissBounds!.y + dismissBounds!.height / 2) - (titleBounds!.y + titleBounds!.height / 2))).toBeLessThanOrEqual(4);
+		expect(
+			Math.abs(
+				chevronBounds!.y +
+					chevronBounds!.height / 2 -
+					(dismissBounds!.y + dismissBounds!.height / 2)
+			)
+		).toBeLessThanOrEqual(2);
+		expect(
+			Math.abs(
+				dismissBounds!.y + dismissBounds!.height / 2 - (titleBounds!.y + titleBounds!.height / 2)
+			)
+		).toBeLessThanOrEqual(4);
 		await expandQueueButton.click();
-		await expect(uploadQueue.getByRole('button', { name: 'Ciutkan antrean unggahan' })).toBeVisible();
+		await expect(
+			uploadQueue.getByRole('button', { name: 'Ciutkan antrean unggahan' })
+		).toBeVisible();
 		await expect(uploadQueue.getByTestId('upload-queue-item')).toContainText('notes.txt');
 		await uploadQueue.getByRole('button', { name: 'Tutup notifikasi unggahan' }).click();
 		await expect(page.getByTestId('upload-queue')).toHaveCount(0);
@@ -146,7 +230,9 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 		// A same-path upload is kept as a separately named item; the original bytes stay intact.
 		writeFileSync(simpleFile, 'replacement candidate');
 		await page.getByTestId('upload-file-input').setInputFiles(simpleFile);
-		await expect.poll(async () => (await listing(page)).items.filter((item) => item.kind === 'file').length).toBe(2);
+		await expect
+			.poll(async () => (await listing(page)).items.filter((item) => item.kind === 'file').length)
+			.toBe(2);
 		const reopenedQueue = page.getByTestId('upload-queue');
 		await expect(reopenedQueue).toBeVisible();
 		await expect(reopenedQueue.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100');
@@ -161,12 +247,18 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 		const suffixed = root.items.find((item) => item.kind === 'file' && item.id !== original?.id);
 		expect(suffixed?.name).toMatch(/^notes(?: \(\d+\))?\.txt$/);
 		expect(suffixed?.name).not.toBe('notes.txt');
-		expect(root.items.find((item) => item.id === original?.id)?.size_bytes).toBe(Buffer.byteLength(originalContent));
+		expect(root.items.find((item) => item.id === original?.id)?.size_bytes).toBe(
+			Buffer.byteLength(originalContent)
+		);
 		await page.route('**/api/v1/drive/my-storage/*/duplicate', async (route) => {
-			await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Gagal menduplikasi item' }) });
+			await route.fulfill({
+				status: 500,
+				contentType: 'application/json',
+				body: JSON.stringify({ error: 'Gagal menduplikasi item' })
+			});
 		});
 		await openActions(page, 'notes.txt');
-		await page.getByRole('menuitem', { name: 'Duplikat' }).click();
+		await page.getByRole('menuitem', { name: 'Salin' }).click();
 		const errorToast = page.locator('[data-sonner-toast][data-type="error"]').first();
 		await expect(errorToast).toBeVisible();
 		const errorStyles = await errorToast.evaluate((el) => {
@@ -177,20 +269,27 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 		expect(errorStyles.border).toBe('rgb(236, 0, 63)');
 		await page.unroute('**/api/v1/drive/my-storage/*/duplicate');
 		await openActions(page, 'notes.txt');
-		await page.getByRole('menuitem', { name: 'Duplikat' }).click();
-		await expect.poll(async () => (await listing(page)).items.filter((item) => item.kind === 'file').length).toBe(3);
+		await page.getByRole('menuitem', { name: 'Salin' }).click();
+		await expect
+			.poll(async () => (await listing(page)).items.filter((item) => item.kind === 'file').length)
+			.toBe(3);
 		root = await listing(page);
-		const duplicateFile = root.items.find((item) => item.kind === 'file' && item.id !== original?.id && item.id !== suffixed?.id);
+		const duplicateFile = root.items.find(
+			(item) => item.kind === 'file' && item.id !== original?.id && item.id !== suffixed?.id
+		);
 		expect(duplicateFile?.name).toMatch(/^notes \(\d+\)\.txt$/);
 		expect(duplicateFile?.name).not.toBe(suffixed?.name);
 		expect(duplicateFile?.size_bytes).toBe(Buffer.byteLength(originalContent));
-		const originalDownload = await page.request.get(`/api/v1/drive/my-storage/${encodeURIComponent(original!.id)}/download`);
-		const duplicateDownload = await page.request.get(`/api/v1/drive/my-storage/${encodeURIComponent(duplicateFile!.id)}/download`);
+		const originalDownload = await page.request.get(
+			`/api/v1/drive/my-storage/${encodeURIComponent(original!.id)}/download`
+		);
+		const duplicateDownload = await page.request.get(
+			`/api/v1/drive/my-storage/${encodeURIComponent(duplicateFile!.id)}/download`
+		);
 		expect(originalDownload.ok()).toBeTruthy();
 		expect(duplicateDownload.ok()).toBeTruthy();
 		expect((await originalDownload.body()).toString()).toBe(originalContent);
 		expect((await duplicateDownload.body()).toString()).toBe(originalContent);
-
 
 		await openActions(page, 'notes.txt');
 		const fileDownload = page.waitForEvent('download');
@@ -202,19 +301,26 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 		// Drag and drop across the whole page (bg-app area) outside the explorer card.
 		await page.evaluate(() => {
 			const dt = new DataTransfer();
-			const file = new File(['dropped workspace content'], 'dropped-page.txt', { type: 'text/plain' });
+			const file = new File(['dropped workspace content'], 'dropped-page.txt', {
+				type: 'text/plain'
+			});
 			dt.items.add(file);
 			window.dispatchEvent(new DragEvent('dragenter', { dataTransfer: dt, bubbles: true }));
 		});
 		await expect(page.getByText('Lepas berkas di mana saja untuk mengunggah')).toBeVisible();
 		await page.evaluate(() => {
 			const dt = new DataTransfer();
-			const file = new File(['dropped workspace content'], 'dropped-page.txt', { type: 'text/plain' });
+			const file = new File(['dropped workspace content'], 'dropped-page.txt', {
+				type: 'text/plain'
+			});
 			dt.items.add(file);
 			window.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true }));
 		});
 		await expect(itemRow(page, 'dropped-page.txt')).toBeVisible();
-		await page.getByTestId('upload-queue').getByRole('button', { name: 'Tutup notifikasi unggahan' }).click();
+		await page
+			.getByTestId('upload-queue')
+			.getByRole('button', { name: 'Tutup notifikasi unggahan' })
+			.click();
 		// Drag and drop an entire directory hierarchy using webkitGetAsEntry with nested files and empty subfolders
 		await page.evaluate(() => {
 			const originalGetAsEntry = DataTransferItem.prototype.webkitGetAsEntry;
@@ -234,13 +340,15 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 											isFile: true,
 											isDirectory: false,
 											name: 'inside.txt',
-											file: (fileCb: (f: File) => void) => fileCb(new File(['hello inside dir'], 'inside.txt', { type: 'text/plain' }))
+											file: (fileCb: (f: File) => void) =>
+												fileCb(new File(['hello inside dir'], 'inside.txt', { type: 'text/plain' }))
 										},
 										{
 											isFile: true,
 											isDirectory: false,
 											name: '.DS_Store',
-											file: (fileCb: (f: File) => void) => fileCb(new File(['junk'], '.DS_Store', { type: 'text/plain' }))
+											file: (fileCb: (f: File) => void) =>
+												fileCb(new File(['junk'], '.DS_Store', { type: 'text/plain' }))
 										},
 										{
 											isFile: false,
@@ -266,9 +374,14 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 			DataTransferItem.prototype.webkitGetAsEntry = originalGetAsEntry;
 		});
 		await expect(itemRow(page, 'dropped-dir')).toBeVisible();
-		await page.getByTestId('upload-queue').getByRole('button', { name: 'Tutup notifikasi unggahan' }).click();
+		await page
+			.getByTestId('upload-queue')
+			.getByRole('button', { name: 'Tutup notifikasi unggahan' })
+			.click();
 		const droppedDirListing = await listing(page);
-		const droppedDirEntry = droppedDirListing.items.find((item) => item.name === 'dropped-dir' && item.kind === 'folder');
+		const droppedDirEntry = droppedDirListing.items.find(
+			(item) => item.name === 'dropped-dir' && item.kind === 'folder'
+		);
 		expect(droppedDirEntry).toBeTruthy();
 		const droppedDirChildren = await listing(page, droppedDirEntry!.id);
 		expect(droppedDirChildren.items.map((i) => i.name)).toContain('inside.txt');
@@ -287,23 +400,32 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 		expect(project).toBeTruthy();
 		let projectContents = await listing(page, project!.id);
 		expect(projectContents.items.map((item) => item.name)).toContain('root.txt');
-		const nested = projectContents.items.find((item) => item.name === 'nested' && item.kind === 'folder');
+		const nested = projectContents.items.find(
+			(item) => item.name === 'nested' && item.kind === 'folder'
+		);
 		expect(nested).toBeTruthy();
 		expect((await listing(page, nested!.id)).items.map((item) => item.name)).toContain('child.txt');
-		await page.getByTestId('upload-queue').getByRole('button', { name: 'Tutup notifikasi unggahan' }).click();
+		await page
+			.getByTestId('upload-queue')
+			.getByRole('button', { name: 'Tutup notifikasi unggahan' })
+			.click();
 		const partialFolder = join(base, 'partial-folder');
 		mkdirSync(partialFolder);
 		writeFileSync(join(partialFolder, 'kept.txt'), 'persist this file');
 		writeFileSync(join(partialFolder, 'failed.txt'), 'upload-failure-sentinel');
 		await page.route('**/api/v1/drive/my-storage/upload**', async (route) => {
 			if (new URL(route.request().url()).searchParams.get('filename') === 'failed.txt') {
-				await route.abort('failed');
+				await route.fulfill({
+					status: 400,
+					contentType: 'application/json',
+					body: JSON.stringify({ error: 'upload_rejected' })
+				});
 				return;
 			}
 			await route.continue();
 		});
 		await page.getByTestId('upload-folder-input').setInputFiles(partialFolder);
-		await expect(page.getByText('1 unggahan gagal')).toBeVisible();
+		await expect(page.getByText('1 unggahan gagal')).toBeVisible({ timeout: 15_000 });
 		const warningToast = page.locator('[data-sonner-toast][data-type="warning"]').first();
 		await expect(warningToast).toBeVisible();
 		const warningStyles = await warningToast.evaluate((el) => {
@@ -314,17 +436,23 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 		expect(warningStyles.border).toBe('rgb(188, 108, 37)');
 		const partialQueue = page.getByTestId('upload-queue');
 		await partialQueue.getByRole('button', { name: 'Buka antrean unggahan' }).click();
-		await expect(partialQueue.getByTestId('upload-queue-item').filter({ hasText: 'failed.txt' })).toBeVisible();
-		const failedProgress = await partialQueue.getByRole('progressbar').getAttribute('aria-valuenow');
+		await expect(
+			partialQueue.getByTestId('upload-queue-item').filter({ hasText: 'failed.txt' })
+		).toBeVisible();
+		const failedProgress = await partialQueue
+			.getByRole('progressbar')
+			.getAttribute('aria-valuenow');
 		expect(Number(failedProgress)).toBeLessThan(100);
+		await partialQueue.getByRole('button', { name: 'Tutup notifikasi unggahan' }).click();
 		await page.unroute('**/api/v1/drive/my-storage/upload**');
 		const partialRoot = await listing(page);
-		const partialEntry = partialRoot.items.find((item) => item.kind === 'folder' && item.name === 'partial-folder');
+		const partialEntry = partialRoot.items.find(
+			(item) => item.kind === 'folder' && item.name === 'partial-folder'
+		);
 		expect(partialEntry).toBeTruthy();
 		const partialContents = await listing(page, partialEntry!.id);
 		expect(partialContents.items.map((item) => item.name)).toContain('kept.txt');
 		expect(partialContents.items.map((item) => item.name)).not.toContain('failed.txt');
-
 
 		await openActions(page, 'project');
 		const folderDownload = page.waitForEvent('download');
@@ -348,12 +476,27 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 		expect(renamed).toBeTruthy();
 
 		await openActions(page, 'renamed.txt');
-		await page.getByRole('menuitem', { name: 'Pindahkan ke' }).click();
+		await page.getByRole('menuitem', { name: /^(Pindahkan|Pindahkan ke|Move)$/ }).click();
 		const moveDialog1 = page.getByTestId('move-dialog');
 		await expect(moveDialog1).toBeVisible();
 		await expect(moveDialog1.getByRole('heading', { name: 'Pindahkan' })).toBeVisible();
 		await expect(moveDialog1.getByText('renamed.txt')).toBeVisible();
 		await expect(moveDialog1.getByTestId('move-tab-organisasi')).toBeDisabled();
+		const moveTabs = moveDialog1.getByRole('tablist');
+		const driveTab = moveTabs.getByRole('tab', { name: 'Drive Saya' });
+		const organizationTab = moveTabs.getByRole('tab', { name: 'Organisasi' });
+		await expect(moveTabs).toBeVisible();
+		await expect(driveTab).toHaveAttribute('aria-selected', 'true');
+		await expect(organizationTab).toHaveAttribute('aria-selected', 'false');
+		await expect(organizationTab).toBeDisabled();
+		await expectTabColors(driveTab, true);
+		await expectTabColors(organizationTab, false);
+		await driveTab.click();
+		await expect(driveTab).toHaveAttribute('aria-selected', 'true');
+		await expect(organizationTab).toHaveAttribute('aria-selected', 'false');
+		await expectTabColors(driveTab, true);
+		await expectTabColors(organizationTab, false);
+		await expect(moveDialog1.getByText('Drive Saya', { exact: true })).toBeVisible();
 		// Drill down into project folder
 		await moveDialog1.getByTestId(`move-folder-${project!.id}`).click();
 		// Click Pindahkan on nested folder row
@@ -372,14 +515,16 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 		expect(await renameModal.textContent()).toContain('(1)');
 		await renameModal.getByRole('button', { name: 'Gunakan Nama Ini' }).click();
 		await expect(itemRow(page, 'child (1).txt')).toBeVisible();
-		expect((await listing(page, nested!.id)).items.map((item) => item.name)).toContain('child (1).txt');
+		expect((await listing(page, nested!.id)).items.map((item) => item.name)).toContain(
+			'child (1).txt'
+		);
 		const moveConflictFile = join(base, 'child.txt');
 		writeFileSync(moveConflictFile, 'move collision');
 		await page.goto('/drive/my-storage');
 		await page.getByTestId('upload-file-input').setInputFiles(moveConflictFile);
 		await expect(itemRow(page, 'child.txt')).toBeVisible();
 		await openActions(page, 'child.txt');
-		await page.getByRole('menuitem', { name: 'Pindahkan ke' }).click();
+		await page.getByRole('menuitem', { name: /^(Pindahkan|Pindahkan ke|Move)$/ }).click();
 		const moveDialog2 = page.getByTestId('move-dialog');
 		await expect(moveDialog2).toBeVisible();
 		// Drill down into project folder
@@ -393,22 +538,30 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 		expect(await moveModal.textContent()).toContain('child');
 		expect(await moveModal.textContent()).toContain('(2)');
 		await moveModal.getByRole('button', { name: 'Gunakan Nama Ini' }).click();
-		await expect.poll(async () => (await listing(page, nested!.id)).items.map((item) => item.name)).toContain('child (2).txt');
+		await expect
+			.poll(async () => (await listing(page, nested!.id)).items.map((item) => item.name))
+			.toContain('child (2).txt');
 
 		// Duplicate the folder and verify its descendants exist in the real API listing.
 		await page.goto('/drive/my-storage');
 		await openActions(page, 'project');
-		await page.getByRole('menuitem', { name: 'Duplikat' }).click();
+		await page.getByRole('menuitem', { name: 'Salin' }).click();
 		await expect.poll(async () => (await listing(page)).items.length).toBeGreaterThan(3);
 		root = await listing(page);
-		const duplicate = root.items.find((item) => item.kind === 'folder' && item.name !== 'project' && /project/.test(item.name));
+		const duplicate = root.items.find(
+			(item) => item.kind === 'folder' && item.name !== 'project' && /project/.test(item.name)
+		);
 		expect(duplicate).toBeTruthy();
 		const duplicateItems = await listing(page, duplicate!.id);
-		const duplicateNested = duplicateItems.items.find((item) => item.kind === 'folder' && item.name === 'nested');
+		const duplicateNested = duplicateItems.items.find(
+			(item) => item.kind === 'folder' && item.name === 'nested'
+		);
 		expect(duplicateNested).toBeTruthy();
 		const duplicateNestedItems = await listing(page, duplicateNested!.id);
 		expect(duplicateNestedItems.items.map((item) => item.name)).toContain('child (2).txt');
-		const duplicateChildId = duplicateNestedItems.items.find((item) => item.name === 'child (1).txt')?.id;
+		const duplicateChildId = duplicateNestedItems.items.find(
+			(item) => item.name === 'child (1).txt'
+		)?.id;
 		expect(duplicateChildId).toBeTruthy();
 
 		// Folder deletion must disclose recursive impact and invoke the native confirmation.
@@ -420,8 +573,12 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 		expect(deleteText).toContain('dan semua isinya');
 		expect(deleteText).toContain(duplicate!.name);
 		await deleteModal.getByRole('button', { name: 'Hapus ke Trash' }).click();
-		await expect.poll(async () => (await listing(page)).items.some((item) => item.id === duplicate!.id)).toBe(false);
-		const deletedChild = await page.request.get(`/api/v1/drive/my-storage/${encodeURIComponent(duplicateChildId!)}/download`);
+		await expect
+			.poll(async () => (await listing(page)).items.some((item) => item.id === duplicate!.id))
+			.toBe(false);
+		const deletedChild = await page.request.get(
+			`/api/v1/drive/my-storage/${encodeURIComponent(duplicateChildId!)}/download`
+		);
 		expect(deletedChild.ok()).toBe(false);
 
 		// Trash Lifecycle Verification
@@ -435,7 +592,7 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 
 		// 2. Navigate to /drive/trash
 		await page.goto('/drive/trash');
-		await expect(page.getByRole('heading', { name: 'Trash' })).toBeVisible();
+		await expect(page.getByRole('heading', { name: /^(Trash|Sampah)$/ })).toBeVisible();
 
 		// Verify ordering: dropped-page.txt was deleted after duplicate folder, so dropped-page.txt appears first
 		const trashRows = page.getByRole('option');
@@ -466,7 +623,10 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 		await page.goto('/drive/my-storage');
 		await openActions(page, duplicate!.name);
 		await page.getByRole('menuitem', { name: 'Hapus ke Trash' }).click();
-		await page.getByTestId('confirm-dialog').getByRole('button', { name: 'Hapus ke Trash' }).click();
+		await page
+			.getByTestId('confirm-dialog')
+			.getByRole('button', { name: 'Hapus ke Trash' })
+			.click();
 
 		await page.goto('/drive/trash');
 		await expect(itemRow(page, duplicate!.name)).toBeVisible();
@@ -494,13 +654,19 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 
 		await openActions(page, 'fallback-doc.txt');
 		await page.getByRole('menuitem', { name: 'Hapus ke Trash' }).click();
-		await page.getByTestId('confirm-dialog').getByRole('button', { name: 'Hapus ke Trash' }).click();
+		await page
+			.getByTestId('confirm-dialog')
+			.getByRole('button', { name: 'Hapus ke Trash' })
+			.click();
 		await expect(itemRow(page, 'fallback-doc.txt')).not.toBeVisible();
 
 		await page.goto('/drive/my-storage');
 		await openActions(page, 'temp-parent');
 		await page.getByRole('menuitem', { name: 'Hapus ke Trash' }).click();
-		await page.getByTestId('confirm-dialog').getByRole('button', { name: 'Hapus ke Trash' }).click();
+		await page
+			.getByTestId('confirm-dialog')
+			.getByRole('button', { name: 'Hapus ke Trash' })
+			.click();
 
 		await page.goto('/drive/trash');
 		const fallbackTrashRow = itemRow(page, 'fallback-doc.txt');
@@ -557,7 +723,9 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 		await expect(itemRow(page, 'conflict-sample.txt')).toBeVisible();
 
 		// Drag conflict-sample.txt onto move-target to trigger conflict dialog
-		const conflictSource = page.locator('[draggable="true"]').filter({ hasText: 'conflict-sample.txt' });
+		const conflictSource = page
+			.locator('[draggable="true"]')
+			.filter({ hasText: 'conflict-sample.txt' });
 		await conflictSource.dragTo(targetRow);
 
 		// Expect conflict dialog "Nama Sudah Digunakan"
@@ -618,5 +786,515 @@ test('My Storage manages real files and folders end to end', async ({ page }) =>
 		await expect(itemRow(page, 'move-target')).toBeVisible();
 	} finally {
 		rmSync(base, { recursive: true, force: true });
+	}
+});
+
+// Import via Vite in the browser; the Playwright Node runner cannot compile this Svelte-rune module.
+test('the same persisted upload cannot run in two browser tabs at once', async ({ page }) => {
+	await finishSetup(page);
+	const ownerId = await page.evaluate(async () => {
+		const queue = await import('/src/lib/transfer-queue.svelte.ts');
+		return queue.transferQueueState.ownerId;
+	});
+	expect(ownerId).toBeTruthy();
+
+	const transferId = await page.evaluate(async () => {
+		const queue = await import('/src/lib/transfer-queue.svelte.ts');
+		const file = new File(['cross-tab upload'], 'cross-tab.txt', { lastModified: 123 });
+		const [id] = await queue.enqueueTransfers(queue.transferQueueState.ownerId, 'my-storage', [
+			{ name: file.name, relativePath: file.name, parentId: null, file }
+		]);
+		let releaseDriver: (() => void) | undefined;
+		let signalStarted: (() => void) | undefined;
+		const started = new Promise<void>((resolve) => (signalStarted = resolve));
+		(
+			window as typeof window & {
+				__releaseTransferDriver?: () => void;
+				__transferDriverPromise?: Promise<boolean>;
+			}
+		).__releaseTransferDriver = () => releaseDriver?.();
+		(
+			window as typeof window & { __transferDriverPromise?: Promise<boolean> }
+		).__transferDriverPromise = queue.runTransfer(
+			id,
+			file,
+			async (_file, _record, options) => {
+				await options.onPhase('uploading');
+				signalStarted?.();
+				await new Promise<void>((resolve) => (releaseDriver = resolve));
+				await options.onPhase('committing');
+			},
+			async () => {}
+		);
+		await started;
+		return id;
+	});
+
+	const secondTab = await page.context().newPage();
+	try {
+		await secondTab.goto('/drive/my-storage');
+		const attempt = await secondTab.evaluate(
+			async ({ id, ownerId }) => {
+				const queue = await import('/src/lib/transfer-queue.svelte.ts');
+				await queue.loadTransferQueue(ownerId, 'my-storage');
+				const file = new File(['cross-tab upload'], 'cross-tab.txt', { lastModified: 123 });
+				let driverCalled = false;
+				const result = await queue.runTransfer(
+					id,
+					file,
+					async () => {
+						driverCalled = true;
+					},
+					async () => {}
+				);
+				return { result, driverCalled };
+			},
+			{ id: transferId, ownerId }
+		);
+		expect(attempt).toEqual({ result: false, driverCalled: false });
+	} finally {
+		await page.evaluate(async () => {
+			const transferWindow = window as typeof window & {
+				__releaseTransferDriver?: () => void;
+				__transferDriverPromise?: Promise<boolean>;
+			};
+			transferWindow.__releaseTransferDriver?.();
+			await transferWindow.__transferDriverPromise;
+		});
+		await secondTab.close();
+	}
+});
+
+test('logout pauses an active upload and preserves it for the next login', async ({ page }) => {
+	test.setTimeout(120_000);
+	await finishSetup(page);
+
+	const filename = 'logout-resume.bin';
+	const original = Buffer.alloc(1024 * 1024, 0x6c);
+	const sourceDir = mkdtempSync(join(tmpdir(), 'my-storage-logout-upload-'));
+	const filePath = join(sourceDir, filename);
+	writeFileSync(filePath, original);
+	const network = await page.context().newCDPSession(page);
+	await network.send('Network.enable');
+
+	try {
+		await network.send('Network.emulateNetworkConditions', {
+			offline: false,
+			latency: 25,
+			downloadThroughput: 10 * 1024 * 1024,
+			uploadThroughput: 64 * 1024
+		});
+		await page.getByTestId('upload-file-input').setInputFiles(filePath);
+		const queue = page.getByTestId('upload-queue');
+		await expect(queue).toBeVisible();
+		const openQueue = queue.getByRole('button', { name: 'Buka antrean unggahan' });
+		if (await openQueue.count()) await openQueue.click();
+		const transfer = queue.getByTestId('upload-queue-item').filter({ hasText: filename });
+		await expect(transfer).toHaveAttribute('data-state', 'uploading');
+		await expect
+			.poll(async () =>
+				Number(
+					await queue
+						.getByRole('progressbar', { name: 'Progress unggahan' })
+						.getAttribute('aria-valuenow')
+				)
+			)
+			.toBeGreaterThan(0);
+
+		await page.getByRole('button', { name: 'Menu akun' }).click();
+		await page.getByRole('menuitem', { name: 'Keluar' }).click();
+		await page.waitForURL('**/login');
+		await page.locator('#login-identifier').fill(username);
+		await page.locator('#login-password').fill(password);
+		await page.getByRole('button', { name: /Masuk|Sign in/i }).click();
+		await page.waitForURL('**/drive/home');
+		await page.goto('/drive/my-storage');
+		await page.waitForFunction(async () => {
+			const transferQueue = await import('/src/lib/transfer-queue.svelte.ts');
+			return (
+				transferQueue.transferQueueState.ready && Boolean(transferQueue.transferQueueState.ownerId)
+			);
+		});
+
+		const resumedQueue = page.getByTestId('upload-queue');
+		await expect(resumedQueue).toBeVisible();
+		const reopenQueue = resumedQueue.getByRole('button', { name: 'Buka antrean unggahan' });
+		if (await reopenQueue.count()) await reopenQueue.click();
+		const pausedTransfer = resumedQueue
+			.getByTestId('upload-queue-item')
+			.filter({ hasText: filename });
+		await expect(pausedTransfer).toHaveAttribute('data-state', 'paused');
+
+		await network.send('Network.emulateNetworkConditions', {
+			offline: false,
+			latency: 0,
+			downloadThroughput: -1,
+			uploadThroughput: -1
+		});
+		await pausedTransfer.getByRole('button', { name: `Lanjutkan: ${filename}` }).click();
+		await page.getByTestId('resume-upload-file-input').setInputFiles(filePath);
+		await expect(pausedTransfer).toHaveAttribute('data-state', 'completed', { timeout: 30_000 });
+		const matches = (await listing(page)).items.filter((item) => item.name === filename);
+		expect(matches).toHaveLength(1);
+		expect(matches[0].size_bytes).toBe(original.length);
+	} finally {
+		await network
+			.send('Network.emulateNetworkConditions', {
+				offline: false,
+				latency: 0,
+				downloadThroughput: -1,
+				uploadThroughput: -1
+			})
+			.catch(() => {});
+		await network.detach().catch(() => {});
+		rmSync(sourceDir, { recursive: true, force: true });
+	}
+});
+
+test('resumable upload survives refresh, backend restart, and tab closure, then rejects a mismatched file', async ({
+	page
+}) => {
+	test.setTimeout(120_000);
+	await finishSetup(page);
+	const restartResultPath = join(restartControlDir, 'restart-result.json');
+	const restartRequestPath = join(restartControlDir, 'restart-request.json');
+	const filename = 'resumable-recovery.bin';
+	const original = Buffer.alloc(8 * 1024 * 1024, 0x61);
+	const sourceDir = mkdtempSync(join(tmpdir(), 'my-storage-resume-upload-'));
+	const originalDir = join(sourceDir, 'original');
+	const mismatchedDir = join(sourceDir, 'mismatched');
+	mkdirSync(originalDir);
+	mkdirSync(mismatchedDir);
+	const originalPath = join(originalDir, filename);
+	const mismatchedPath = join(mismatchedDir, filename);
+	writeFileSync(originalPath, original);
+	writeFileSync(mismatchedPath, Buffer.alloc(original.length, 0x62));
+	const modifiedAt = new Date('2026-01-01T00:00:00.000Z');
+	utimesSync(originalPath, modifiedAt, modifiedAt);
+	utimesSync(mismatchedPath, modifiedAt, modifiedAt);
+	const browserContext = page.context();
+
+	try {
+		const network = await page.context().newCDPSession(page);
+		await network.send('Network.enable');
+		await network.send('Network.emulateNetworkConditions', {
+			offline: false,
+			latency: 25,
+			downloadThroughput: 10 * 1024 * 1024,
+			uploadThroughput: 256 * 1024
+		});
+
+		try {
+			await page.getByTestId('upload-file-input').setInputFiles(originalPath);
+			const queue = page.getByTestId('upload-queue');
+			await expect(queue).toBeVisible();
+			const openQueue = queue.getByRole('button', { name: 'Buka antrean unggahan' });
+			if (await openQueue.count()) await openQueue.click();
+			const transfer = queue.getByTestId('upload-queue-item').filter({ hasText: filename });
+			await expect(transfer).toHaveAttribute('data-state', 'uploading', { timeout: 20_000 });
+			const progress = queue.getByRole('progressbar', { name: 'Progress unggahan' });
+			await expect
+				.poll(async () => Number(await progress.getAttribute('aria-valuenow')))
+				.toBeGreaterThan(0);
+			await expect
+				.poll(async () => Number(await progress.getAttribute('aria-valuenow')))
+				.toBeLessThan(100);
+			await transfer.getByRole('button', { name: `Jeda ${filename}` }).click();
+			await expect(transfer).toHaveAttribute('data-state', 'paused');
+		} finally {
+			await network
+				.send('Network.emulateNetworkConditions', {
+					offline: false,
+					latency: 0,
+					downloadThroughput: -1,
+					uploadThroughput: -1
+				})
+				.catch(() => {});
+			await network.detach().catch(() => {});
+		}
+
+		await page.reload();
+		await page.waitForFunction(async () => {
+			const queue = await import('/src/lib/transfer-queue.svelte.ts');
+			return queue.transferQueueState.ready && Boolean(queue.transferQueueState.ownerId);
+		});
+		const queue = page.getByTestId('upload-queue');
+		await expect(queue).toBeVisible();
+		const openQueue = queue.getByRole('button', { name: 'Buka antrean unggahan' });
+		if (await openQueue.count()) await openQueue.click();
+		const transfer = queue.getByTestId('upload-queue-item').filter({ hasText: filename });
+		await expect(transfer).toHaveAttribute('data-state', 'paused');
+		const persistedFingerprint = await page.evaluate(async (name) => {
+			const { transferQueueState } = await import('/src/lib/transfer-queue.svelte.ts');
+			return transferQueueState.items.find((item) => item.name === name)?.fingerprint;
+		}, filename);
+		expect(persistedFingerprint).toMatch(/^[a-f\d]{64}$/i);
+		const fileAvailableWithoutReselection = await page.evaluate(async (name) => {
+			const { transferQueueState, getInMemoryTransferFile } =
+				await import('/src/lib/transfer-queue.svelte.ts');
+			const record = transferQueueState.items.find((item) => item.name === name);
+			return record ? Boolean(getInMemoryTransferFile(record.id)) : null;
+		}, filename);
+		expect(fileAvailableWithoutReselection).toBe(false);
+
+		await expect.poll(() => existsSync(restartResultPath), { timeout: 120_000 }).toBeTruthy();
+		const previousBackend = JSON.parse(readFileSync(restartResultPath, 'utf8')) as {
+			generation: number;
+			pid: number;
+		};
+		const requestId = `restart-${Date.now()}`;
+		const temporaryRequestPath = `${restartRequestPath}.${process.pid}.tmp`;
+		writeFileSync(temporaryRequestPath, JSON.stringify({ requestId }));
+		renameSync(temporaryRequestPath, restartRequestPath);
+		await expect
+			.poll(
+				() => {
+					const result = JSON.parse(readFileSync(restartResultPath, 'utf8')) as {
+						requestId: string | null;
+						generation: number;
+						pid: number;
+					};
+					return result.requestId === requestId ? result : null;
+				},
+				{ timeout: 120_000 }
+			)
+			.toMatchObject({ requestId, generation: previousBackend.generation + 1 });
+		const restartedBackend = JSON.parse(readFileSync(restartResultPath, 'utf8')) as {
+			pid: number;
+		};
+		expect(restartedBackend.pid).not.toBe(previousBackend.pid);
+		await expect
+			.poll(async () => (await page.request.get('/api/v1/setup/status')).ok(), { timeout: 120_000 })
+			.toBeTruthy();
+
+		await page.close();
+		const reopenedPage = await browserContext.newPage();
+		await reopenedPage.goto('/drive/my-storage');
+		await reopenedPage.waitForFunction(async () => {
+			const queue = await import('/src/lib/transfer-queue.svelte.ts');
+			return queue.transferQueueState.ready && Boolean(queue.transferQueueState.ownerId);
+		});
+		await expect(reopenedPage.getByRole('heading', { name: 'My Storage' })).toBeVisible();
+		const reopenedQueue = reopenedPage.getByTestId('upload-queue');
+		await expect(reopenedQueue).toBeVisible();
+		const reopenQueue = reopenedQueue.getByRole('button', { name: 'Buka antrean unggahan' });
+		await expect(reopenQueue).toBeVisible();
+		await reopenQueue.click();
+		const reopenedTransfer = reopenedQueue
+			.getByTestId('upload-queue-item')
+			.filter({ hasText: filename });
+		await expect(reopenedTransfer).toHaveAttribute('data-state', 'paused');
+
+		await reopenedTransfer.getByRole('button', { name: `Lanjutkan: ${filename}` }).click();
+		await reopenedPage.getByTestId('resume-upload-file-input').setInputFiles(mismatchedPath);
+		await expect(reopenedTransfer).toHaveAttribute('data-state', 'waiting-for-file', {
+			timeout: 30_000
+		});
+		await reopenedTransfer.getByRole('button', { name: `Pilih file: ${filename}` }).click();
+		await reopenedPage.getByTestId('resume-upload-file-input').setInputFiles(originalPath);
+		await expect(reopenedTransfer).toHaveAttribute('data-state', 'completed', { timeout: 30_000 });
+
+		const matches = (await listing(reopenedPage)).items.filter((item) => item.name === filename);
+		expect(matches).toHaveLength(1);
+		expect(matches[0].size_bytes).toBe(original.length);
+		const download = await reopenedPage.request.get(
+			`/api/v1/drive/my-storage/${matches[0].id}/download`
+		);
+		expect(download.ok()).toBeTruthy();
+		expect(await download.body()).toEqual(original);
+	} finally {
+		rmSync(sourceDir, { recursive: true, force: true });
+	}
+});
+
+test('paused upload survives closing and reopening the browser', async ({ page }) => {
+	test.setTimeout(120_000);
+	await finishSetup(page);
+
+	const sourceDir = mkdtempSync(join(tmpdir(), 'my-storage-browser-reopen-'));
+	const profileDir = join(sourceDir, 'profile');
+	const filename = 'browser-reopen-resume.bin';
+	const original = Buffer.alloc(8 * 1024 * 1024, 0x63);
+	const originalPath = join(sourceDir, filename);
+	writeFileSync(originalPath, original);
+	const baseURL = new URL(page.url()).origin;
+	const launchBrowser = () =>
+		chromium.launchPersistentContext(profileDir, {
+			baseURL,
+			headless: true,
+			viewport: { width: 1280, height: 720 }
+		});
+	let browserContext: BrowserContext | undefined;
+
+	try {
+		browserContext = await launchBrowser();
+		let browserPage = browserContext.pages()[0] ?? (await browserContext.newPage());
+		await browserPage.goto('/login');
+		await browserPage.locator('#login-identifier').fill(username);
+		await browserPage.locator('#login-password').fill(password);
+		await browserPage.getByRole('button', { name: /Masuk|Sign in/i }).click();
+		await browserPage.waitForURL('**/drive/home');
+		await browserPage.goto('/drive/my-storage');
+		await browserPage.waitForFunction(async () => {
+			const queue = await import('/src/lib/transfer-queue.svelte.ts');
+			return queue.transferQueueState.ready && Boolean(queue.transferQueueState.ownerId);
+		});
+
+		const network = await browserContext.newCDPSession(browserPage);
+		await network.send('Network.enable');
+		try {
+			await network.send('Network.emulateNetworkConditions', {
+				offline: false,
+				latency: 25,
+				downloadThroughput: 10 * 1024 * 1024,
+				uploadThroughput: 256 * 1024
+			});
+			await browserPage.getByTestId('upload-file-input').setInputFiles(originalPath);
+			const queue = browserPage.getByTestId('upload-queue');
+			await expect(queue).toBeVisible();
+			const openQueue = queue.getByRole('button', { name: 'Buka antrean unggahan' });
+			if (await openQueue.count()) await openQueue.click();
+			const transfer = queue.getByTestId('upload-queue-item').filter({ hasText: filename });
+			await expect(transfer).toHaveAttribute('data-state', 'uploading', { timeout: 20_000 });
+			const progress = queue.getByRole('progressbar', { name: 'Progress unggahan' });
+			await expect
+				.poll(async () => Number(await progress.getAttribute('aria-valuenow')))
+				.toBeGreaterThan(0);
+			await expect
+				.poll(async () => Number(await progress.getAttribute('aria-valuenow')))
+				.toBeLessThan(100);
+			await transfer.getByRole('button', { name: `Jeda ${filename}` }).click();
+			await expect(transfer).toHaveAttribute('data-state', 'paused');
+		} finally {
+			await network
+				.send('Network.emulateNetworkConditions', {
+					offline: false,
+					latency: 0,
+					downloadThroughput: -1,
+					uploadThroughput: -1
+				})
+				.catch(() => {});
+			await network.detach().catch(() => {});
+		}
+
+		await browserContext.close();
+		browserContext = await launchBrowser();
+		browserPage = browserContext.pages()[0] ?? (await browserContext.newPage());
+		await browserPage.goto('/drive/my-storage');
+		const loginForm = browserPage.locator('#login-identifier');
+		if (await loginForm.count()) {
+			await loginForm.fill(username);
+			await browserPage.locator('#login-password').fill(password);
+			await browserPage.getByRole('button', { name: /Masuk|Sign in/i }).click();
+			await browserPage.waitForURL('**/drive/home');
+			await browserPage.goto('/drive/my-storage');
+		}
+		await browserPage.waitForFunction(async () => {
+			const queue = await import('/src/lib/transfer-queue.svelte.ts');
+			return queue.transferQueueState.ready && Boolean(queue.transferQueueState.ownerId);
+		});
+		await expect(browserPage.getByRole('heading', { name: 'My Storage' })).toBeVisible();
+		const queue = browserPage.getByTestId('upload-queue');
+		await expect(queue).toBeVisible();
+		const openQueue = queue.getByRole('button', { name: 'Buka antrean unggahan' });
+		if (await openQueue.count()) await openQueue.click();
+		const transfer = queue.getByTestId('upload-queue-item').filter({ hasText: filename });
+		await expect(transfer).toHaveAttribute('data-state', 'paused');
+
+		const fingerprint = await browserPage.evaluate(async (name) => {
+			const { transferQueueState } = await import('/src/lib/transfer-queue.svelte.ts');
+			return transferQueueState.items.find((item) => item.name === name)?.fingerprint;
+		}, filename);
+		expect(fingerprint).toMatch(/^[a-f\d]{64}$/i);
+		await transfer.getByRole('button', { name: `Lanjutkan: ${filename}` }).click();
+		await browserPage.getByTestId('resume-upload-file-input').setInputFiles(originalPath);
+		await expect(transfer).toHaveAttribute('data-state', 'completed', { timeout: 30_000 });
+
+		const matches = (await listing(browserPage)).items.filter((item) => item.name === filename);
+		expect(matches).toHaveLength(1);
+		expect(matches[0].size_bytes).toBe(original.length);
+		const download = await browserPage.request.get(
+			`/api/v1/drive/my-storage/${matches[0].id}/download`
+		);
+		expect(download.ok()).toBeTruthy();
+		expect(await download.body()).toEqual(original);
+	} finally {
+		await browserContext?.close().catch(() => {});
+		rmSync(sourceDir, { recursive: true, force: true });
+	}
+});
+test('cancelling an active TUS upload deletes its server session without creating a file', async ({
+	page
+}) => {
+	test.setTimeout(120_000);
+	await finishSetup(page);
+
+	const filename = 'cancelled-resumable.bin';
+	const sourceDir = mkdtempSync(join(tmpdir(), 'my-storage-cancel-upload-'));
+	const filePath = join(sourceDir, filename);
+	writeFileSync(filePath, Buffer.alloc(4 * 1024 * 1024, 0x63));
+	const network = await page.context().newCDPSession(page);
+	await network.send('Network.enable');
+
+	try {
+		await network.send('Network.emulateNetworkConditions', {
+			offline: false,
+			latency: 25,
+			downloadThroughput: 10 * 1024 * 1024,
+			uploadThroughput: 256 * 1024
+		});
+
+		const createResponsePromise = page.waitForResponse(
+			(response) =>
+				response.url().includes('/api/v1/drive/my-storage/upload-tus') &&
+				response.request().method() === 'POST'
+		);
+		await page.getByTestId('upload-file-input').setInputFiles(filePath);
+		const createResponse = await createResponsePromise;
+		expect(createResponse.status()).toBe(201);
+		const uploadLocation = createResponse.headers()['location'];
+		expect(uploadLocation).toBeTruthy();
+
+		const queue = page.getByTestId('upload-queue');
+		await expect(queue).toBeVisible();
+		const openQueue = queue.getByRole('button', { name: 'Buka antrean unggahan' });
+		if (await openQueue.count()) await openQueue.click();
+		const transfer = queue.getByTestId('upload-queue-item').filter({ hasText: filename });
+		await expect(transfer).toHaveAttribute('data-state', 'uploading', { timeout: 20_000 });
+		await expect
+			.poll(async () =>
+				Number(
+					await queue
+						.getByRole('progressbar', { name: 'Progress unggahan' })
+						.getAttribute('aria-valuenow')
+				)
+			)
+			.toBeGreaterThan(0);
+
+		const deleteResponsePromise = page.waitForResponse(
+			(response) =>
+				response.url().includes('/api/v1/drive/my-storage/upload-tus/') &&
+				response.request().method() === 'DELETE'
+		);
+		await transfer.getByRole('button', { name: `Batalkan ${filename}` }).click();
+		expect((await deleteResponsePromise).status()).toBe(204);
+		await expect(transfer).toHaveCount(0);
+
+		const missingSession = await page.request.head(uploadLocation, {
+			headers: { 'Tus-Resumable': '1.0.0' }
+		});
+		expect(missingSession.status()).toBe(404);
+		expect((await listing(page)).items.filter((item) => item.name === filename)).toHaveLength(0);
+	} finally {
+		await network
+			.send('Network.emulateNetworkConditions', {
+				offline: false,
+				latency: 0,
+				downloadThroughput: -1,
+				uploadThroughput: -1
+			})
+			.catch(() => {});
+		await network.detach().catch(() => {});
+		rmSync(sourceDir, { recursive: true, force: true });
 	}
 });

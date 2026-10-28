@@ -3,8 +3,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const username = 'multiselect-e2e-admin';
-const password = 'MultiSelect-password-2026';
+const username = 'storage-e2e-admin';
+const password = 'StorageE2E-password-2026';
 const recoveryKey = 'ABCDE-FGHKL-MNPQR-STUVW-XYZ23-45678';
 
 async function finishSetup(page: Page) {
@@ -18,7 +18,12 @@ async function finishSetup(page: Page) {
 		expect(nodes.length).toBeGreaterThan(0);
 		const setup = await page.request.post('/api/v1/setup/complete', {
 			data: {
-				admin: { username, email: 'multiselect-e2e@example.test', password, recovery_key: recoveryKey },
+				admin: {
+					username,
+					email: 'multiselect-e2e@example.test',
+					password,
+					recovery_key: recoveryKey
+				},
 				storage_nodes: nodes.map((node) => ({ ...node, enabled: true })),
 				placement_strategy: 'FILL_FIRST',
 				cloud: { enabled: false }
@@ -29,9 +34,9 @@ async function finishSetup(page: Page) {
 
 	await page.context().clearCookies();
 	await page.goto('/login');
-	await page.getByLabel('Username atau Email').fill(username);
-	await page.getByRole('textbox', { name: 'Password' }).fill(password);
-	await page.getByRole('button', { name: 'Masuk' }).click();
+	await page.locator('#login-identifier').fill(username);
+	await page.locator('#login-password').fill(password);
+	await page.getByRole('button', { name: /Masuk|Sign in/i }).click();
 	await page.waitForURL('**/drive/home');
 	await page.goto('/drive/my-storage');
 }
@@ -40,8 +45,21 @@ function itemRow(page: Page, name: string | RegExp): Locator {
 	return page.getByRole('option').filter({ hasText: name });
 }
 
-test('Multi-select actions in List & Grid view with bulk bar, move, delete, zip, and drag-drop', async ({ page }) => {
+test('Multi-select actions in List & Grid view with bulk bar, move, delete, zip, and drag-drop', async ({
+	page
+}) => {
 	await finishSetup(page);
+
+	const cleanRes = await page.request.get('/api/v1/drive/my-storage');
+	if (cleanRes.ok()) {
+		const { items } = (await cleanRes.json()) as { items: { id: string }[] };
+		for (const item of items) {
+			await page.request.delete(`/api/v1/drive/my-storage/${encodeURIComponent(item.id)}`);
+		}
+		await page.request.delete('/api/v1/drive/trash');
+	}
+	await page.goto('/drive/my-storage');
+	await expect(page.getByRole('heading', { name: 'My Storage' })).toBeVisible();
 
 	const baseDir = mkdtempSync(join(tmpdir(), 'multiselect-e2e-'));
 	const fileA = join(baseDir, 'doc-alpha.txt');
@@ -96,7 +114,7 @@ test('Multi-select actions in List & Grid view with bulk bar, move, delete, zip,
 		await expect(page.getByTestId('bulk-action-bar')).toBeHidden();
 
 		// 4. Test Grid View Selection & Star removal
-		await page.getByRole('button', { name: 'Tampilan Grid' }).click();
+		await page.getByRole('button', { name: 'Tampilan Kisi' }).click();
 		const alphaCard = itemRow(page, 'doc-alpha.txt');
 		await expect(alphaCard.getByTitle('Bintang')).toHaveCount(0);
 
@@ -106,7 +124,7 @@ test('Multi-select actions in List & Grid view with bulk bar, move, delete, zip,
 		await expect(page.getByTestId('selected-count-label')).toHaveText('1 item dipilih');
 
 		// Switch back to List view
-		await page.getByRole('button', { name: 'Tampilan List' }).click();
+		await page.getByRole('button', { name: 'Tampilan Daftar' }).click();
 		await expect(page.getByTestId('selected-count-label')).toHaveText('1 item dipilih');
 
 		// Deselect
@@ -125,7 +143,10 @@ test('Multi-select actions in List & Grid view with bulk bar, move, delete, zip,
 		await expect(moveDialog.getByText('2 item dipilih')).toBeVisible();
 
 		// Select ArchiveFolder in MoveDialog
-		await moveDialog.getByTestId(/^btn-move-to-/).first().click();
+		await moveDialog
+			.getByTestId(/^btn-move-to-/)
+			.first()
+			.click();
 		await expect(moveDialog).toBeHidden();
 
 		// Both alpha and beta are moved into ArchiveFolder
@@ -143,8 +164,10 @@ test('Multi-select actions in List & Grid view with bulk bar, move, delete, zip,
 		await page.getByRole('button', { name: 'Pilih doc-beta.txt' }).click();
 
 		await page.getByTestId('bulk-actions-menu-trigger').click();
-		const zipRequest = page.waitForRequest((request) =>
-			request.url().endsWith('/api/v1/drive/my-storage/batch/download-zip') && request.method() === 'POST'
+		const zipRequest = page.waitForRequest(
+			(request) =>
+				request.url().endsWith('/api/v1/drive/my-storage/batch/download-zip') &&
+				request.method() === 'POST'
 		);
 		const downloadPromise = page.waitForEvent('download');
 		await page.getByTestId('bulk-action-download').click();
@@ -174,7 +197,10 @@ test('Multi-select actions in List & Grid view with bulk bar, move, delete, zip,
 
 		// 8. Test Drag and Drop multi-item into folder
 		// Navigate back to root
-		await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('button', { name: 'My Storage' }).click();
+		await page
+			.getByRole('navigation', { name: /Breadcrumb|Jejak navigasi/i })
+			.getByRole('button', { name: 'My Storage' })
+			.click();
 		await page.waitForURL((url) => !url.searchParams.get('folder'));
 		await expect(itemRow(page, 'doc-gamma.txt')).toBeVisible();
 		await expect(itemRow(page, 'ArchiveFolder')).toBeVisible();

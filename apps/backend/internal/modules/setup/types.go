@@ -16,11 +16,13 @@ type StorageNodeInput struct {
 type CloudConfig struct {
 	Enabled   bool   `json:"enabled"`
 	Provider  string `json:"provider"`
+	NodeName  string `json:"node_name"`
 	Endpoint  string `json:"endpoint"`
 	Bucket    string `json:"bucket"`
 	Region    string `json:"region"`
 	AccessKey string `json:"access_key"`
 	SecretKey string `json:"secret_key"`
+	CapacityCapGB int64  `json:"capacity_cap_gb,omitempty"`
 }
 
 type CompleteSetupRequest struct {

@@ -23,7 +23,9 @@ async function ensureSetup(page: Page) {
 		if (!json.is_setup_completed) {
 			const scan = await page.request.get('/api/v1/setup/scan-nodes');
 			expect(scan.ok()).toBeTruthy();
-			const { nodes } = (await scan.json()) as { nodes: { path: string; capacity_bytes: number }[] };
+			const { nodes } = (await scan.json()) as {
+				nodes: { path: string; capacity_bytes: number }[];
+			};
 			const setup = await page.request.post('/api/v1/setup/complete', {
 				data: {
 					admin: {
@@ -45,9 +47,9 @@ async function ensureSetup(page: Page) {
 async function loginUser(page: Page, username: string, password: string) {
 	await page.context().clearCookies();
 	await page.goto('/login');
-	await page.getByLabel('Username atau Email').fill(username);
-	await page.getByRole('textbox', { name: 'Password' }).fill(password);
-	await page.getByRole('button', { name: 'Masuk' }).click();
+	await page.locator('#login-identifier').fill(username);
+	await page.locator('#login-password').fill(password);
+	await page.getByRole('button', { name: /Masuk|Sign in/i }).click();
 	await page.waitForURL('**/drive/home');
 }
 
@@ -83,7 +85,7 @@ test('Organization shared drive provides multi-user collaboration and isolates p
 
 	// 3b. Check absence of storage node labels in Organization
 	await page.goto('/drive/organization');
-	await expect(page.getByRole('heading', { name: 'Organization' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: /Organization|Organisasi/i })).toBeVisible();
 	await expect(page.getByText('SSD-1')).toHaveCount(0);
 	await expect(page.getByText('HDD-2')).toHaveCount(0);
 	await expect(page.getByText('R2')).toHaveCount(0);
@@ -97,13 +99,19 @@ test('Organization shared drive provides multi-user collaboration and isolates p
 	await expect(page.getByText('Proyek Bersama Tim', { exact: true })).toBeVisible();
 
 	// 5. Alice uploads a shared file "shared-spec.txt" into Organization
-	const fileInput = page.locator('input[type="file"]').first();
+	const fileInput = page.getByTestId('upload-file-input');
 	await fileInput.setInputFiles({
 		name: 'shared-spec.txt',
 		mimeType: 'text/plain',
 		buffer: Buffer.from('Spesifikasi bersama tim CubyCloud dibuat oleh Alice.')
 	});
 	await expect(page.getByText('shared-spec.txt', { exact: true })).toBeVisible();
+	const uploadQueue = page.getByTestId('upload-queue');
+	await expect(uploadQueue).toBeVisible();
+	await uploadQueue.getByRole('button', { name: 'Buka antrean unggahan' }).click();
+	await expect(
+		uploadQueue.getByTestId('upload-queue-item').filter({ hasText: 'shared-spec.txt' })
+	).toHaveAttribute('data-state', 'completed');
 
 	// 6. Alice goes to My Storage to verify isolation
 	await page.goto('/drive/my-storage');
@@ -140,7 +148,7 @@ test('Organization shared drive provides multi-user collaboration and isolates p
 
 	// 7b. Bob goes to Organization: Bob MUST see the shared folder and file created by Alice!
 	await page.goto('/drive/organization');
-	await expect(page.getByRole('heading', { name: 'Organization' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: /Organization|Organisasi/i })).toBeVisible();
 	await expect(page.getByText('Proyek Bersama Tim', { exact: true })).toBeVisible();
 	await expect(page.getByText('shared-spec.txt', { exact: true })).toBeVisible();
 
@@ -156,7 +164,7 @@ test('Organization shared drive provides multi-user collaboration and isolates p
 	// 9. Bob logs out and Alice logs back in to verify shared state in Organization
 	await loginUser(page, userAlice.username, userAlice.password);
 	await page.goto('/drive/organization');
-	await expect(page.getByRole('heading', { name: 'Organization' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: /Organization|Organisasi/i })).toBeVisible();
 	// Alice sees the file renamed by Bob
 	await expect(page.getByText('shared-spec-revised.txt', { exact: true })).toBeVisible();
 

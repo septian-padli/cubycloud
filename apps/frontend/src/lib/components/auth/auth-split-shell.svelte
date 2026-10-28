@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ThemeToggle from '$lib/components/theme-toggle.svelte';
+	import LanguagePicker from '$lib/components/language-picker.svelte';
 	import authHero from '$lib/assets/auth-hero-placeholder.svg';
 	import type { Snippet } from 'svelte';
 
@@ -21,24 +22,39 @@
 
 	<!-- Desktop image panel -->
 	<aside class="relative hidden overflow-hidden md:block">
-		<img
-			src={authHero}
-			alt=""
-			class="absolute inset-0 h-full w-full object-cover object-center"
-		/>
+		<img src={authHero} alt="" class="absolute inset-0 h-full w-full object-cover object-center" />
 	</aside>
 
 	<!-- Form panel -->
 	<section class="relative flex min-h-dvh flex-col">
 		<header class="flex items-center justify-between px-6 py-4 md:px-10">
 			<a href="/" class="text-sm font-semibold text-main">CubyCloud</a>
-			<ThemeToggle />
+			<div class="flex items-center gap-3">
+				<ThemeToggle />
+				<LanguagePicker />
+			</div>
 		</header>
-
 		<div class="flex flex-1 items-center justify-center px-6 py-8 md:px-10 md:py-10">
 			<div class="w-full max-w-md">
 				{@render children()}
 			</div>
 		</div>
+		<p class="px-6 pb-4 text-xs text-muted md:px-10">
+			Copyright (C) 2026 CubyCloud contributors. You may convey this work under AGPL-3.0-or-later.
+			No warranty.
+			<a
+				class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+				href="https://github.com/septian-padli/cubycloud/blob/main/LICENSE"
+				target="_blank"
+				rel="noreferrer">License</a
+			>
+			·
+			<a
+				class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+				href="https://github.com/septian-padli/cubycloud"
+				target="_blank"
+				rel="noreferrer">Source</a
+			>
+		</p>
 	</section>
 </div>

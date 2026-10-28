@@ -1,0 +1,37 @@
+# Template Caddyfile untuk CubyCloud
+# Ganti drive.example.com dengan domain publik Anda.
+# Caddy secara otomatis mengelola sertifikat TLS (Let's Encrypt / ZeroSSL).
+
+drive.example.com {
+    encode gzip zstd
+
+    # Ukuran upload besar (CubyCloud mendukung TUS chunked upload & single upload)
+    request_body {
+        max_size 10GB
+    }
+
+    # Proxy seluruh request ke container CubyCloud
+    reverse_proxy cubycloud:8383 {
+        # Mendukung Server-Sent Events (SSE) di /api/v1/events
+        flush_interval -1
+
+        # Health check upstream otomatis (opsional)
+        # health_path /api/health
+        # health_interval 15s
+        # health_timeout 5s
+    }
+
+    # Header keamanan standar HTTPS
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    # Logging akses terstruktur
+    log {
+        output stdout
+        format console
+    }
+}

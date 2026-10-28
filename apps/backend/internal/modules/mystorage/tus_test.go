@@ -3,7 +3,9 @@ package mystorage
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -669,4 +671,288 @@ func TestTusLocksCleanedUpAfterLifecycle(t *testing.T) {
 		t.Errorf("lock for non-existent-id should not remain after 404")
 	}
 	tusLocks.mu.Unlock()
+}
+
+// ---------------------------------------------------------------------------
+// Idempotent finalization, full-file SHA-256 verification, 24h lifetime
+// ---------------------------------------------------------------------------
+
+func tusHead(t *testing.T, e *echo.Echo, location string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodHead, location, nil)
+	req.Header.Set("Tus-Resumable", "1.0.0")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestTusFinalizeIsIdempotentAfterLostResponse(t *testing.T) {
+	handler, e, dir := setupTusTestEnvironment(t, 10000)
+	location := tusCreateForTest(t, e, 4)
+	uploadID := filepath.Base(location)
+
+	tusPatchForTest(e, location, "0", &gatedTusReader{data: bytes.NewReader([]byte("ab"))})
+	tusPatchForTest(e, location, "2", &gatedTusReader{data: bytes.NewReader([]byte("cd"))})
+
+	donePath := filepath.Join(dir, uploadID+".done")
+	if _, err := os.Stat(donePath); err != nil {
+		t.Fatalf("finalized record must be retained for idempotency: %v", err)
+	}
+
+	// Survive a process-like restart: the record is durable on disk.
+	setTusSessionHasher(uploadID, nil)
+
+	// Client lost the final response and retries the final PATCH (same offset).
+	req := httptest.NewRequest(http.MethodPatch, location, bytes.NewReader(nil))
+	req.Header.Set("Tus-Resumable", "1.0.0")
+	req.Header.Set("Upload-Offset", "4")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("retried final PATCH: %d %s", rec.Code, rec.Body.String())
+	}
+
+	if rec.Header().Get("Upload-Item-Id") == "" {
+		t.Fatal("expected Upload-Item-Id echo on retried final PATCH")
+	}
+
+	// HEAD offset recovery reports the finished state without 404.
+	head := tusHead(t, e, location)
+	if head.Code != http.StatusOK || head.Header().Get("Upload-Offset") != "4" {
+		t.Fatalf("HEAD after finalize: %d offset=%q", head.Code, head.Header().Get("Upload-Offset"))
+	}
+	headItemID := head.Header().Get("Upload-Item-Id")
+	if headItemID == "" {
+		t.Fatal("expected Upload-Item-Id on HEAD of finalized upload")
+	}
+
+	// No duplicate file may exist.
+	var count int
+	if err := handler.service.db.QueryRow(
+		`SELECT COUNT(*) FROM my_storage_items WHERE owner_id=? AND deleted_at IS NULL AND kind='file'`,
+		"test-user",
+	).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("expected exactly 1 finalized file, got %d", count)
+	}
+
+	// CleanupExpiredTusUploads removes the now-stale session state but keeps
+	// the item. Simulate age instead of waiting 24h.
+	for _, suffix := range []string{".info", ".part", ".done", ".hash"} {
+		_ = os.Chtimes(filepath.Join(dir, uploadID+suffix), time.Now().Add(-25*time.Hour), time.Now().Add(-25*time.Hour))
+	}
+	// head must still work pre-cleanup
+	tusHead(t, e, location)
+	if err := CleanupExpiredTusUploads(); err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+	if _, err := os.Stat(donePath); !os.IsNotExist(err) {
+		t.Fatalf("expired .done state must be removed")
+	}
+	if count2 := countRowsFor(handler, "test-user"); count2 != 1 {
+		t.Fatalf("cleanup must not touch finalized items, got %d rows", count2)
+	}
+	tusLocks.mu.Lock()
+	locks := len(tusLocks.byID)
+	tusLocks.mu.Unlock()
+	if locks != 0 {
+		t.Fatalf("cleanup leaked upload locks: %d", locks)
+	}
+}
+
+func countRowsFor(handler *Handler, owner string) int {
+	var count int
+	_ = handler.service.db.QueryRow(
+		`SELECT COUNT(*) FROM my_storage_items WHERE owner_id=? AND deleted_at IS NULL AND kind='file'`,
+		owner,
+	).Scan(&count)
+	return count
+}
+
+func TestTusChecksumVerificationRejectsCorruptUpload(t *testing.T) {
+	handler, e, dir := setupTusTestEnvironment(t, 10000)
+
+	goodContent := []byte("aaaabbbb")
+	goodSum := sha256.Sum256(goodContent)
+	goodB64 := base64.StdEncoding.EncodeToString(goodSum[:])
+
+	// Without a checksum provided, finalization proceeds.
+	loc := tusCreateForTest(t, e, 8)
+	req := httptest.NewRequest(http.MethodPatch, loc, bytes.NewReader(goodContent))
+	req.Header.Set("Tus-Resumable", "1.0.0")
+	req.Header.Set("Upload-Offset", "0")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("plain finalize: %d %s", rec.Code, rec.Body.String())
+	}
+	if countRowsFor(handler, "test-user") != 1 {
+		t.Fatalf("expected the file to be stored")
+	}
+
+	// Metadata checksum, matching content: finalization succeeds.
+	metaReq := httptest.NewRequest(http.MethodPost, "/api/v1/drive/my-storage/upload-tus", nil)
+	metaReq.Header.Set("Tus-Resumable", "1.0.0")
+	metaReq.Header.Set("Upload-Length", "8")
+	checksumMeta := "sha256 " + goodB64
+	metaReq.Header.Set("Upload-Metadata", fmt.Sprintf("checksum %s", base64.StdEncoding.EncodeToString([]byte(checksumMeta))))
+	metaRec := httptest.NewRecorder()
+	e.ServeHTTP(metaRec, metaReq)
+	if metaRec.Code != http.StatusCreated {
+		t.Fatalf("metadata checksum create: %d %s", metaRec.Code, metaRec.Body.String())
+	}
+	metaLoc := metaRec.Header().Get("Location")
+	metaPatch := httptest.NewRequest(http.MethodPatch, metaLoc, bytes.NewReader(goodContent))
+	metaPatch.Header.Set("Tus-Resumable", "1.0.0")
+	metaPatch.Header.Set("Upload-Offset", "0")
+	metaPatchRec := httptest.NewRecorder()
+	e.ServeHTTP(metaPatchRec, metaPatch)
+	if metaPatchRec.Code != http.StatusNoContent {
+		t.Fatalf("metadata checksum finalize: %d %s", metaPatchRec.Code, metaPatchRec.Body.String())
+	}
+	if countRowsFor(handler, "test-user") != 2 {
+		t.Fatalf("expected both correct uploads to be stored")
+	}
+
+	// Header-provided checksum, corrupt content: reject, no extra item.
+	expectSum := sha256.Sum256([]byte("not-this-content"))
+	wrongLoc := tusCreateForTest(t, e, 4)
+	badPatch := httptest.NewRequest(http.MethodPatch, wrongLoc, bytes.NewReader([]byte("evildata")))
+	badPatch.Header.Set("Tus-Resumable", "1.0.0")
+	badPatch.Header.Set("Upload-Offset", "0")
+	badPatch.Header.Set("Upload-Checksum", "sha256 "+base64.StdEncoding.EncodeToString(expectSum[:]))
+	badRec := httptest.NewRecorder()
+	e.ServeHTTP(badRec, badPatch)
+	if badRec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on checksum mismatch, got %d %s", badRec.Code, badRec.Body.String())
+	}
+	uploadID := filepath.Base(wrongLoc)
+	if _, err := os.Stat(filepath.Join(dir, uploadID+".part")); !os.IsNotExist(err) {
+		t.Fatalf("corrupt upload part must be removed after mismatch")
+	}
+	if _, err := os.Stat(filepath.Join(dir, uploadID+".info")); !os.IsNotExist(err) {
+		t.Fatalf("corrupt upload info must be removed after mismatch")
+	}
+	if countRowsFor(handler, "test-user") != 2 {
+		t.Fatalf("rejected digest must not create an extra file")
+	}
+}
+
+func TestTusDigestStateRebuildsAfterRestart(t *testing.T) {
+	_, e, dir := setupTusTestEnvironment(t, 10000)
+	loc := tusCreateForTest(t, e, 4)
+	uploadID := filepath.Base(loc)
+
+	content := []byte("abcd")
+	sum := sha256.Sum256(content)
+	checksum := base64.StdEncoding.EncodeToString(sum[:])
+
+	tusPatchForTest(e, loc, "0", &gatedTusReader{data: bytes.NewReader([]byte("ab"))})
+	if _, err := os.Stat(filepath.Join(dir, uploadID+".hash")); err != nil {
+		t.Fatalf("digest state file must exist after a partial patch: %v", err)
+	}
+
+	// Restart: sessions are gone from memory; state must come back from disk.
+	setTusSessionHasher(uploadID, nil)
+
+	req := httptest.NewRequest(http.MethodPatch, loc, bytes.NewReader([]byte("cd")))
+	req.Header.Set("Tus-Resumable", "1.0.0")
+	req.Header.Set("Upload-Offset", "2")
+	req.Header.Set("Upload-Checksum", "sha256 "+checksum)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("resumed final PATCH with full-file checksum: %d %s", rec.Code, rec.Body.String())
+	}
+	if rec.Header().Get("Upload-Item-Id") == "" {
+		t.Fatal("expected finalized Upload-Item-Id")
+	}
+}
+
+func TestTusSweepOnlyRemovesExpiredGroups(t *testing.T) {
+	_, e, dir := setupTusTestEnvironment(t, 10000)
+
+	fresh := filepath.Base(tusCreateForTest(t, e, 4))
+	tusPatchForTest(e, "/api/v1/drive/my-storage/upload-tus/"+fresh, "0", &gatedTusReader{data: bytes.NewReader([]byte("ab"))})
+
+	expired := filepath.Base(tusCreateForTest(t, e, 4))
+	tusPatchForTest(e, "/api/v1/drive/my-storage/upload-tus/"+expired, "0", &gatedTusReader{data: bytes.NewReader([]byte("cd"))})
+	for _, suffix := range []string{".info", ".part", ".hash"} {
+		path := filepath.Join(dir, expired+suffix)
+		if _, err := os.Stat(path); err == nil {
+			old := time.Now().Add(-25 * time.Hour)
+			if err := os.Chtimes(path, old, old); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	// A completed record older than the TTL must be swept too.
+	doneID := strings.Repeat("A", 25) + "1"
+	donePath := filepath.Join(dir, doneID+".done")
+	record, _ := json.Marshal(map[string]any{"item_id": "stale-item", "finalized_at": time.Now().Add(-25 * time.Hour)})
+	if err := os.WriteFile(donePath, record, 0644); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-25 * time.Hour)
+	_ = os.Chtimes(donePath, old, old)
+
+	// Unknown files must never be touched.
+	notes := filepath.Join(dir, "notes.txt")
+	if err := os.WriteFile(notes, []byte("keep"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// A non-ULID-ish prefix with our extension is likewise left alone.
+	notOurs := filepath.Join(dir, "attacker-traversal.info")
+	if err := os.WriteFile(notOurs, []byte("{}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := CleanupExpiredTusUploads(); err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, expired+".info")); !os.IsNotExist(err) {
+		t.Fatalf("expired upload info must be swept")
+	}
+	if _, err := os.Stat(filepath.Join(dir, expired+".part")); !os.IsNotExist(err) {
+		t.Fatalf("expired upload part must be swept")
+	}
+	if _, err := os.Stat(donePath); !os.IsNotExist(err) {
+		t.Fatalf("expired finalized record must be swept")
+	}
+	// Fresh upload survives.
+	if _, err := os.Stat(filepath.Join(dir, fresh+".info")); err != nil {
+		t.Fatalf("fresh upload must be retained: %v", err)
+	}
+	headRec := tusHead(t, e, "/api/v1/drive/my-storage/upload-tus/"+fresh)
+	if headRec.Code != http.StatusOK || headRec.Header().Get("Upload-Offset") != "2" {
+		t.Fatalf("fresh upload must still be resumable: %d offset=%q", headRec.Code, headRec.Header().Get("Upload-Offset"))
+	}
+	if _, err := os.Stat(notes); err != nil {
+		t.Fatalf("unrecognized files must never be swept: %v", err)
+	}
+	if _, err := os.Stat(notOurs); err != nil {
+		t.Fatalf("files with non-ULID ids must never be swept: %v", err)
+	}
+}
+
+func TestTusChecksumInvalidEncodingRejected(t *testing.T) {
+	_, e, dir := setupTusTestEnvironment(t, 10000)
+	bad := tusCreateForTest(t, e, 4)
+	req := httptest.NewRequest(http.MethodPatch, bad, bytes.NewReader([]byte("zyxw")))
+	req.Header.Set("Tus-Resumable", "1.0.0")
+	req.Header.Set("Upload-Offset", "0")
+	req.Header.Set("Upload-Checksum", "sha256 !!!notbase64")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 on malformed Upload-Checksum, got %d", rec.Code)
+	}
+	if _, err := os.Stat(filepath.Join(dir, filepath.Base(bad)+".part")); !os.IsNotExist(err) {
+		t.Fatalf("failed verify must not keep the upload around")
+	}
 }

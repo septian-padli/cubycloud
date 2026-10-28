@@ -31,9 +31,9 @@ async function finishSetupAndLogin(page: Page) {
 
 	await page.context().clearCookies();
 	await page.goto('/login');
-	await page.getByLabel('Username atau Email').fill(adminUsername);
-	await page.getByRole('textbox', { name: 'Password' }).fill(adminPassword);
-	await page.getByRole('button', { name: 'Masuk' }).click();
+	await page.locator('#login-identifier').fill(adminUsername);
+	await page.locator('#login-password').fill(adminPassword);
+	await page.getByRole('button', { name: /Masuk|Sign in/i }).click();
 	await page.waitForURL('**/drive/home');
 }
 
@@ -80,6 +80,14 @@ test.describe('Storage Stats Largest Files', () => {
 		page
 	}) => {
 		await finishSetupAndLogin(page);
+		const cleanRes = await page.request.get('/api/v1/drive/my-storage');
+		if (cleanRes.ok()) {
+			const { items } = (await cleanRes.json()) as { items: { id: string }[] };
+			for (const item of items) {
+				await page.request.delete(`/api/v1/drive/my-storage/${encodeURIComponent(item.id)}`);
+			}
+			await page.request.delete('/api/v1/drive/trash');
+		}
 
 		// 1. Create nested folders: Work -> Reports
 		const workFolder = await createFolder(page, 'Work');

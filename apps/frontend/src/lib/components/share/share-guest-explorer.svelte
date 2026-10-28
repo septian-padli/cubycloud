@@ -10,6 +10,7 @@
 	import * as ContextMenu from '$lib/components/ui/context-menu/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Download, Eye, FolderOpen, MoreVertical, Pencil, Trash2 } from '@lucide/svelte';
+	import { locale } from '$lib/locale.svelte.js';
 
 	let {
 		items,
@@ -32,11 +33,17 @@
 
 {#if items.length === 0}
 	<div class="overflow-hidden rounded-xl border border-subtle bg-surface px-4 py-12 text-center">
-		<p class="text-sm font-medium text-main">Folder kosong</p>
-		<p class="mt-1 text-xs text-muted">Tidak ada berkas di dalam folder ini.</p>
+		<p class="text-sm font-medium text-main">
+			{locale.language === 'id' ? 'Folder kosong' : 'Empty folder'}
+		</p>
+		<p class="mt-1 text-xs text-muted">
+			{locale.language === 'id'
+				? 'Tidak ada berkas di dalam folder ini.'
+				: 'There are no files in this folder.'}
+		</p>
 	</div>
 {:else if driveView.mode === 'grid'}
-	<DriveFileGrid label="Berkas dibagikan">
+	<DriveFileGrid label={locale.language === 'id' ? 'Berkas dibagikan' : 'Shared files'}>
 		{#each items as entry (entry.id)}
 			{@const isFolder = entry.kind === 'folder'}
 			<ContextMenu.Root>
@@ -45,8 +52,8 @@
 						kind={entry.kind}
 						name={entry.name}
 						subtitle={isFolder
-							? `Folder · ${entry.modifiedAt}`
-							: `${formatSize(entry.sizeBytes)} · ${entry.modifiedAt}`}
+							? `Folder · ${locale.formatDate(entry.modifiedAt)}`
+							: `${formatSize(entry.sizeBytes)} · ${locale.formatDate(entry.modifiedAt)}`}
 						selected={selectedId === entry.id}
 						onOpen={() => onOpen(entry)}
 						onSelect={() => (selectedId = entry.id)}
@@ -61,29 +68,29 @@
 											variant="ghost"
 											size="icon"
 											class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
-											aria-label="Aksi berkas"
+											aria-label={locale.language === 'id' ? 'Aksi berkas' : 'File actions'}
 											onclick={(e: MouseEvent) => e.stopPropagation()}
 										>
 											<MoreVertical class="size-4 stroke-2" />
 										</Button>
 									{/snippet}
 								</DropdownMenu.Trigger>
-								<DropdownMenu.Content align="end" class="min-w-48 bg-surface border-subtle">
+								<DropdownMenu.Content align="end" class="min-w-48 border-subtle bg-surface">
 									{#if isFolder}
 										<DropdownMenu.Item class="gap-2" onclick={() => onOpen(entry)}>
 											<FolderOpen class="size-4 stroke-2" />
-											Buka folder
+											{locale.language === 'id' ? 'Buka folder' : 'Open folder'}
 										</DropdownMenu.Item>
 									{:else}
 										<DropdownMenu.Item class="gap-2" onclick={() => onOpen(entry)}>
 											<Eye class="size-4 stroke-2" />
-											Pratinjau
+											{locale.language === 'id' ? 'Pratinjau' : 'Preview'}
 										</DropdownMenu.Item>
 									{/if}
 									{#if onDownload}
 										<DropdownMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 											<Download class="size-4 stroke-2" />
-											Unduh
+											{locale.language === 'id' ? 'Unduh' : 'Download'}
 										</DropdownMenu.Item>
 									{/if}
 									{#if canEdit}
@@ -91,7 +98,7 @@
 										{#if onRename}
 											<DropdownMenu.Item class="gap-2" onclick={() => onRename(entry)}>
 												<Pencil class="size-4 stroke-2" />
-												Ubah nama
+												{locale.language === 'id' ? 'Ubah nama' : 'Rename'}
 											</DropdownMenu.Item>
 										{/if}
 										{#if onDelete}
@@ -101,7 +108,7 @@
 												onclick={() => onDelete(entry)}
 											>
 												<Trash2 class="size-4 stroke-2" />
-												Hapus
+												{locale.language === 'id' ? 'Hapus' : 'Delete'}
 											</DropdownMenu.Item>
 										{/if}
 									{/if}
@@ -110,22 +117,22 @@
 						{/snippet}
 					</FileGridCard>
 				</ContextMenu.Trigger>
-				<ContextMenu.Content class="min-w-48 bg-surface border-subtle">
+				<ContextMenu.Content class="min-w-48 border-subtle bg-surface">
 					{#if isFolder}
 						<ContextMenu.Item class="gap-2" onclick={() => onOpen(entry)}>
 							<FolderOpen class="size-4 stroke-2" />
-							Buka folder
+							{locale.language === 'id' ? 'Buka folder' : 'Open folder'}
 						</ContextMenu.Item>
 					{:else}
 						<ContextMenu.Item class="gap-2" onclick={() => onOpen(entry)}>
 							<Eye class="size-4 stroke-2" />
-							Pratinjau
+							{locale.language === 'id' ? 'Pratinjau' : 'Preview'}
 						</ContextMenu.Item>
 					{/if}
 					{#if onDownload}
 						<ContextMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 							<Download class="size-4 stroke-2" />
-							Unduh
+							{locale.language === 'id' ? 'Unduh' : 'Download'}
 						</ContextMenu.Item>
 					{/if}
 					{#if canEdit}
@@ -133,17 +140,13 @@
 						{#if onRename}
 							<ContextMenu.Item class="gap-2" onclick={() => onRename(entry)}>
 								<Pencil class="size-4 stroke-2" />
-								Ubah nama
+								{locale.language === 'id' ? 'Ubah nama' : 'Rename'}
 							</ContextMenu.Item>
 						{/if}
 						{#if onDelete}
-							<ContextMenu.Item
-								variant="destructive"
-								class="gap-2"
-								onclick={() => onDelete(entry)}
-							>
+							<ContextMenu.Item variant="destructive" class="gap-2" onclick={() => onDelete(entry)}>
 								<Trash2 class="size-4 stroke-2" />
-								Hapus
+								{locale.language === 'id' ? 'Hapus' : 'Delete'}
 							</ContextMenu.Item>
 						{/if}
 					{/if}
@@ -155,7 +158,7 @@
 	<div
 		class="overflow-hidden rounded-xl border border-subtle bg-surface"
 		role="listbox"
-		aria-label="Berkas dibagikan"
+		aria-label={locale.language === 'id' ? 'Berkas dibagikan' : 'Shared files'}
 	>
 		{#each items as entry (entry.id)}
 			{@const isFolder = entry.kind === 'folder'}
@@ -173,9 +176,11 @@
 							<p class="truncate text-sm font-medium text-main">{entry.name}</p>
 							<p class="text-xs text-muted">
 								{#if isFolder}
-									Folder · {entry.modifiedAt}
+									{locale.language === 'id' ? 'Folder' : 'Folder'} · {locale.formatDate(
+										entry.modifiedAt
+									)}
 								{:else}
-									{formatSize(entry.sizeBytes)} · {entry.modifiedAt}
+									{formatSize(entry.sizeBytes)} · {locale.formatDate(entry.modifiedAt)}
 								{/if}
 							</p>
 						{/snippet}
@@ -189,29 +194,29 @@
 											variant="ghost"
 											size="icon"
 											class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
-											aria-label="Aksi berkas"
+											aria-label={locale.language === 'id' ? 'Aksi berkas' : 'File actions'}
 											onclick={(e: MouseEvent) => e.stopPropagation()}
 										>
 											<MoreVertical class="size-4 stroke-2" />
 										</Button>
 									{/snippet}
 								</DropdownMenu.Trigger>
-								<DropdownMenu.Content align="end" class="min-w-48 bg-surface border-subtle">
+								<DropdownMenu.Content align="end" class="min-w-48 border-subtle bg-surface">
 									{#if isFolder}
 										<DropdownMenu.Item class="gap-2" onclick={() => onOpen(entry)}>
 											<FolderOpen class="size-4 stroke-2" />
-											Buka folder
+											{locale.language === 'id' ? 'Buka folder' : 'Open folder'}
 										</DropdownMenu.Item>
 									{:else}
 										<DropdownMenu.Item class="gap-2" onclick={() => onOpen(entry)}>
 											<Eye class="size-4 stroke-2" />
-											Pratinjau
+											{locale.language === 'id' ? 'Pratinjau' : 'Preview'}
 										</DropdownMenu.Item>
 									{/if}
 									{#if onDownload}
 										<DropdownMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 											<Download class="size-4 stroke-2" />
-											Unduh
+											{locale.language === 'id' ? 'Unduh' : 'Download'}
 										</DropdownMenu.Item>
 									{/if}
 									{#if canEdit}
@@ -219,7 +224,7 @@
 										{#if onRename}
 											<DropdownMenu.Item class="gap-2" onclick={() => onRename(entry)}>
 												<Pencil class="size-4 stroke-2" />
-												Ubah nama
+												{locale.language === 'id' ? 'Ubah nama' : 'Rename'}
 											</DropdownMenu.Item>
 										{/if}
 										{#if onDelete}
@@ -229,7 +234,7 @@
 												onclick={() => onDelete(entry)}
 											>
 												<Trash2 class="size-4 stroke-2" />
-												Hapus
+												{locale.language === 'id' ? 'Hapus' : 'Delete'}
 											</DropdownMenu.Item>
 										{/if}
 									{/if}
@@ -238,22 +243,22 @@
 						{/snippet}
 					</DriveListRow>
 				</ContextMenu.Trigger>
-				<ContextMenu.Content class="min-w-48 bg-surface border-subtle">
+				<ContextMenu.Content class="min-w-48 border-subtle bg-surface">
 					{#if isFolder}
 						<ContextMenu.Item class="gap-2" onclick={() => onOpen(entry)}>
 							<FolderOpen class="size-4 stroke-2" />
-							Buka folder
+							{locale.language === 'id' ? 'Buka folder' : 'Open folder'}
 						</ContextMenu.Item>
 					{:else}
 						<ContextMenu.Item class="gap-2" onclick={() => onOpen(entry)}>
 							<Eye class="size-4 stroke-2" />
-							Pratinjau
+							{locale.language === 'id' ? 'Pratinjau' : 'Preview'}
 						</ContextMenu.Item>
 					{/if}
 					{#if onDownload}
 						<ContextMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 							<Download class="size-4 stroke-2" />
-							Unduh
+							{locale.language === 'id' ? 'Unduh' : 'Download'}
 						</ContextMenu.Item>
 					{/if}
 					{#if canEdit}
@@ -261,17 +266,13 @@
 						{#if onRename}
 							<ContextMenu.Item class="gap-2" onclick={() => onRename(entry)}>
 								<Pencil class="size-4 stroke-2" />
-								Ubah nama
+								{locale.language === 'id' ? 'Ubah nama' : 'Rename'}
 							</ContextMenu.Item>
 						{/if}
 						{#if onDelete}
-							<ContextMenu.Item
-								variant="destructive"
-								class="gap-2"
-								onclick={() => onDelete(entry)}
-							>
+							<ContextMenu.Item variant="destructive" class="gap-2" onclick={() => onDelete(entry)}>
 								<Trash2 class="size-4 stroke-2" />
-								Hapus
+								{locale.language === 'id' ? 'Hapus' : 'Delete'}
 							</ContextMenu.Item>
 						{/if}
 					{/if}

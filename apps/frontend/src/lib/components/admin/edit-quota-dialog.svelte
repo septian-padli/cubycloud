@@ -7,7 +7,7 @@
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Label } from '$lib/components/ui/label/index.js';
 	import { cn } from '$lib/utils.js';
-
+	import { locale } from '$lib/locale.svelte.js';
 	type EditQuotaChoice = 'default' | 'override_gb' | 'unlimited';
 
 	let {
@@ -29,7 +29,11 @@
 	const isSuperAdmin = $derived(String(user?.role).toLowerCase() === 'super_admin');
 
 	const defaultLabel = $derived(
-		defaultQuota.mode === 'unlimited' ? 'Unlimited' : `${defaultQuota.gb} GB`
+		defaultQuota.mode === 'unlimited'
+			? locale.language === 'id'
+				? 'Tanpa batas'
+				: 'Unlimited'
+			: `${defaultQuota.gb} GiB`
 	);
 
 	const canSubmit = $derived(
@@ -68,9 +72,9 @@
 	}
 
 	function getTargetLabel(): string {
-		if (quotaChoice === 'unlimited') return 'Unlimited';
+		if (quotaChoice === 'unlimited') return locale.language === 'id' ? 'Tanpa batas' : 'Unlimited';
 		if (quotaChoice === 'default') return defaultLabel;
-		return `${Number(quotaGb)} GB`;
+		return `${Number(quotaGb)} GiB`;
 	}
 
 	function executeSave() {
@@ -96,24 +100,36 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="bg-surface text-main sm:max-w-md">
 		<Dialog.Header>
-			<Dialog.Title>Edit Kuota</Dialog.Title>
+			<Dialog.Title>{locale.language === 'id' ? 'Edit Kuota' : 'Edit quota'}</Dialog.Title>
 			<Dialog.Description>
 				{#if isSuperAdmin}
-					Super Admin selalu Unlimited dan tidak dapat diubah menjadi terbatas.
+					{locale.language === 'id'
+						? 'Super Admin selalu memiliki kuota tanpa batas dan tidak dapat dibatasi.'
+						: 'Super Admins always have unlimited quota and cannot be restricted.'}
 				{:else if user}
-					Atur kuota untuk {user.username}. Default sistem: {defaultLabel}.
+					{locale.language === 'id' ? 'Atur kuota untuk' : 'Set the quota for'}
+					{user.username}. {locale.language === 'id'
+						? 'Kuota default sistem:'
+						: 'System default quota:'}
+					{defaultLabel}.
 				{:else}
-					Pilih pengguna dari tabel.
+					{locale.language === 'id'
+						? 'Pilih pengguna dari tabel.'
+						: 'Select a user from the table.'}
 				{/if}
 			</Dialog.Description>
 		</Dialog.Header>
 
 		{#if isSuperAdmin}
 			<p class="rounded-xl border border-subtle bg-app px-4 py-3 text-sm text-muted">
-				Kuota Super Admin terkunci ke Unlimited.
+				{locale.language === 'id'
+					? 'Kuota Super Admin dikunci tanpa batas.'
+					: 'Super Admin quota is locked to unlimited.'}
 			</p>
 			<Dialog.Footer>
-				<Button type="button" variant="secondary" onclick={() => (open = false)}>Tutup</Button>
+				<Button type="button" variant="secondary" onclick={() => (open = false)}
+					>{locale.language === 'id' ? 'Tutup' : 'Close'}</Button
+				>
 			</Dialog.Footer>
 		{:else}
 			<form
@@ -133,7 +149,7 @@
 						<RadioGroup.Item value="override_gb" id="edit-quota-gb" class="mt-0.5" />
 						<div class="min-w-0 flex-1 space-y-2">
 							<Label for="edit-quota-gb" class="cursor-pointer text-sm font-medium text-main">
-								Atur GB
+								{locale.language === 'id' ? 'Atur GiB' : 'Set GiB'}
 							</Label>
 							{#if quotaChoice === 'override_gb'}
 								<div class="relative flex w-full items-center">
@@ -144,12 +160,10 @@
 										step="any"
 										bind:value={quotaGb}
 										class="w-full pe-9"
-										aria-label="Kuota dalam GB"
+										aria-label={locale.language === 'id' ? 'Kuota dalam GiB' : 'Quota in GiB'}
 									/>
-									<span
-										class="pointer-events-none absolute end-3 text-xs font-semibold text-muted"
-									>
-										GB
+									<span class="pointer-events-none absolute end-3 text-xs font-semibold text-muted">
+										GiB
 									</span>
 								</div>
 							{/if}
@@ -168,9 +182,13 @@
 								for="edit-quota-unlimited"
 								class="cursor-pointer text-sm font-medium text-main"
 							>
-								Unlimited
+								{locale.language === 'id' ? 'Tanpa batas' : 'Unlimited'}
 							</Label>
-							<p class="text-xs text-muted">Tanpa batas kuota My Storage.</p>
+							<p class="text-xs text-muted">
+								{locale.language === 'id'
+									? 'Tanpa batas kuota My Storage.'
+									: 'No quota limit for My Storage.'}
+							</p>
 						</div>
 					</label>
 
@@ -183,16 +201,24 @@
 						<RadioGroup.Item value="default" id="edit-quota-default" class="mt-0.5" />
 						<div class="min-w-0">
 							<Label for="edit-quota-default" class="cursor-pointer text-sm font-medium text-main">
-								Reset ke Default ({defaultLabel})
+								{locale.language === 'id' ? 'Reset ke Default' : 'Reset to default'} ({defaultLabel})
 							</Label>
-							<p class="text-xs text-muted">Kembali ke kebijakan kuota sistem.</p>
+							<p class="text-xs text-muted">
+								{locale.language === 'id'
+									? 'Kembali ke kebijakan kuota sistem.'
+									: 'Return to the system quota policy.'}
+							</p>
 						</div>
 					</label>
 				</RadioGroup.Root>
 
 				<Dialog.Footer>
-					<Button type="button" variant="secondary" onclick={() => (open = false)}>Batal</Button>
-					<Button type="submit" disabled={!canSubmit}>Simpan</Button>
+					<Button type="button" variant="secondary" onclick={() => (open = false)}
+						>{locale.language === 'id' ? 'Batal' : 'Cancel'}</Button
+					>
+					<Button type="submit" disabled={!canSubmit}
+						>{locale.language === 'id' ? 'Simpan' : 'Save'}</Button
+					>
 				</Dialog.Footer>
 			</form>
 		{/if}
@@ -201,10 +227,12 @@
 
 <ConfirmDialog
 	bind:open={confirmOpen}
-	title="Konfirmasi Penurunan Kuota"
-	description={`Kuota baru (${getTargetLabel()}) lebih kecil dari pemakaian saat ini (${user?.usedGb.toFixed(1)} GB). Pengguna tidak akan dapat mengunggah file baru sampai pemakaian berada di bawah kuota. Apakah Anda yakin ingin melanjutkan?`}
-	confirmText="Ya, Simpan"
-	cancelText="Batal"
+	title={locale.language === 'id' ? 'Konfirmasi Penurunan Kuota' : 'Confirm quota reduction'}
+	description={locale.language === 'id'
+		? `Kuota baru (${getTargetLabel()}) lebih kecil dari pemakaian saat ini (${user?.usedGb.toFixed(1)} GiB). Pengguna tidak akan dapat mengunggah berkas baru sampai pemakaian berada di bawah kuota. Apakah Anda yakin ingin melanjutkan?`
+		: `The new quota (${getTargetLabel()}) is lower than current usage (${user?.usedGb.toFixed(1)} GiB). The user will not be able to upload new files until usage is below the quota. Are you sure you want to continue?`}
+	confirmText={locale.language === 'id' ? 'Ya, Simpan' : 'Yes, save'}
+	cancelText={locale.language === 'id' ? 'Batal' : 'Cancel'}
 	variant="destructive"
 	onConfirm={executeSave}
 	onCancel={() => {

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
 )
@@ -30,7 +31,6 @@ func TestAdminUsers_CreateAndUpdateQuota(t *testing.T) {
 	userDefault, err := handler.service.CreateUser(ctx, &CreateUserRequest{
 		Username:  "siti",
 		Email:     "siti@example.com",
-		Password:  "password123",
 		QuotaMode: "DEFAULT",
 	})
 	if err != nil {
@@ -52,7 +52,6 @@ func TestAdminUsers_CreateAndUpdateQuota(t *testing.T) {
 	userCustom, err := handler.service.CreateUser(ctx, &CreateUserRequest{
 		Username:  "budi",
 		Email:     "budi@example.com",
-		Password:  "password123",
 		QuotaMode: "CUSTOM",
 		QuotaGB:   &onePointFive,
 	})
@@ -72,7 +71,6 @@ func TestAdminUsers_CreateAndUpdateQuota(t *testing.T) {
 	userZero, err := handler.service.CreateUser(ctx, &CreateUserRequest{
 		Username:  "zero",
 		Email:     "zero@example.com",
-		Password:  "password123",
 		QuotaMode: "CUSTOM",
 		QuotaGB:   &zero,
 	})
@@ -87,7 +85,6 @@ func TestAdminUsers_CreateAndUpdateQuota(t *testing.T) {
 	userUnlimited, err := handler.service.CreateUser(ctx, &CreateUserRequest{
 		Username:  "unlimited_user",
 		Email:     "unlimited@example.com",
-		Password:  "password123",
 		QuotaMode: "UNLIMITED",
 	})
 	if err != nil {
@@ -191,7 +188,6 @@ func TestAdminUsers_ValidationAndHTTPHandlers(t *testing.T) {
 	body1, _ := json.Marshal(CreateUserRequest{
 		Username: "dupuser",
 		Email:    "dup1@example.com",
-		Password: "password123",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/users", bytes.NewReader(body1))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -208,7 +204,6 @@ func TestAdminUsers_ValidationAndHTTPHandlers(t *testing.T) {
 	bodyDup, _ := json.Marshal(CreateUserRequest{
 		Username: "DUPUSER",
 		Email:    "dup2@example.com",
-		Password: "password123",
 	})
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/admin/users", bytes.NewReader(bodyDup))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -305,7 +300,6 @@ func TestAdminUsers_DeleteUser_CompleteFlow(t *testing.T) {
 	user, err := handler.service.CreateUser(ctx, &CreateUserRequest{
 		Username: "charlie",
 		Email:    "charlie@company.com",
-		Password: "password123",
 	})
 	if err != nil {
 		t.Fatalf("create user: %v", err)
@@ -406,3 +400,26 @@ func TestAdminUsers_DeleteUser_CompleteFlow(t *testing.T) {
 		t.Fatalf("organization creator attribution = %s, want 'deleted user'", orgCreator)
 	}
 }
+
+func TestAdminUsers_ResetPasswordIssuesTokenAndDisablesPassword(t *testing.T) {
+	db, handler, _ := setupTestAdmin(t)
+	defer db.Close()
+	ctx := context.Background()
+	created, err := handler.service.CreateUser(ctx, &CreateUserRequest{Username: "pending", Email: "pending@example.com", QuotaMode: "DEFAULT"})
+	if err != nil { t.Fatal(err) }
+	var passwordHash, status string
+	if err := db.QueryRowContext(ctx, `SELECT password_hash, status FROM users WHERE id = ?`, created.ID).Scan(&passwordHash, &status); err != nil { t.Fatal(err) }
+	if passwordHash != "" || status != "PENDING_ACTIVATION" { t.Fatalf("pending credentials/status = %q/%q", passwordHash, status) }
+	if created.InvitationToken == "" || created.InvitationURL != "/set-password#token="+created.InvitationToken { t.Fatal("missing invitation response") }
+	var version int
+	if err := db.QueryRowContext(ctx, `SELECT token_version FROM users WHERE id = ?`, created.ID).Scan(&version); err != nil { t.Fatal(err) }
+	token, expires, err := handler.service.ResetUserPassword(ctx, "super-admin-id", created.ID)
+	if err != nil { t.Fatal(err) }
+	if token == "" || expires.Sub(time.Now()) < 29*time.Minute { t.Fatalf("invalid reset expiration: %v", expires) }
+	if err := db.QueryRowContext(ctx, `SELECT password_hash, token_version FROM users WHERE id = ?`, created.ID).Scan(&passwordHash, &version); err != nil { t.Fatal(err) }
+	if passwordHash != "" || version != 1 { t.Fatalf("reset hash/version = %q/%d", passwordHash, version) }
+	var tokenType string
+	if err := db.QueryRowContext(ctx, `SELECT token_type FROM auth_tokens WHERE user_id = ? ORDER BY rowid DESC LIMIT 1`, created.ID).Scan(&tokenType); err != nil { t.Fatal(err) }
+	if tokenType != "PASSWORD_RESET" { t.Fatalf("token type = %q", tokenType) }
+}
+

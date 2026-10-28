@@ -1,18 +1,20 @@
 <script lang="ts">
+	import { locale } from '$lib/locale.svelte.js';
 	import { LayoutGrid, LayoutList } from '@lucide/svelte';
 	import { driveView, type DriveViewMode } from '$lib/drive-view.svelte.js';
 	import { cn } from '$lib/utils.js';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
-	const options: { id: DriveViewMode; label: string; icon: typeof LayoutList }[] = [
-		{ id: 'list', label: 'List', icon: LayoutList },
-		{ id: 'grid', label: 'Grid', icon: LayoutGrid }
-	];
+	const options = $derived([
+		{ id: 'list' as DriveViewMode, label: tx('Daftar', 'List'), icon: LayoutList },
+		{ id: 'grid' as DriveViewMode, label: tx('Kisi', 'Grid'), icon: LayoutGrid }
+	]);
 </script>
 
 <div
 	class="inline-flex items-center gap-1 rounded-full border border-subtle bg-surface p-0.5"
 	role="group"
-	aria-label="Tampilan daftar"
+	aria-label={tx('Tampilan daftar', 'View mode')}
 >
 	{#each options as opt (opt.id)}
 		{@const Icon = opt.icon}
@@ -26,7 +28,7 @@
 					: 'text-muted hover:bg-primary/10 hover:text-main'
 			)}
 			aria-pressed={active}
-			aria-label={`Tampilan ${opt.label}`}
+			aria-label={tx(`Tampilan ${opt.label}`, `${opt.label} view`)}
 			onclick={() => driveView.setMode(opt.id)}
 		>
 			<Icon class="size-3.5 stroke-2" aria-hidden="true" />

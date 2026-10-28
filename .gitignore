@@ -28,6 +28,16 @@ apps/frontend/node_modules/
 !.vscode/settings.json
 !.vscode/extensions.json
 
+
+# AI Agent & Editor scratch
+.claude/
+.codex/
+.gemini/
+.kiro/
+.mcp.json
+GEMINI.md
+opencode.jsonc
+prompt-hermes.md
 .codegraph/
 apps/backend/tmp/
 apps/frontend/test-results/

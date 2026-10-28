@@ -1,6 +1,8 @@
 <script lang="ts">
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
+	import { locale } from '$lib/locale.svelte.js';
 	import { Button } from '$lib/components/ui/button/index.js';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	let {
 		open = $bindable(false),
@@ -16,13 +18,18 @@
 <Dialog.Root bind:open>
 	<Dialog.Content class="bg-surface text-main">
 		<Dialog.Header>
-			<Dialog.Title>Kosongkan Sampah</Dialog.Title>
+			<Dialog.Title>{tx('Kosongkan Sampah', 'Empty Trash')}</Dialog.Title>
 			<Dialog.Description>
-				Hapus permanen {itemCount} item di Trash? Tindakan ini tidak dapat dibatalkan.
+				{tx(
+					`Hapus permanen ${itemCount} item di Trash? Tindakan ini tidak dapat dibatalkan.`,
+					`Permanently delete ${itemCount} items in Trash? This action cannot be undone.`
+				)}
 			</Dialog.Description>
 		</Dialog.Header>
 		<Dialog.Footer>
-			<Button type="button" variant="secondary" onclick={() => (open = false)}>Batal</Button>
+			<Button type="button" variant="secondary" onclick={() => (open = false)}
+				>{tx('Batal', 'Cancel')}</Button
+			>
 			<Button
 				type="button"
 				variant="destructive"
@@ -31,7 +38,7 @@
 					open = false;
 				}}
 			>
-				Hapus permanen semua
+				{tx('Hapus permanen semua', 'Permanently delete all')}
 			</Button>
 		</Dialog.Footer>
 	</Dialog.Content>

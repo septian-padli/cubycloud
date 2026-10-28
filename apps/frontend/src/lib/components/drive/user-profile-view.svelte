@@ -1,28 +1,29 @@
 <script lang="ts">
+	import { locale } from '$lib/locale.svelte.js';
 	import type { AdminUser } from '$lib/types/admin.js';
-	import type { CategoryUsage, QuotaState } from '$lib/types/drive.js';
-	import { effectiveQuotaLabel, roleLabel } from '$lib/mocks/user-profiles.js';
-	import { MOCK_DEFAULT_QUOTA } from '$lib/mocks/admin-users.js';
+	import type { QuotaState } from '$lib/types/drive.js';
 	import DrivePageHeader from '$lib/components/drive/drive-page-header.svelte';
 	import StorageQuotaDetail from '$lib/components/drive/storage-quota-detail.svelte';
-	import ProfileStackedCategoryBar from '$lib/components/drive/profile-stacked-category-bar.svelte';
 	import EditProfileDialog from '$lib/components/drive/edit-profile-dialog.svelte';
 	import * as Card from '$lib/components/ui/card/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Pencil } from '@lucide/svelte';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	let {
 		user,
 		quota,
-		categories,
 		editable = false,
 		onSaveProfile
 	}: {
 		user: AdminUser;
 		quota: QuotaState;
-		categories: CategoryUsage[];
 		editable?: boolean;
-		onSaveProfile?: (next: { displayName: string; email: string }) => void;
+		onSaveProfile?: (next: {
+			displayName: string;
+			email: string;
+			currentPassword?: string;
+		}) => void | Promise<boolean | void>;
 	} = $props();
 
 	let editOpen = $state(false);
@@ -33,29 +34,38 @@
 <div class="flex flex-col gap-8">
 	<DrivePageHeader
 		title={user.displayName}
-		description="Profil pengguna dan ringkasan pemakaian My Storage."
+		description={tx(
+			'Profil pengguna dan ringkasan pemakaian My Storage.',
+			'User profile and My Storage usage summary.'
+		)}
 		eyebrow="@{user.username}"
 	>
 		{#snippet actions()}
-			{#if editable}
-				<Button type="button" variant="secondary" onclick={() => (editOpen = true)}>
-					<Pencil class="size-4 stroke-2" />
-					Edit Profil
-				</Button>
-			{/if}
+			<Button
+				type="button"
+				variant="secondary"
+				disabled={!editable}
+				onclick={() => {
+					if (editable) editOpen = true;
+				}}
+				class={!editable ? 'cursor-not-allowed opacity-50' : ''}
+			>
+				<Pencil class="size-4 stroke-2" />
+				{tx('Edit Profil', 'Edit profile')}
+			</Button>
 		{/snippet}
 	</DrivePageHeader>
 
 	<section class="space-y-3">
-		<h2 class="text-sm font-semibold text-main">Informasi akun</h2>
+		<h2 class="text-sm font-semibold text-main">{tx('Informasi akun', 'Account information')}</h2>
 		<Card.Root class="rounded-xl border-subtle bg-surface shadow-none">
 			<Card.Content class="grid gap-4 sm:grid-cols-2">
 				<div class="space-y-1">
-					<p class="text-xs font-medium text-muted">Nama pengguna</p>
+					<p class="text-xs font-medium text-muted">{tx('Nama pengguna', 'Username')}</p>
 					<p class="text-sm text-main">@{user.username}</p>
 				</div>
 				<div class="space-y-1">
-					<p class="text-xs font-medium text-muted">Nama tampilan</p>
+					<p class="text-xs font-medium text-muted">{tx('Nama tampilan', 'Display name')}</p>
 					<p class="text-sm text-main">{user.displayName}</p>
 				</div>
 				<div class="space-y-1">
@@ -63,22 +73,25 @@
 					<p class="text-sm text-main">{user.email}</p>
 				</div>
 				<div class="space-y-1">
-					<p class="text-xs font-medium text-muted">Peran</p>
+					<p class="text-xs font-medium text-muted">{tx('Peran', 'Role')}</p>
 					<span
 						class="inline-flex rounded-full px-2.5 py-1 text-xs font-medium {isSuperAdmin
 							? 'bg-primary/15 text-primary'
 							: 'bg-app text-muted'}"
 					>
-						{roleLabel(user.role)}
+						{user.role === 'super_admin' ? 'Super Admin' : tx('Pengguna', 'User')}
 					</span>
 				</div>
 				<div class="space-y-1 sm:col-span-2">
-					<p class="text-xs font-medium text-muted">Kuota efektif</p>
+					<p class="text-xs font-medium text-muted">{tx('Kuota efektif', 'Effective quota')}</p>
 					<p class="text-sm text-main">
-						{effectiveQuotaLabel(user, MOCK_DEFAULT_QUOTA)}
-						{#if quota.limitGb == null}
-							<span class="text-muted"> · terpakai {user.usedGb.toFixed(1)} GB</span>
-						{/if}
+						{#if quota.limitGb == null}{tx('Tidak terbatas', 'Unlimited')}{:else}{quota.limitGb
+								.toFixed(1)
+								.replace('.', locale.language === 'id' ? ',' : '.')} GiB{/if}
+						<span class="text-muted">
+							· {tx('terpakai', 'used')}
+							{user.usedGb.toFixed(1).replace('.', locale.language === 'id' ? ',' : '.')} GiB</span
+						>
 					</p>
 				</div>
 			</Card.Content>
@@ -86,15 +99,6 @@
 	</section>
 
 	<StorageQuotaDetail {quota} />
-
-	<section class="space-y-3">
-		<h2 class="text-sm font-semibold text-main">Pemakaian per kategori</h2>
-		<Card.Root class="rounded-xl border-subtle bg-surface shadow-none">
-			<Card.Content>
-				<ProfileStackedCategoryBar {categories} />
-			</Card.Content>
-		</Card.Root>
-	</section>
 </div>
 
 {#if editable && onSaveProfile}

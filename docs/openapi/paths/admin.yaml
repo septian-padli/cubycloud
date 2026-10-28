@@ -1,0 +1,404 @@
+/api/v1/admin/settings:
+  get:
+    operationId: getAdminSettings
+    summary: Get system settings
+    description: Returns system settings. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Current system settings
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/SystemSettings'}
+            example:
+              default_quota: {mode: limited, gb: 50}
+              audit_retention_days: 90
+              worker_concurrency: 2
+              placement_strategy: FILL_FIRST
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to retrieve settings, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+  put:
+    operationId: updateAdminSettings
+    summary: Update system settings
+    description: Updates supplied settings and returns the resulting settings. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/UpdateSystemSettingsRequest'}
+          example:
+            default_quota: {mode: limited, gb: 50}
+            audit_retention_days: 90
+            worker_concurrency: 2
+            placement_strategy: FILL_FIRST
+    responses:
+      '200': {description: Updated system settings, content: {application/json: {schema: {$ref: '#/components/schemas/SystemSettings'}}}}
+      '400': {description: Invalid request or setting value, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Settings update succeeded but retrieval failed, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+/api/v1/admin/storage-nodes:
+  get:
+    operationId: listAdminStorageNodes
+    summary: List storage nodes
+    description: Returns storage nodes with capacity and status information. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200': {description: Storage nodes, content: {application/json: {schema: {$ref: '#/components/schemas/StorageNodesList'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to retrieve storage nodes, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+  post:
+    operationId: createStorageNodeLocal
+    summary: Create a local storage node
+    description: Adds a local disk storage node. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/CreateLocalStorageNodeRequest'}
+          example: {name: Primary disk, path: /srv/cubycloud, capacity_cap_gb: 1000, enabled: true}
+    responses:
+      '201': {description: Storage node created, content: {application/json: {schema: {$ref: '#/components/schemas/StorageNode'}}}}
+      '400': {description: Invalid request or node configuration, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '409': {description: A node with that name already exists, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to create node, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+/api/v1/admin/storage-nodes/cloud:
+  post:
+    operationId: createStorageNodeCloud
+    summary: Create an S3-compatible storage node
+    description: Adds an S3-compatible cloud storage node. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/CreateCloudStorageNodeRequest'}
+          example: {name: Offsite backup, endpoint: 'https://s3.example.com', bucket: cubycloud-data, region: us-east-1, access_key: AKIAIOSFODNN7EXAMPLE, secret_key: example-secret-key, capacity_cap_gb: 2000, enabled: true}
+    responses:
+      '201': {description: Cloud storage node created, content: {application/json: {schema: {$ref: '#/components/schemas/StorageNode'}}}}
+      '400': {description: Invalid request or node name, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '409': {description: A node with that name already exists, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to create node, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+/api/v1/admin/storage-nodes/{id}:
+  put:
+    operationId: updateStorageNode
+    summary: Update storage node configuration
+    description: Updates supplied storage-node properties. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - {name: id, in: path, required: true, description: Storage node ID, schema: {type: string}, example: node-01}
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/UpdateStorageNodeRequest'}
+          example: {capacity_cap_gb: 1500, enabled: true}
+    responses:
+      '200': {description: Node updated, content: {application/json: {schema: {$ref: '#/components/schemas/AdminMessageResponse'}}}}
+      '400': {description: Invalid request or node configuration, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: Storage node not found, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '409': {description: Node name already exists, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to update node, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+  delete:
+    operationId: deleteStorageNode
+    summary: Delete a storage node
+    description: Soft-deletes the specified storage node. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - {name: id, in: path, required: true, description: Storage node ID, schema: {type: string}, example: node-01}
+    responses:
+      '200': {description: Node deleted, content: {application/json: {schema: {$ref: '#/components/schemas/AdminMessageResponse'}, example: {message: node deleted successfully}}}}
+      '400': {description: Invalid node ID, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: Storage node not found, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to delete node, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+/api/v1/admin/storage-nodes/{id}/disable:
+  put:
+    operationId: disableStorageNode
+    summary: Disable a storage node
+    description: Disables the specified storage node. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - {name: id, in: path, required: true, description: Storage node ID, schema: {type: string}, example: node-01}
+    responses:
+      '200': {description: Node disabled, content: {application/json: {schema: {$ref: '#/components/schemas/AdminMessageResponse'}, example: {message: node disabled successfully}}}}
+      '400': {description: Invalid node ID or node cannot be disabled, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+/api/v1/admin/storage-nodes/{id}/detach:
+  post:
+    operationId: detachStorageNode
+    summary: Detach a storage node
+    description: Disables a node and starts physical migration. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - {name: id, in: path, required: true, description: Storage node ID, schema: {type: string}, example: node-01}
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/DetachStorageNodeRequest'}
+          example: {target_node_id: node-02}
+    responses:
+      '200': {description: Detach operation result, content: {application/json: {schema: {$ref: '#/components/schemas/DetachStorageNodeResponse'}}}}
+      '400': {description: Invalid node ID or detach operation rejected, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+/api/v1/admin/storage-nodes/rescan:
+  post:
+    operationId: rescanStorageNodes
+    summary: Rescan storage nodes
+    description: Rescans local storage and returns the resulting storage-node list. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200': {description: Rescanned storage nodes, content: {application/json: {schema: {$ref: '#/components/schemas/StorageNodesList'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to rescan nodes, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+/api/v1/admin/users:
+  get:
+    operationId: listAdminUsers
+    summary: List users
+    description: Returns registered users with quota and storage-usage information. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200': {description: Users, content: {application/json: {schema: {$ref: '#/components/schemas/AdminUsersList'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to retrieve users, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+  post:
+    operationId: provisionAdminUser
+    summary: Provision a user
+    description: Creates a regular user in PENDING_ACTIVATION state and returns a single-use invitation link. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/CreateAdminUserRequest'}
+          example: {username: alice, email: alice@example.com, quota_mode: DEFAULT, quota_gb: 50}
+    responses:
+      '201': {description: User created, content: {application/json: {schema: {$ref: '#/components/schemas/AdminUser'}}}}
+      '400': {description: Invalid user data, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '409': {description: Username or email already exists, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to create user, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+/api/v1/admin/users/{id}:
+  delete:
+    operationId: deleteAdminUser
+    summary: Delete a user
+    description: Soft-deletes a user. The request body email is checked by the backend. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - {name: id, in: path, required: true, description: User ID, schema: {type: string}, example: user-123}
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/DeleteAdminUserRequest'}
+          example: {email: alice@example.com}
+    responses:
+      '200': {description: User deleted, content: {application/json: {schema: {$ref: '#/components/schemas/AdminMessageResponse'}, example: {message: user deleted successfully}}}}
+      '400': {description: Invalid request or deletion rejected, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: User not found, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to delete user, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+/api/v1/admin/users/{id}/quota:
+  put:
+    operationId: updateAdminUserQuota
+    summary: Update user quota
+    description: Updates a user's quota configuration; quota_bytes in responses is expressed in bytes. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - {name: id, in: path, required: true, description: User ID, schema: {type: string}, example: user-123}
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/UpdateAdminUserQuotaRequest'}
+          example: {quota_mode: CUSTOM, quota_gb: 100}
+    responses:
+      '200': {description: Updated user quota and usage, content: {application/json: {schema: {$ref: '#/components/schemas/AdminUser'}}}}
+      '400': {description: Invalid quota configuration or update rejected, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: User not found, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to update quota, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+/api/v1/admin/users/{id}/invitation:
+  post:
+    operationId: regenerateAdminUserInvitation
+    summary: Regenerate user invitation link
+    description: Regenerates a single-use invitation link for a user awaiting activation and revokes previously issued invitation tokens. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - {name: id, in: path, required: true, description: User ID, schema: {type: string}, example: user-123}
+    responses:
+      '200': {description: Fresh invitation link generated, content: {application/json: {schema: {$ref: '#/components/schemas/AdminUserInvitationResponse'}}}}
+      '400': {description: User already active or invalid request, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: User not found, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to regenerate invitation link, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+/api/v1/admin/users/{id}/reset-password:
+  post:
+    operationId: resetAdminUserPassword
+    summary: Reset a user's password
+    description: Immediately revokes all active sessions for the user, disables password login, and generates a one-time 30-minute password reset link. The authenticated super administrator cannot reset their own password. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - {name: id, in: path, required: true, description: User ID, schema: {type: string}, example: user-123}
+    responses:
+      '200': {description: Password reset link generated, content: {application/json: {schema: {$ref: '#/components/schemas/AdminUserResetPasswordResponse'}}}}
+      '400': {description: Password reset rejected, including attempts to reset the actor's own account, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '404': {description: User not found, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to reset password, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+/api/v1/admin/backup:
+  get:
+    operationId: downloadAdminDatabaseBackup
+    summary: Download database backup
+    description: Streams a SQLite database backup file. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200':
+        description: SQLite database backup file
+        headers:
+          Content-Disposition:
+            schema: {type: string}
+            description: Attachment filename.
+            example: attachment; filename=cubycloud.db
+          Content-Length:
+            schema: {type: integer}
+            description: Backup file size in bytes.
+            example: 524288
+        content:
+          application/octet-stream:
+            schema: {type: string, format: binary}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to produce or stream database backup, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+/api/v1/admin/storage/stats:
+  get:
+    operationId: getAdminStorageStats
+    summary: Get global storage statistics
+    description: Returns aggregate capacity, usage, free space, node count, and file-category usage. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200': {description: Global storage statistics, content: {application/json: {schema: {$ref: '#/components/schemas/AdminStorageStats'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to retrieve storage statistics, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+/api/v1/admin/storage/top-users:
+  get:
+    operationId: listAdminTopStorageUsers
+    summary: List top storage consumers
+    description: Returns users ordered by storage usage with offset pagination. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - name: limit
+        in: query
+        required: false
+        description: Maximum number of results; defaults to 20 and is capped at 100.
+        schema: {type: integer, default: 20}
+        example: 20
+      - name: offset
+        in: query
+        required: false
+        description: Zero-based result offset.
+        schema: {type: integer, default: 0, minimum: 0}
+        example: 0
+    responses:
+      '200': {description: Paginated top storage consumers, content: {application/json: {schema: {$ref: '#/components/schemas/AdminTopStorageUsers'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to retrieve top storage users, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+/api/v1/admin/audit-logs:
+  get:
+    operationId: listAdminAuditLogs
+    summary: Query audit logs
+    description: Returns audit logs ordered by creation time descending. Requires the SUPER_ADMIN role; authenticated regular users receive 403 Forbidden.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - name: limit
+        in: query
+        required: false
+        description: Page size; defaults to 50 and is bounded to 1 through 200.
+        schema: {type: integer, default: 50, minimum: 1, maximum: 200}
+        example: 50
+      - name: offset
+        in: query
+        required: false
+        description: Zero-based result offset; negative or unparsable values use zero.
+        schema: {type: integer, default: 0, minimum: 0}
+        example: 0
+      - name: action
+        in: query
+        required: false
+        description: Filter by exact action value.
+        schema: {type: string}
+        example: settings.update
+      - name: user_id
+        in: query
+        required: false
+        description: Filter by exact user ID.
+        schema: {type: string}
+        example: user-123
+    responses:
+      '200': {description: Matching audit log entries, content: {application/json: {schema: {$ref: '#/components/schemas/AuditLogs'}}}}
+      '401': {description: Authentication required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '403': {description: SUPER_ADMIN role required, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
+      '500': {description: Failed to retrieve audit logs, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}

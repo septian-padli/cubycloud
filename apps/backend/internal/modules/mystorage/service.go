@@ -38,14 +38,15 @@ var (
 )
 
 type Item struct {
-	ID         string    `json:"id"`
-	Name       string    `json:"name"`
-	Kind       string    `json:"kind"`
-	SizeBytes  int64     `json:"size_bytes"`
-	ParentID   *string   `json:"parent_id"`
-	ModifiedAt time.Time `json:"modified_at"`
-	IsStarred  bool      `json:"is_starred"`
-	DiskKey    *string   `json:"-"`
+	ID                string    `json:"id"`
+	Name              string    `json:"name"`
+	Kind              string    `json:"kind"`
+	SizeBytes         int64     `json:"size_bytes"`
+	ParentID          *string   `json:"parent_id"`
+	ModifiedAt        time.Time `json:"modified_at"`
+	IsStarred         bool      `json:"is_starred"`
+	StorageAvailable  bool      `json:"storage_available"`
+	DiskKey           *string   `json:"-"`
 }
 
 type VFSNode = Item
@@ -113,7 +114,7 @@ func NewService(db *bun.DB, driver storage.StorageDriver) *Service {
 
 func (s *Service) List(ctx context.Context, owner string, parent *string) ([]Item, []Folder, error) {
 	query := `SELECT i.id, i.name, i.kind, i.size_bytes, i.parent_id, i.modified_at, i.disk_key,
-		CASE WHEN s.id IS NOT NULL THEN 1 ELSE 0 END AS is_starred
+		CASE WHEN s.id IS NOT NULL THEN 1 ELSE 0 END AS is_starred, COALESCE(i.storage_node_id,'')
 		FROM my_storage_items i
 		LEFT JOIN vfs_starred s ON s.node_id = i.id AND s.user_id = ?
 		WHERE i.owner_id=? AND i.deleted_at IS NULL AND `
@@ -137,15 +138,41 @@ func (s *Service) List(ctx context.Context, owner string, parent *string) ([]Ite
 		return nil, nil, err
 	}
 	defer rows.Close()
-	items := make([]Item, 0)
+	type listedItem struct {
+		item   Item
+		nodeID string
+	}
+	listed := make([]listedItem, 0)
 	for rows.Next() {
-		var i Item
-		if err = rows.Scan(&i.ID, &i.Name, &i.Kind, &i.SizeBytes, &i.ParentID, &i.ModifiedAt, &i.DiskKey, &i.IsStarred); err != nil {
+		var record listedItem
+		if err = rows.Scan(&record.item.ID, &record.item.Name, &record.item.Kind, &record.item.SizeBytes, &record.item.ParentID, &record.item.ModifiedAt, &record.item.DiskKey, &record.item.IsStarred, &record.nodeID); err != nil {
 			return nil, nil, err
 		}
-		items = append(items, i)
+		listed = append(listed, record)
 	}
-	return items, nil, rows.Err()
+	if err = rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	if err = rows.Close(); err != nil {
+		return nil, nil, err
+	}
+	items := make([]Item, 0, len(listed))
+	availability := make(map[string]bool)
+	for _, record := range listed {
+		item := record.item
+		if item.Kind != "folder" {
+			available, ok := availability[record.nodeID]
+			if !ok {
+				available = storage.NodeAvailable(ctx, s.storage, record.nodeID)
+				availability[record.nodeID] = available
+			}
+			item.StorageAvailable = available
+		} else {
+			item.StorageAvailable = true
+		}
+		items = append(items, item)
+	}
+	return items, nil, nil
 }
 
 func (s *Service) Folders(ctx context.Context, owner string) ([]Folder, error) {
@@ -194,21 +221,31 @@ func (s *Service) Breadcrumbs(ctx context.Context, owner string, parent *string)
 
 func (s *Service) get(ctx context.Context, owner, id string) (Item, error) {
 	var i Item
+	var nodeID string
 	err := s.db.DB.QueryRowContext(
 		ctx,
 		`SELECT i.id, i.name, i.kind, i.size_bytes, i.parent_id, i.modified_at, i.disk_key,
-			CASE WHEN s.id IS NOT NULL THEN 1 ELSE 0 END AS is_starred
+			CASE WHEN s.id IS NOT NULL THEN 1 ELSE 0 END AS is_starred,
+			COALESCE(i.storage_node_id, '')
 		FROM my_storage_items i
 		LEFT JOIN vfs_starred s ON s.node_id = i.id AND s.user_id = ?
 		WHERE i.id=? AND i.owner_id=? AND i.deleted_at IS NULL`,
 		owner,
 		id,
 		owner,
-	).Scan(&i.ID, &i.Name, &i.Kind, &i.SizeBytes, &i.ParentID, &i.ModifiedAt, &i.DiskKey, &i.IsStarred)
+	).Scan(&i.ID, &i.Name, &i.Kind, &i.SizeBytes, &i.ParentID, &i.ModifiedAt, &i.DiskKey, &i.IsStarred, &nodeID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return i, errNotFound
 	}
-	return i, err
+	if err != nil {
+		return i, err
+	}
+	if i.Kind != "folder" {
+		i.StorageAvailable = storage.NodeAvailable(ctx, s.storage, nodeID)
+	} else {
+		i.StorageAvailable = true
+	}
+	return i, nil
 }
 
 func (s *Service) Get(ctx context.Context, owner, id string) (Item, error) {
@@ -430,9 +467,8 @@ func (s *Service) localPlacement(ctx context.Context) (string, string, int64, er
 			if physicalCapacity%20 != 0 {
 				physicalReserve++
 			}
-			physicalFree -= physicalReserve
-			if physicalFree < candidates[i].capacity {
-				candidates[i].capacity = physicalFree
+			if physicalFree <= physicalReserve {
+				candidates[i].capacity = 0
 			}
 		}
 	}
@@ -531,6 +567,15 @@ func (s *Service) Upload(ctx context.Context, owner, name string, parent *string
 	if err != nil {
 		return Item{}, err
 	}
+	instanceID, err := storage.InstanceID(ctx, s.db)
+	if err != nil {
+		return Item{}, err
+	}
+	effectiveNodeID := placement.ID
+	if effectiveNodeID == "" {
+		effectiveNodeID, _ = legacyLocalStorageNodeID(ctx, s.db)
+	}
+	blobKey := storage.BuildBlobKey(instanceID, effectiveNodeID, id)
 	var storedNodeID any
 	if placement.ID != "" {
 		storedNodeID = placement.ID
@@ -559,20 +604,20 @@ func (s *Service) Upload(ctx context.Context, owner, name string, parent *string
 		if !ok {
 			return Item{}, errors.New("cloud driver unavailable")
 		}
-		if err = cloud.WriteObject(ctx, placement.ID, id, counter, -1); err != nil {
-			_ = cloud.DeleteObject(ctx, placement.ID, id)
+		if err = cloud.WriteObject(ctx, placement.ID, blobKey, counter, -1); err != nil {
+			_ = cloud.DeleteObject(ctx, placement.ID, blobKey)
 			return Item{}, err
 		}
 		cleanup = func() {
-			_ = cloud.DeleteObject(ctx, placement.ID, id)
+			_ = cloud.DeleteObject(ctx, placement.ID, blobKey)
 		}
 	} else {
-		if err = s.storage.WriteLocal(ctx, placement.Path, id, counter); err != nil {
-			_ = s.storage.DeleteLocal(ctx, placement.Path, id)
+		if err = s.storage.WriteLocal(ctx, placement.Path, blobKey, counter); err != nil {
+			_ = s.storage.DeleteLocal(ctx, placement.Path, blobKey)
 			return Item{}, err
 		}
 		cleanup = func() {
-			_ = s.storage.DeleteLocal(ctx, placement.Path, id)
+			_ = s.storage.DeleteLocal(ctx, placement.Path, blobKey)
 		}
 	}
 	size := counter.n
@@ -634,7 +679,7 @@ func (s *Service) Upload(ctx context.Context, owner, name string, parent *string
 		candidate,
 		size,
 		parent,
-		id,
+		blobKey,
 		storedNodeID,
 		now,
 	)
@@ -1576,11 +1621,15 @@ func (s *Service) UploadIntent(ctx context.Context, owner, filename string, size
 
 	uploadID := ulid.Make().String()
 	urlExpiry := 15 * time.Minute
-	putURL, err := cloud.PresignUpload(ctx, placement.ID, uploadID, urlExpiry)
+	instanceID, err := storage.InstanceID(ctx, s.db)
+	if err != nil {
+		return nil, fmt.Errorf("load storage instance ID: %w", err)
+	}
+	blobKey := storage.BuildBlobKey(instanceID, placement.ID, uploadID)
+	putURL, err := cloud.PresignUpload(ctx, placement.ID, blobKey, urlExpiry)
 	if err != nil {
 		return nil, fmt.Errorf("presign upload: %w", err)
 	}
-
 	now := time.Now().UTC()
 	expiresAt := now.Add(24 * time.Hour)
 	var parentVal any
@@ -1605,6 +1654,47 @@ func (s *Service) UploadIntent(ctx context.Context, owner, filename string, size
 	}, nil
 }
 
+func (s *Service) RenewUploadIntentURL(ctx context.Context, owner, uploadID string) (*UploadIntentResult, error) {
+	if uploadID == "" {
+		return nil, errNotFound
+	}
+	var nodeID string
+	var expiresAt time.Time
+	err := s.db.QueryRowContext(ctx, `
+		SELECT storage_node_id, expires_at
+		FROM pending_cloud_uploads
+		WHERE id = ? AND owner_id = ?
+	`, uploadID, owner).Scan(&nodeID, &expiresAt)
+	if errors.Is(err, sql.ErrNoRows) || (!expiresAt.IsZero() && !expiresAt.After(time.Now().UTC())) {
+		return nil, errNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	cloud, ok := s.storage.(storage.CloudStorageDriver)
+	if !ok {
+		return nil, errors.New("cloud driver unavailable")
+	}
+	const urlExpiry = 15 * time.Minute
+	instanceID, err := storage.InstanceID(ctx, s.db)
+	if err != nil {
+		return nil, fmt.Errorf("load storage instance ID: %w", err)
+	}
+	blobKey := storage.BuildBlobKey(instanceID, nodeID, uploadID)
+	putURL, err := cloud.PresignUpload(ctx, nodeID, blobKey, urlExpiry)
+	if err != nil {
+		return nil, fmt.Errorf("presign upload: %w", err)
+	}
+	return &UploadIntentResult{
+		Placement: "s3",
+		UploadID:  uploadID,
+		URL:       putURL,
+		Method:    "PUT",
+		ExpiresAt: time.Now().UTC().Add(urlExpiry).Format(time.RFC3339),
+	}, nil
+}
+
+
 func (s *Service) SyncCloud(ctx context.Context, owner, uploadID string) (Item, error) {
 	var storageNodeID, filename string
 	var sizeBytes int64
@@ -1618,7 +1708,7 @@ func (s *Service) SyncCloud(ctx context.Context, owner, uploadID string) (Item, 
 		WHERE id = ? AND owner_id = ?
 	`, uploadID, owner).Scan(&storageNodeID, &filename, &sizeBytes, &parentID, &uniqueNameRequested, &expiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
-		return Item{}, errNotFound
+		return s.syncedCloudItem(ctx, owner, uploadID)
 	}
 	if err != nil {
 		return Item{}, err
@@ -1642,12 +1732,18 @@ func (s *Service) SyncCloud(ctx context.Context, owner, uploadID string) (Item, 
 		return Item{}, err
 	}
 	if pending == 0 {
-		return Item{}, errNotFound
+		return s.syncedCloudItem(ctx, owner, uploadID)
 	}
 	if !expiresAt.After(time.Now().UTC()) {
 		return Item{}, errNotFound
 	}
-	actualSize, err := cloud.HeadObject(ctx, storageNodeID, uploadID)
+
+	instanceID, err := storage.InstanceID(ctx, s.db)
+	if err != nil {
+		return Item{}, fmt.Errorf("load storage instance ID: %w", err)
+	}
+	blobKey := storage.BuildBlobKey(instanceID, storageNodeID, uploadID)
+	actualSize, err := cloud.HeadObject(ctx, storageNodeID, blobKey)
 	if err != nil {
 		return Item{}, fmt.Errorf("cloud object verification failed: %w", err)
 	}
@@ -1747,7 +1843,7 @@ func (s *Service) SyncCloud(ctx context.Context, owner, uploadID string) (Item, 
 		candidate,
 		sizeBytes,
 		parent,
-		uploadID,
+		blobKey,
 		storageNodeID,
 		now,
 	)
@@ -1775,21 +1871,46 @@ func (s *Service) SyncCloud(ctx context.Context, owner, uploadID string) (Item, 
 	}, nil
 }
 
+func (s *Service) syncedCloudItem(ctx context.Context, owner, uploadID string) (Item, error) {
+	var item Item
+	var parentID sql.NullString
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id, name, kind, size_bytes, parent_id, modified_at
+		FROM my_storage_items
+		WHERE id = ? AND owner_id = ? AND deleted_at IS NULL
+	`, uploadID, owner).Scan(&item.ID, &item.Name, &item.Kind, &item.SizeBytes, &parentID, &item.ModifiedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Item{}, errNotFound
+	}
+	if err != nil {
+		return Item{}, err
+	}
+	if parentID.Valid && parentID.String != "" {
+		item.ParentID = &parentID.String
+	}
+	return item, nil
+}
+
 // Keep a blob that is still referenced by either drive; only orphan uploads
 // belong to the pending intent's cancellation/expiry cleanup.
 func (s *Service) deleteUnreferencedCloudUpload(ctx context.Context, cloud storage.CloudStorageDriver, nodeID, uploadID string) error {
+	instanceID, err := storage.InstanceID(ctx, s.db)
+	if err != nil {
+		return err
+	}
+	blobKey := storage.BuildBlobKey(instanceID, nodeID, uploadID)
 	var referenced bool
-	err := s.db.QueryRowContext(ctx, `
+	err = s.db.QueryRowContext(ctx, `
 		SELECT EXISTS(
-			SELECT 1 FROM my_storage_items WHERE disk_key=? AND storage_node_id=?
+			SELECT 1 FROM my_storage_items WHERE (disk_key=? OR disk_key=?) AND storage_node_id=?
 			UNION ALL
-			SELECT 1 FROM organization_items WHERE disk_key=? AND storage_node_id=?
+			SELECT 1 FROM organization_items WHERE (disk_key=? OR disk_key=?) AND storage_node_id=?
 		)
-	`, uploadID, nodeID, uploadID, nodeID).Scan(&referenced)
+	`, blobKey, uploadID, nodeID, blobKey, uploadID, nodeID).Scan(&referenced)
 	if err != nil || referenced {
 		return err
 	}
-	return cloud.DeleteObject(ctx, nodeID, uploadID)
+	return cloud.DeleteObject(ctx, nodeID, blobKey)
 }
 func (s *Service) CancelUploadIntent(ctx context.Context, owner, uploadID string) (bool, error) {
 	cloudUploadMu.Lock()

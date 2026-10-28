@@ -19,7 +19,7 @@
 		{#if eyebrow}
 			<p class="text-xs font-medium text-muted">{eyebrow}</p>
 		{/if}
-		<h1 class="text-2xl font-bold leading-tight text-main">{title}</h1>
+		<h1 class="text-2xl leading-tight font-bold text-main">{title}</h1>
 		{#if description}
 			<p class="text-sm text-muted">{description}</p>
 		{/if}

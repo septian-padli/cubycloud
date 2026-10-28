@@ -1,0 +1,560 @@
+/api/v1/drive/organization:
+  get:
+    operationId: listOrganizationDrive
+    tags: [Organization]
+    summary: List organization drive items
+    description: Lists root items or contents of the folder specified by `parent_id`, including breadcrumbs.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - { name: parent_id, in: query, description: Folder ID; omit to list the root., schema: { type: string } }
+    responses:
+      '200':
+        description: Organization folder contents.
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrganizationListResponse' }
+            example: { items: [{ id: 01JGF7Y8M0D6RH4M2N8K3VQZ1A, name: Annual report.pdf, kind: file, size_bytes: 204800, parent_id: null, modified_at: '2026-10-25T14:30:00Z', is_starred: false, storage_available: true, created_by: alex }], breadcrumbs: [] }
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '404': { description: Parent folder not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '500': { description: Internal server error., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+
+/api/v1/drive/organization/folders:
+  get:
+    operationId: listOrganizationFolders
+    tags: [Organization]
+    summary: List organization folders
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200':
+        description: All non-deleted organization folders.
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrganizationFoldersResponse' }
+            example: { items: [{ id: 01JGF7XQ8WJ6QW0GMRR4RXM2HZ, name: Finance, parent_id: null }] }
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '500': { description: Internal server error., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+  post:
+    operationId: createOrganizationFolder
+    tags: [Organization]
+    summary: Create an organization folder
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/CreateOrganizationFolderRequest' }
+          example: { name: Finance, parent_id: null, unique_name: false }
+    responses:
+      '201':
+        description: Folder created.
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrganizationItem' }
+      '400': { description: Invalid request, folder name, or parent., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '409':
+        description: Name conflict.
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrganizationNameConflict' }
+            example: { error: name_conflict, suggested_name: Finance (1), existing_id: 01JGF7XQ8WJ6QW0GMRR4RXM2HZ, existing_kind: folder }
+      '500': { description: Internal server error., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+
+/api/v1/drive/organization/upload:
+  post:
+    operationId: uploadOrganizationFile
+    tags: [Organization]
+    summary: Upload a file to the organization drive
+    description: Reads a multipart form part named `file`. Optional filename, destination, and unique-name behavior are query parameters.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - { name: parent_id, in: query, schema: { type: string } }
+      - { name: filename, in: query, schema: { type: string }, example: report.pdf }
+      - { name: unique_name, in: query, description: Pass `true` to choose a unique name on conflict., schema: { type: boolean, default: false } }
+    requestBody:
+      required: true
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            required: [file]
+            properties:
+              file: { type: string, format: binary }
+    responses:
+      '201': { description: File uploaded., content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationItem' } } }}
+      '400': { description: File part missing or request invalid., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '404': { description: Destination folder not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '409': { description: Name conflict., content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationNameConflict' } } }}
+      '413': { description: File exceeds available storage capacity., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '503': { description: Storage unavailable., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+
+/api/v1/drive/organization/upload-tus:
+  options:
+    operationId: getOrganizationTusOptions
+    tags: [Organization]
+    summary: Get Organization TUS capabilities
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '204':
+        description: TUS protocol capabilities returned in headers.
+        headers:
+          Tus-Version: { schema: { type: string, example: '1.0.0' } }
+          Tus-Resumable: { schema: { type: string, example: '1.0.0' } }
+          Tus-Extension: { schema: { type: string, example: 'creation,termination,checksum' } }
+  post:
+    operationId: createOrganizationTusUpload
+    tags: [Organization]
+    summary: Create an Organization TUS upload
+    description: Creates a resumable upload session. Filename, parent ID, and optional checksum can be supplied through `Upload-Metadata`; filename and parent ID also accept query fallbacks.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - { name: filename, in: query, description: Fallback filename., schema: { type: string } }
+      - { name: parent_id, in: query, description: Fallback destination folder ID., schema: { type: string } }
+      - { name: Upload-Length, in: header, required: true, description: Total upload length in bytes., schema: { type: integer, format: int64, minimum: 0 }, example: 204800 }
+      - { name: Tus-Resumable, in: header, schema: { type: string, enum: ['1.0.0'] } }
+      - { name: Upload-Metadata, in: header, description: Comma-separated TUS metadata; values are base64 encoded., schema: { type: string }, example: 'filename cmVwb3J0LnBkZg==' }
+    responses:
+      '201':
+        description: Upload session created.
+        headers:
+          Location: { schema: { type: string, example: /api/v1/drive/organization/upload-tus/01JGF83D0V2AKVGWN8W7NB9S43 } }
+          Tus-Resumable: { schema: { type: string, example: '1.0.0' } }
+      '400': { description: Upload length or checksum metadata is invalid., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '412': { description: Unsupported TUS version., headers: { Tus-Version: { schema: { type: string, example: '1.0.0' } } } }
+      '413': { description: Upload exceeds available capacity., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '503': { description: Storage unavailable., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+
+/api/v1/drive/organization/upload-tus/{id}:
+  parameters:
+    - { name: id, in: path, required: true, description: TUS upload session ID., schema: { type: string }, example: 01JGF83D0V2AKVGWN8W7NB9S43 }
+  options:
+    operationId: getOrganizationTusResourceOptions
+    tags: [Organization]
+    summary: Get Organization TUS resource capabilities
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '204':
+        description: TUS protocol capabilities returned in headers.
+        headers:
+          Tus-Version: { schema: { type: string, example: '1.0.0' } }
+          Tus-Resumable: { schema: { type: string, example: '1.0.0' } }
+          Tus-Extension: { schema: { type: string, example: 'creation,termination,checksum' } }
+  head:
+    operationId: getOrganizationTusUploadOffset
+    tags: [Organization]
+    summary: Get TUS upload offset
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - { name: Tus-Resumable, in: header, schema: { type: string, enum: ['1.0.0'] } }
+    responses:
+      '200':
+        description: Current offset and total length; finalized uploads may include resulting item headers.
+        headers:
+          Upload-Offset: { schema: { type: integer, format: int64, example: 65536 } }
+          Upload-Length: { schema: { type: integer, format: int64, example: 204800 } }
+          Tus-Resumable: { schema: { type: string, example: '1.0.0' } }
+          Upload-Item-Id: { schema: { type: string, example: 01JGF9K7N3MEXZ45XPK1J1S2DX } }
+          Upload-Item: { schema: { $ref: '#/components/schemas/TusUploadItem' } }
+      '400': { description: Invalid upload ID., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '404': { description: Upload not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '412': { description: Unsupported TUS version., headers: { Tus-Version: { schema: { type: string, example: '1.0.0' } } } }
+      '500': { description: Upload metadata could not be read., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+  patch:
+    operationId: appendOrganizationTusUploadChunk
+    tags: [Organization]
+    summary: Append an upload chunk
+    description: Appends the request body at `Upload-Offset`; the final chunk is checked and finalized as an organization item.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - { name: Tus-Resumable, in: header, schema: { type: string, enum: ['1.0.0'] } }
+      - { name: Upload-Offset, in: header, required: true, schema: { type: integer, format: int64, minimum: 0 }, example: 65536 }
+      - { name: Upload-Checksum, in: header, description: Optional SHA-256 checksum., schema: { type: string }, example: 'sha256 47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=' }
+    requestBody:
+      required: true
+      content:
+        application/offset+octet-stream:
+          schema: { type: string, format: binary }
+    responses:
+      '204':
+        description: Chunk accepted or upload finalized.
+        headers:
+          Upload-Offset: { schema: { type: integer, format: int64, example: 204800 } }
+          Tus-Resumable: { schema: { type: string, example: '1.0.0' } }
+          Upload-Item-Id: { schema: { type: string, example: 01JGF9K7N3MEXZ45XPK1J1S2DX } }
+          Upload-Item: { schema: { $ref: '#/components/schemas/TusUploadItem' } }
+      '400': { description: Invalid ID, offset, or checksum; or bytes exceed Upload-Length., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '404': { description: Upload not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '409': { description: Upload offset mismatch., headers: { Upload-Offset: { schema: { type: integer, format: int64 } } }, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '412': { description: Unsupported TUS version., headers: { Tus-Version: { schema: { type: string, example: '1.0.0' } } } }
+      '413': { description: Upload exceeds available capacity., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+  delete:
+    operationId: terminateOrganizationTusUpload
+    tags: [Organization]
+    summary: Terminate a TUS upload
+    description: Deletes the upload session and temporary state. The upload must belong to the authenticated user.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    parameters:
+      - { name: Tus-Resumable, in: header, schema: { type: string, enum: ['1.0.0'] } }
+    responses:
+      '204': { description: Upload terminated. }
+      '400': { description: Invalid upload ID., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '404': { description: Upload not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '412': { description: Unsupported TUS version., headers: { Tus-Version: { schema: { type: string, example: '1.0.0' } } } }
+
+/api/v1/drive/organization/multipart-intent:
+  post:
+    operationId: createOrganizationMultipartIntent
+    tags: [Organization]
+    summary: Create an organization multipart upload intent
+    description: Selects server upload or multipart storage placement from the requested file size and available node placement.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/OrganizationMultipartIntentRequest' }
+          example: { filename: database-backup.tar, size: 734003200, parent_id: null, unique_name: true }
+    responses:
+      '200': { description: Upload placement and planned parts., content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationMultipartIntentResponse' } } }}
+      '400': { description: Invalid request, filename, or size., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '413': { description: Storage capacity is insufficient., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '503': { description: Storage unavailable., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+
+/api/v1/drive/organization/multipart/{id}:
+  parameters:
+    - { name: id, in: path, required: true, description: Multipart upload session ID., schema: { type: string }, example: 01JGF83D0V2AKVGWN8W7NB9S43 }
+  get:
+    operationId: getOrganizationMultipartState
+    tags: [Organization]
+    summary: Get multipart upload state
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200': { description: Multipart session snapshot., content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationMultipartState' } } }}
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '404': { description: Session not found or not owned by current user., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '500': { description: Internal server error., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+  delete:
+    operationId: abortOrganizationMultipartUpload
+    tags: [Organization]
+    summary: Abort a multipart upload
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '204': { description: Upload session aborted. }
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '404': { description: Session not found or not owned by current user., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '409': { description: Multipart upload is already complete., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '500': { description: Multipart upload could not be aborted., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+
+/api/v1/drive/organization/multipart/{id}/parts/urls:
+  parameters:
+    - { name: id, in: path, required: true, description: Multipart upload session ID., schema: { type: string } }
+  post:
+    operationId: createOrganizationMultipartPartURLs
+    tags: [Organization]
+    summary: Create multipart part upload URLs
+    description: Creates presigned URLs for requested parts; empty `part_numbers` requests all non-completed parts.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/OrganizationMultipartPartURLsRequest' }
+          example: { part_numbers: [1, 2] }
+    responses:
+      '200': { description: Part upload URLs., content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationMultipartPartURLsResponse' } } }}
+      '400': { description: Invalid part numbers or request., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '404': { description: Session not found or not owned by current user., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '410': { description: Multipart session expired., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '409': { description: Session is completed or unrecoverable., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+
+/api/v1/drive/organization/multipart/{id}/parts:
+  parameters:
+    - { name: id, in: path, required: true, description: Multipart upload session ID., schema: { type: string } }
+  put:
+    operationId: checkpointOrganizationMultipartParts
+    tags: [Organization]
+    summary: Checkpoint multipart part states
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/OrganizationMultipartCheckpointRequest' }
+          example: { parts: [{ part_number: 1, etag: '"9b2cf535f27731c974343645a3985328"', size_bytes: 16777216, status: completed }] }
+    responses:
+      '204': { description: Part states saved. }
+      '400': { description: Invalid request or part update., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '404': { description: Session not found or not owned by current user., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '410': { description: Multipart session expired., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '409': { description: Session is completed or unrecoverable., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+
+/api/v1/drive/organization/multipart/{id}/complete:
+  parameters:
+    - { name: id, in: path, required: true, description: Multipart upload session ID., schema: { type: string } }
+  post:
+    operationId: completeOrganizationMultipartUpload
+    tags: [Organization]
+    summary: Complete a multipart upload
+    description: Reconciles and assembles uploaded parts and creates the organization drive item.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '201': { description: Upload completed., content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationItem' } } }}
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '404': { description: Session not found or not owned by current user., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '409': { description: Parts are incomplete, session is complete, or upload is unrecoverable., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '410': { description: Multipart session expired., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '413': { description: Storage capacity is insufficient., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+
+/api/v1/drive/organization/{id}/download:
+  parameters:
+    - { name: id, in: path, required: true, description: Organization item ID., schema: { type: string }, example: 01JGF7Y8M0D6RH4M2N8K3VQZ1A }
+  get:
+    operationId: downloadOrganizationItem
+    tags: [Organization]
+    summary: Download an organization item
+    description: Streams a file or a folder as a ZIP. File-serving may support byte ranges and inline previews.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200':
+        description: File bytes or ZIP archive stream.
+        headers:
+          Content-Disposition: { schema: { type: string, example: 'attachment; filename="Annual report.pdf"' } }
+        content:
+          application/octet-stream: { schema: { type: string, format: binary } }
+          application/zip: { schema: { type: string, format: binary } }
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '404': { description: Item not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '503': { description: Storage unavailable., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+  head:
+    operationId: getOrganizationItemDownloadHeaders
+    tags: [Organization]
+    summary: Get download headers without the response body
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200':
+        description: Download response headers.
+        headers:
+          Content-Type: { schema: { type: string, example: application/octet-stream } }
+          Content-Disposition: { schema: { type: string, example: 'attachment; filename="Annual report.pdf"' } }
+          Content-Length: { schema: { type: integer, format: int64, example: 204800 } }
+          Accept-Ranges: { schema: { type: string, example: bytes } }
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '404': { description: Item not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '503': { description: Storage unavailable., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+
+/api/v1/drive/organization/batch/download-zip:
+  post:
+    operationId: downloadOrganizationBatchZip
+    tags: [Organization]
+    summary: Download selected items as a ZIP
+    description: Streams selected items as a ZIP archive. Accepts JSON or form-encoded `ids`.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/OrganizationBatchDownloadRequest' }
+          example: { ids: [01JGF7Y8M0D6RH4M2N8K3VQZ1A] }
+        application/x-www-form-urlencoded:
+          schema: { type: object, required: [ids], properties: { ids: { type: array, items: { type: string } } } }
+    responses:
+      '200':
+        description: ZIP stream.
+        headers:
+          Content-Disposition: { schema: { type: string, example: 'attachment; filename="cubycloud-archive.zip"' } }
+        content:
+          application/zip: { schema: { type: string, format: binary } }
+      '400': { description: Request invalid or no IDs supplied., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '404': { description: Item not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '503': { description: Storage unavailable., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+
+/api/v1/drive/organization/batch/compress-zip:
+  post:
+    operationId: enqueueOrganizationZipCompression
+    tags: [Organization]
+    summary: Enqueue organization ZIP compression
+    description: Creates a background job to compress selected organization items into a ZIP archive.
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/OrganizationCompressZipRequest' }
+          example: { ids: [01JGF7Y8M0D6RH4M2N8K3VQZ1A], parent_id: null, name: quarterly-archive.zip }
+    responses:
+      '202': { description: Job accepted., content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationCompressJobAccepted' }, example: { job_id: 01JGF83D0V2AKVGWN8W7NB9S43, status: PENDING } } }}
+      '400': { description: Request invalid or no IDs supplied., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '500': { description: Job could not be queued., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+
+/api/v1/drive/organization/{id}:
+  parameters:
+    - { name: id, in: path, required: true, description: Organization item ID., schema: { type: string } }
+  patch:
+    operationId: updateOrganizationItem
+    tags: [Organization]
+    summary: Rename or update an organization item
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/OrganizationRenameRequest' }
+          example: { name: Annual report 2026.pdf }
+    responses:
+      '200': { description: Item updated., content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationItem' } } }}
+      '400': { description: Invalid request, name, or parent., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '404': { description: Item not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '409': { description: Name conflict., content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationNameConflict' } } }}
+      '413': { description: Request body exceeds 64 KiB., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '500': { description: Internal server error., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+  delete:
+    operationId: deleteOrganizationItem
+    tags: [Organization]
+    summary: Delete an organization item
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '204': { description: Item deleted. }
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '404': { description: Item not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '500': { description: Internal server error., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+
+/api/v1/drive/organization/{id}/duplicate:
+  parameters:
+    - { name: id, in: path, required: true, description: Organization item ID., schema: { type: string } }
+  post:
+    operationId: duplicateOrganizationItem
+    tags: [Organization]
+    summary: Duplicate an organization item
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '201': { description: Duplicate created., content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationItem' } } }}
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '404': { description: Item not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '409': { description: Name conflict., content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationNameConflict' } } }}
+      '413': { description: Storage capacity is insufficient., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '503': { description: Storage unavailable., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+
+/api/v1/drive/organization/items/{id}:
+  parameters:
+    - { name: id, in: path, required: true, description: Organization item ID., schema: { type: string } }
+  get:
+    operationId: getOrganizationItem
+    tags: [Organization]
+    summary: Get an organization item
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200': { description: Item details., content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationItem' } } }}
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '404': { description: Item not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '500': { description: Internal server error., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+
+/api/v1/drive/organization/items/{id}/move:
+  parameters:
+    - { name: id, in: path, required: true, description: Organization item ID., schema: { type: string } }
+  patch:
+    operationId: moveOrganizationItem
+    tags: [Organization]
+    summary: Move an organization item
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/OrganizationMoveRequest' }
+          example: { target_parent_id: 01JGF7XQ8WJ6QW0GMRR4RXM2HZ }
+    responses:
+      '200': { description: Item moved., content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationItem' } } }}
+      '400': { description: Invalid destination or circular move., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '404': { description: Item or destination folder not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '409': { description: Name conflict in destination folder., content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationNameConflict' } } }}
+      '500': { description: Internal server error., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+
+/api/v1/drive/organization/items/{id}/star:
+  parameters:
+    - { name: id, in: path, required: true, description: Organization item ID., schema: { type: string } }
+  post:
+    operationId: toggleOrganizationItemStar
+    tags: [Organization]
+    summary: Toggle the authenticated user's star state
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200': { description: Updated star state., content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationStarResponse' }, example: { id: 01JGF7Y8M0D6RH4M2N8K3VQZ1A, is_starred: true } } }}
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '404': { description: Item not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '500': { description: Internal server error., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+  put:
+    operationId: toggleOrganizationItemStarPut
+    tags: [Organization]
+    summary: Toggle the authenticated user's star state (PUT alias)
+    security:
+      - CookieAuth: []
+      - BearerAuth: []
+    responses:
+      '200': { description: Updated star state., content: { application/json: { schema: { $ref: '#/components/schemas/OrganizationStarResponse' } } }}
+      '401': { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '404': { description: Item not found., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}
+      '500': { description: Internal server error., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}

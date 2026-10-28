@@ -31,7 +31,20 @@ type StorageNodeResponse struct {
 	FreeGB        int64  `json:"free_gb"`
 	CapacityCapGB int64  `json:"capacity_cap_gb"`
 	UsedBytes     int64  `json:"used_bytes"`
-	Enabled       bool   `json:"enabled"`
+	Enabled          bool   `json:"enabled"`
+	SafeToDisconnect bool   `json:"safe_to_disconnect"`
+	MigrationStatus  string `json:"migration_status,omitempty"`
+	MigrationJobID   string `json:"migration_job_id,omitempty"`
+}
+
+type DetachNodeRequest struct {
+	TargetNodeID string `json:"target_node_id,omitempty"`
+}
+
+type DetachNodeResponse struct {
+	Message          string  `json:"message"`
+	JobID            *string `json:"job_id,omitempty"`
+	SafeToDisconnect bool    `json:"safe_to_disconnect"`
 }
 type StorageNodesListResponse struct {
 	Nodes []StorageNodeResponse `json:"nodes"`
@@ -69,16 +82,23 @@ type UpdateNodeRequest struct {
 }
 
 type AdminUserResponse struct {
-	ID         string    `json:"id"`
-	Username   string    `json:"username"`
-	Email      string    `json:"email"`
-	Role       string    `json:"role"`
-	QuotaMode  string    `json:"quota_mode"`
-	QuotaBytes int64     `json:"quota_bytes"`
-	QuotaGB    *float64  `json:"quota_gb,omitempty"`
-	UsedBytes  int64     `json:"used_bytes"`
-	UsedGB     float64   `json:"used_gb"`
-	CreatedAt  string    `json:"created_at"`
+	Status          string   `json:"status"`
+	ID              string   `json:"id"`
+	Username        string   `json:"username"`
+	Email           string   `json:"email"`
+	Role            string   `json:"role"`
+	QuotaMode       string   `json:"quota_mode"`
+	QuotaBytes      int64    `json:"quota_bytes"`
+	QuotaGB         *float64 `json:"quota_gb,omitempty"`
+	UsedBytes       int64    `json:"used_bytes"`
+	UsedGB          float64  `json:"used_gb"`
+	CreatedAt       string   `json:"created_at"`
+	InvitationToken string   `json:"invitation_token,omitempty"`
+	InvitationURL   string   `json:"invitation_url,omitempty"`
+	ResetToken      string   `json:"reset_token,omitempty"`
+	ResetURL        string   `json:"reset_url,omitempty"`
+	ExpiresAt       string   `json:"expires_at,omitempty"`
+	Message         string   `json:"message,omitempty"`
 }
 
 type AdminUsersListResponse struct {
@@ -88,7 +108,7 @@ type AdminUsersListResponse struct {
 type CreateUserRequest struct {
 	Username  string   `json:"username"`
 	Email     string   `json:"email"`
-	Password  string   `json:"password"`
+	Password  string   `json:"password,omitempty"`
 	QuotaMode string   `json:"quota_mode"`
 	QuotaGB   *float64 `json:"quota_gb,omitempty"`
 }

@@ -3,6 +3,9 @@
 	import { getSetupStatus } from '$lib/api/setup';
 	import SetupWizard from '$lib/components/setup/setup-wizard.svelte';
 	import ErrorPage from '$lib/components/error/error-page.svelte';
+	import { locale } from '$lib/locale.svelte.js';
+
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	let checking = $state(true);
 	let isCompleted = $state(false);
@@ -20,8 +23,11 @@
 </script>
 
 <svelte:head>
-	<title>CubyCloud — Setup</title>
-	<meta name="description" content="Wizard konfigurasi awal CubyCloud." />
+	<title>CubyCloud — {tx('Penyiapan', 'Setup')}</title>
+	<meta
+		name="description"
+		content={tx('Wizard konfigurasi awal CubyCloud.', 'CubyCloud initial configuration wizard.')}
+	/>
 </svelte:head>
 
 {#if !checking}
@@ -29,7 +35,10 @@
 		<ErrorPage
 			showHeader={false}
 			status={403}
-			message="Setup awal telah selesai. Halaman setup tidak dapat diakses kembali."
+			message={tx(
+				'Setup awal telah selesai. Halaman setup tidak dapat diakses kembali.',
+				'Initial setup is complete. This setup page can no longer be accessed.'
+			)}
 		/>
 	{:else}
 		<SetupWizard />

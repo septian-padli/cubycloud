@@ -1,11 +1,13 @@
 <script lang="ts">
+	import { locale } from '$lib/locale.svelte.js';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import type { SharedFileItem } from '$lib/types/drive.js';
+	import type { FileEntry, SharedFileItem } from '$lib/types/drive.js';
 	import { formatSize } from '$lib/mocks/file-tree.js';
 	import { driveView } from '$lib/drive-view.svelte.js';
+	import { getDriveChrome } from '$lib/drive-context.svelte.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import * as ContextMenu from '$lib/components/ui/context-menu/index.js';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
@@ -45,12 +47,15 @@
 		type SharedItem,
 		detectFileKind
 	} from '$lib/api/share.js';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	let {
 		initialItems
 	}: {
 		initialItems?: SharedFileItem[];
 	} = $props();
+
+	const chrome = getDriveChrome();
 
 	let items = $state<SharedFileItem[]>([]);
 	let loading = $state(true);
@@ -74,9 +79,7 @@
 	let fileInput = $state<HTMLInputElement | null>(null);
 
 	const previewId = $derived(page.url.searchParams.get('preview'));
-	const previewEntry = $derived(
-		previewId ? (items.find((e) => e.id === previewId) ?? null) : null
-	);
+	const previewEntry = $derived(previewId ? (items.find((e) => e.id === previewId) ?? null) : null);
 	const previewOpen = $derived(!!previewEntry);
 
 	function toSharedFileItem(it: SharedItem): SharedFileItem {
@@ -93,6 +96,7 @@
 	}
 
 	async function loadRoot() {
+		chrome.setSharedUploadContext(null, null);
 		loading = true;
 		try {
 			const res = await getSharedWithMe();
@@ -101,7 +105,11 @@
 			folderPermission = 'viewer';
 			currentFolderName = '';
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Gagal memuat berkas dibagikan');
+			toast.error(
+				err instanceof Error
+					? err.message
+					: tx('Gagal memuat berkas dibagikan', 'Failed to load shared files')
+			);
 		} finally {
 			loading = false;
 		}
@@ -109,29 +117,62 @@
 
 	async function loadFolder(folderId: string) {
 		loading = true;
+		chrome.setSharedUploadContext(folderId, null);
 		try {
 			const res = await getSharedFolder(folderId);
 			items = (res.items ?? []).map(toSharedFileItem);
 			breadcrumbs = res.breadcrumbs ?? [];
 			folderPermission = res.permission;
 			currentFolderName = breadcrumbs[breadcrumbs.length - 1]?.name || 'Folder';
+			chrome.setSharedUploadContext(folderId, res.permission);
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Gagal memuat folder bersama');
+			toast.error(
+				err instanceof Error
+					? err.message
+					: tx('Gagal memuat folder bersama', 'Failed to load shared folder')
+			);
 			activeFolderId = null;
 			await loadRoot();
+			chrome.setSharedUploadContext(null, null);
 		} finally {
 			loading = false;
 		}
 	}
 
+	onDestroy(() => {
+		chrome.setSharedUploadContext(null, null);
+		chrome.registerStorageChangeHandler?.(null);
+	});
+
 	onMount(() => {
-		if (initialItems && initialItems.length > 0) {
+		chrome.registerStorageChangeHandler?.(() => {
+			if (activeFolderId) void loadFolder(activeFolderId);
+		});
+		const folderId = page.url.searchParams.get('folder');
+		if (folderId) {
+			activeFolderId = folderId;
+			void loadFolder(folderId);
+		} else if (initialItems && initialItems.length > 0) {
 			items = initialItems;
 			loading = false;
+			chrome.setSharedUploadContext(null, null);
 		} else {
 			void loadRoot();
 		}
 	});
+
+	function syncFolder(id: string | null) {
+		const params = new URLSearchParams(page.url.searchParams);
+		if (id) params.set('folder', id);
+		else params.delete('folder');
+		params.delete('preview');
+		const qs = params.toString();
+		void goto(`${page.url.pathname}${qs ? `?${qs}` : ''}`, {
+			replaceState: true,
+			keepFocus: true,
+			noScroll: true
+		});
+	}
 
 	function syncPreview(id: string | null) {
 		const params = new URLSearchParams(page.url.searchParams);
@@ -148,6 +189,7 @@
 	function onOpen(entry: SharedFileItem) {
 		if (entry.kind === 'folder') {
 			activeFolderId = entry.id;
+			syncFolder(entry.id);
 			void loadFolder(entry.id);
 			return;
 		}
@@ -157,9 +199,11 @@
 	function navigateBreadcrumb(id: string | null) {
 		if (id === null) {
 			activeFolderId = null;
+			syncFolder(null);
 			void loadRoot();
 		} else {
 			activeFolderId = id;
+			syncFolder(id);
 			void loadFolder(id);
 		}
 	}
@@ -193,12 +237,22 @@
 				await uploadSharedFile(activeFolderId, files[i]);
 				successCount++;
 			} catch (err) {
-				toast.error(`Gagal mengunggah ${files[i].name}: ${err instanceof Error ? err.message : ''}`);
+				toast.error(
+					tx(
+						`Gagal mengunggah ${files[i].name}: ${err instanceof Error ? err.message : ''}`,
+						`Failed to upload ${files[i].name}: ${err instanceof Error ? err.message : ''}`
+					)
+				);
 			}
 		}
 		uploading = false;
 		if (successCount > 0) {
-			toast.success(`${successCount} berkas berhasil diunggah`);
+			toast.success(
+				tx(
+					`${successCount} berkas berhasil diunggah`,
+					`${successCount} files uploaded successfully`
+				)
+			);
 			void loadFolder(activeFolderId);
 		}
 		if (fileInput) fileInput.value = '';
@@ -208,12 +262,16 @@
 		if (!newFolderName.trim() || !activeFolderId) return;
 		try {
 			await createSharedFolder(activeFolderId, newFolderName.trim());
-			toast.success(`Folder “${newFolderName.trim()}” dibuat`);
+			toast.success(
+				tx(`Folder “${newFolderName.trim()}” dibuat`, `Folder “${newFolderName.trim()}” created`)
+			);
 			isCreateFolderOpen = false;
 			newFolderName = '';
 			void loadFolder(activeFolderId);
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Gagal membuat folder');
+			toast.error(
+				err instanceof Error ? err.message : tx('Gagal membuat folder', 'Failed to create folder')
+			);
 		}
 	}
 
@@ -221,14 +279,16 @@
 		if (!renameTarget || !renameNewName.trim()) return;
 		try {
 			await renameSharedItem(renameTarget.id, renameNewName.trim());
-			toast.success('Nama berhasil diubah');
+			toast.success(tx('Nama berhasil diubah', 'Name updated'));
 			isRenameOpen = false;
 			renameTarget = null;
 			renameNewName = '';
 			if (activeFolderId) void loadFolder(activeFolderId);
 			else void loadRoot();
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Gagal mengubah nama');
+			toast.error(
+				err instanceof Error ? err.message : tx('Gagal mengubah nama', 'Failed to rename')
+			);
 		}
 	}
 
@@ -236,13 +296,15 @@
 		if (!deleteTarget) return;
 		try {
 			await deleteSharedItem(deleteTarget.id);
-			toast.success(`“${deleteTarget.name}” berhasil dihapus`);
+			toast.success(
+				tx(`“${deleteTarget.name}” berhasil dihapus`, `“${deleteTarget.name}” deleted successfully`)
+			);
 			isDeleteConfirmOpen = false;
 			deleteTarget = null;
 			if (activeFolderId) void loadFolder(activeFolderId);
 			else void loadRoot();
 		} catch (err) {
-			toast.error(err instanceof Error ? err.message : 'Gagal menghapus');
+			toast.error(err instanceof Error ? err.message : tx('Gagal menghapus', 'Failed to delete'));
 		}
 	}
 
@@ -252,14 +314,16 @@
 
 <div class="flex flex-col gap-4">
 	{#if isInsideFolder}
-		<div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-subtle bg-surface px-4 py-3">
+		<div
+			class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-subtle bg-surface px-4 py-3"
+		>
 			<div class="flex items-center gap-2 overflow-x-auto text-sm">
 				<button
 					type="button"
 					class="font-medium text-muted transition-colors hover:text-main"
 					onclick={() => navigateBreadcrumb(null)}
 				>
-					Dibagikan pada saya
+					{tx('Dibagikan pada saya', 'Shared with me')}
 				</button>
 				{#each breadcrumbs as crumb, i (crumb.id)}
 					<span class="text-muted">/</span>
@@ -295,7 +359,7 @@
 						onclick={() => (isCreateFolderOpen = true)}
 					>
 						<FolderPlus class="size-4 stroke-2" />
-						Folder baru
+						{tx('Folder baru', 'New folder')}
 					</Button>
 					<Button
 						type="button"
@@ -309,7 +373,7 @@
 						{:else}
 							<Upload class="size-4 stroke-2" />
 						{/if}
-						Unggah
+						{tx('Unggah', 'Upload')}
 					</Button>
 				{/if}
 				<Button
@@ -317,10 +381,11 @@
 					variant="ghost"
 					size="sm"
 					class="gap-1.5 text-muted hover:text-main"
-					onclick={() => activeFolderId && downloadSharedFolderZip(activeFolderId, currentFolderName)}
+					onclick={() =>
+						activeFolderId && downloadSharedFolderZip(activeFolderId, currentFolderName)}
 				>
 					<Archive class="size-4 stroke-2" />
-					Unduh ZIP
+					{tx('Unduh ZIP', 'Download ZIP')}
 				</Button>
 			</div>
 		</div>
@@ -329,21 +394,31 @@
 	{#if loading}
 		<div class="flex items-center justify-center p-12 text-muted">
 			<Loader2 class="mr-2 size-5 animate-spin text-primary" />
-			<span class="text-sm font-medium">Memuat berkas bersama...</span>
+			<span class="text-sm font-medium"
+				>{tx('Memuat berkas bersama...', 'Loading shared files...')}</span
+			>
 		</div>
 	{:else if items.length === 0}
 		<div class="overflow-hidden rounded-xl border border-subtle bg-surface px-4 py-12 text-center">
 			<p class="text-sm font-medium text-main">
-				{isInsideFolder ? 'Folder ini kosong' : 'Belum ada berkas dibagikan'}
+				{isInsideFolder
+					? tx('Folder ini kosong', 'This folder is empty')
+					: tx('Belum ada berkas dibagikan', 'No shared files yet')}
 			</p>
 			<p class="mt-1 text-xs text-muted">
 				{isInsideFolder
-					? 'Gunakan tombol Unggah atau Folder baru untuk menambahkan konten.'
-					: 'Berkas atau folder yang dibagikan pengguna lain ke Anda akan muncul di sini.'}
+					? tx(
+							'Gunakan tombol Unggah atau Folder baru untuk menambahkan konten.',
+							'Use Upload or New folder to add content.'
+						)
+					: tx(
+							'Berkas atau folder yang dibagikan pengguna lain ke Anda akan muncul di sini.',
+							'Files and folders shared with you by other users will appear here.'
+						)}
 			</p>
 		</div>
 	{:else if driveView.mode === 'grid'}
-		<DriveFileGrid label="Berkas dibagikan">
+		<DriveFileGrid label={tx('Berkas dibagikan', 'Shared files')}>
 			{#each items as entry (entry.id)}
 				{@const isFolder = entry.kind === 'folder'}
 				{@const canEditItem = isInsideFolder && folderPermission === 'editor'}
@@ -353,8 +428,11 @@
 							kind={entry.kind}
 							name={entry.name}
 							subtitle={isFolder
-								? `Folder · Dari ${entry.ownerName}`
-								: `${formatSize(entry.sizeBytes)} · Dari ${entry.ownerName}`}
+								? tx(`Folder · Dari ${entry.ownerName}`, `Folder · From ${entry.ownerName}`)
+								: tx(
+										`${formatSize(entry.sizeBytes)} · Dari ${entry.ownerName}`,
+										`${formatSize(entry.sizeBytes)} · From ${entry.ownerName}`
+									)}
 							previewUrl={!isFolder ? previewUrl('shared', entry.id) : undefined}
 							selected={selectedId === entry.id}
 							onSelect={() => (selectedId = entry.id)}
@@ -373,28 +451,28 @@
 												variant="ghost"
 												size="icon"
 												class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
-												aria-label="Aksi berkas"
+												aria-label={tx('Aksi berkas', 'File actions')}
 												onclick={(e: MouseEvent) => e.stopPropagation()}
 											>
 												<MoreVertical class="size-4 stroke-2" />
 											</Button>
 										{/snippet}
 									</DropdownMenu.Trigger>
-									<DropdownMenu.Content align="end" class="min-w-48 bg-surface border-subtle">
+									<DropdownMenu.Content align="end" class="min-w-48 border-subtle bg-surface">
 										{#if isFolder}
 											<DropdownMenu.Item class="gap-2" onclick={() => onOpen(entry)}>
 												<FolderOpen class="size-4 stroke-2" />
-												Buka folder
+												{tx('Buka folder', 'Open folder')}
 											</DropdownMenu.Item>
 										{:else}
 											<DropdownMenu.Item class="gap-2" onclick={() => onOpen(entry)}>
 												<Eye class="size-4 stroke-2" />
-												Pratinjau
+												{tx('Pratinjau', 'Preview')}
 											</DropdownMenu.Item>
 										{/if}
 										<DropdownMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 											<Download class="size-4 stroke-2" />
-											Unduh
+											{tx('Unduh', 'Download')}
 										</DropdownMenu.Item>
 										<DropdownMenu.Item
 											class="gap-2"
@@ -404,13 +482,13 @@
 											}}
 										>
 											<Info class="size-4 stroke-2" />
-											Detail berbagi
+											{tx('Detail berbagi', 'Sharing details')}
 										</DropdownMenu.Item>
 										{#if canEditItem}
 											<DropdownMenu.Separator />
 											<DropdownMenu.Item class="gap-2" onclick={() => openRenameDialog(entry)}>
 												<Pencil class="size-4 stroke-2" />
-												Ubah nama
+												{tx('Ubah nama', 'Rename')}
 											</DropdownMenu.Item>
 											<DropdownMenu.Item
 												variant="destructive"
@@ -418,7 +496,7 @@
 												onclick={() => openDeleteDialog(entry)}
 											>
 												<Trash2 class="size-4 stroke-2" />
-												Hapus
+												{tx('Hapus', 'Delete')}
 											</DropdownMenu.Item>
 										{/if}
 									</DropdownMenu.Content>
@@ -426,21 +504,21 @@
 							{/snippet}
 						</FileGridCard>
 					</ContextMenu.Trigger>
-					<ContextMenu.Content class="min-w-48 bg-surface border-subtle">
+					<ContextMenu.Content class="min-w-48 border-subtle bg-surface">
 						{#if isFolder}
 							<ContextMenu.Item class="gap-2" onclick={() => onOpen(entry)}>
 								<FolderOpen class="size-4 stroke-2" />
-								Buka folder
+								{tx('Buka folder', 'Open folder')}
 							</ContextMenu.Item>
 						{:else}
 							<ContextMenu.Item class="gap-2" onclick={() => onOpen(entry)}>
 								<Eye class="size-4 stroke-2" />
-								Pratinjau
+								{tx('Pratinjau', 'Preview')}
 							</ContextMenu.Item>
 						{/if}
 						<ContextMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 							<Download class="size-4 stroke-2" />
-							Unduh
+							{tx('Unduh', 'Download')}
 						</ContextMenu.Item>
 						<ContextMenu.Item
 							class="gap-2"
@@ -450,13 +528,13 @@
 							}}
 						>
 							<Info class="size-4 stroke-2" />
-							Detail berbagi
+							{tx('Detail berbagi', 'Sharing details')}
 						</ContextMenu.Item>
 						{#if canEditItem}
 							<ContextMenu.Separator />
 							<ContextMenu.Item class="gap-2" onclick={() => openRenameDialog(entry)}>
 								<Pencil class="size-4 stroke-2" />
-								Ubah nama
+								{tx('Ubah nama', 'Rename')}
 							</ContextMenu.Item>
 							<ContextMenu.Item
 								variant="destructive"
@@ -464,7 +542,7 @@
 								onclick={() => openDeleteDialog(entry)}
 							>
 								<Trash2 class="size-4 stroke-2" />
-								Hapus
+								{tx('Hapus', 'Delete')}
 							</ContextMenu.Item>
 						{/if}
 					</ContextMenu.Content>
@@ -475,7 +553,7 @@
 		<div
 			class="overflow-hidden rounded-xl border border-subtle bg-surface"
 			role="listbox"
-			aria-label="Berkas dibagikan"
+			aria-label={tx('Berkas dibagikan', 'Shared files')}
 		>
 			{#each items as entry (entry.id)}
 				<SharedFileRow
@@ -483,8 +561,8 @@
 					selected={selectedId === entry.id}
 					canEdit={canEditInFolder}
 					onSelect={(e) => (selectedId = e.id)}
-					onOpen={onOpen}
-					onDownload={onDownload}
+					{onOpen}
+					{onDownload}
 					onDetails={(e) => {
 						actionEntry = e;
 						detailsOpen = true;
@@ -505,43 +583,55 @@
 	open={previewOpen}
 	entry={previewEntry}
 	source="shared"
-	onDownload={(e) => onDownload(e as SharedFileItem)}
+	onDownload={(e: FileEntry) => onDownload(e as SharedFileItem)}
 	onClose={() => syncPreview(null)}
 />
 
 <!-- Create Folder Dialog -->
 <Dialog.Root bind:open={isCreateFolderOpen}>
-	<Dialog.Content class="bg-surface text-main border-subtle">
+	<Dialog.Content class="border-subtle bg-surface text-main">
 		<Dialog.Header>
-			<Dialog.Title>Folder Baru</Dialog.Title>
-			<Dialog.Description>Buat folder baru di dalam folder bersama ini.</Dialog.Description>
+			<Dialog.Title>{tx('Folder Baru', 'New folder')}</Dialog.Title>
+			<Dialog.Description
+				>{tx(
+					'Buat folder baru di dalam folder bersama ini.',
+					'Create a new folder in this shared folder.'
+				)}</Dialog.Description
+			>
 		</Dialog.Header>
 		<div class="grid gap-2 py-2">
-			<Label for="shared-folder-name">Nama Folder</Label>
+			<Label for="shared-folder-name">{tx('Nama Folder', 'Folder name')}</Label>
 			<Input
 				id="shared-folder-name"
 				bind:value={newFolderName}
-				placeholder="Folder baru"
+				placeholder={tx('Folder baru', 'New folder')}
 				autocomplete="off"
 				onkeydown={(e) => e.key === 'Enter' && handleCreateFolder()}
 			/>
 		</div>
 		<Dialog.Footer>
-			<Button variant="secondary" onclick={() => (isCreateFolderOpen = false)}>Batal</Button>
-			<Button onclick={handleCreateFolder}>Buat</Button>
+			<Button variant="secondary" onclick={() => (isCreateFolderOpen = false)}
+				>{tx('Batal', 'Cancel')}</Button
+			>
+			<Button onclick={handleCreateFolder}>{tx('Buat', 'Create')}</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
 
 <!-- Rename Dialog -->
 <Dialog.Root bind:open={isRenameOpen}>
-	<Dialog.Content class="bg-surface text-main border-subtle">
+	<Dialog.Content class="border-subtle bg-surface text-main">
 		<Dialog.Header>
-			<Dialog.Title>Ubah Nama</Dialog.Title>
-			<Dialog.Description>Masukkan nama baru untuk berkas atau folder ini.</Dialog.Description>
+			<Dialog.Title>{tx('Ubah Nama', 'Rename')}</Dialog.Title>
+			<Dialog.Description
+				>{tx(
+					'Masukkan nama baru untuk berkas atau folder ini.',
+					'Enter a new name for this file or folder.'
+				)}</Dialog.Description
+			>
 		</Dialog.Header>
 		<div class="grid gap-2 py-2">
-			<Label for="shared-rename-name">Nama Baru</Label>
+			<Label for="shared-rename-name">{tx('Nama Baru', 'New name')}</Label>
 			<Input
 				id="shared-rename-name"
 				bind:value={renameNewName}
@@ -550,24 +640,31 @@
 			/>
 		</div>
 		<Dialog.Footer>
-			<Button variant="secondary" onclick={() => (isRenameOpen = false)}>Batal</Button>
-			<Button onclick={handleRename}>Simpan</Button>
+			<Button variant="secondary" onclick={() => (isRenameOpen = false)}
+				>{tx('Batal', 'Cancel')}</Button
+			>
+			<Button onclick={handleRename}>{tx('Simpan', 'Save')}</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
 
 <!-- Delete Dialog -->
 <Dialog.Root bind:open={isDeleteConfirmOpen}>
-	<Dialog.Content class="bg-surface text-main border-subtle">
+	<Dialog.Content class="border-subtle bg-surface text-main">
 		<Dialog.Header>
-			<Dialog.Title>Hapus Berkas / Folder</Dialog.Title>
+			<Dialog.Title>{tx('Hapus Berkas / Folder', 'Delete file / folder')}</Dialog.Title>
 			<Dialog.Description>
-				Apakah Anda yakin ingin menghapus “{deleteTarget?.name}”? Tindakan ini tidak dapat dibatalkan.
+				{tx(
+					`Apakah Anda yakin ingin menghapus “${deleteTarget?.name}”? Tindakan ini tidak dapat dibatalkan.`,
+					`Are you sure you want to delete “${deleteTarget?.name}”? This action cannot be undone.`
+				)}
 			</Dialog.Description>
 		</Dialog.Header>
 		<Dialog.Footer>
-			<Button variant="secondary" onclick={() => (isDeleteConfirmOpen = false)}>Batal</Button>
-			<Button variant="destructive" onclick={handleDelete}>Hapus</Button>
+			<Button variant="secondary" onclick={() => (isDeleteConfirmOpen = false)}
+				>{tx('Batal', 'Cancel')}</Button
+			>
+			<Button variant="destructive" onclick={handleDelete}>{tx('Hapus', 'Delete')}</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

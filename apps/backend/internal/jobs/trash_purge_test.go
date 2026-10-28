@@ -71,6 +71,9 @@ func (*mockStorageDriver) PresignUpload(context.Context, string, string, time.Du
 func (*mockStorageDriver) PresignDownload(context.Context, string, string, string, time.Duration) (string, error) {
 	return "", nil
 }
+func (*mockStorageDriver) ListObjects(context.Context, string, string) ([]string, error) {
+	return nil, nil
+}
 
 func TestTrashPurgeJobExpiredRetention(t *testing.T) {
 	dataDir := t.TempDir()
@@ -144,7 +147,7 @@ func TestTrashPurgeJobExpiredRetention(t *testing.T) {
 	// Verify old item was physically purged
 	foundOldKey := false
 	for _, k := range driver.deletedKeys {
-		if k == fOld.ID {
+		if k == fOld.ID || strings.HasSuffix(k, fOld.ID) {
 			foundOldKey = true
 		}
 	}
@@ -209,7 +212,7 @@ func TestCleanupExpiredPendingCloudUploads(t *testing.T) {
 	if expired != 0 || unexpired != 1 {
 		t.Fatalf("cleanup left expired=%d and unexpired=%d, want 0 and 1", expired, unexpired)
 	}
-	if len(driver.deletedKeys) != 2 || driver.deletedKeys[0] != "expired" || driver.deletedKeys[1] != "expired" {
+	if len(driver.deletedKeys) != 2 || !strings.HasSuffix(driver.deletedKeys[0], "expired") || !strings.HasSuffix(driver.deletedKeys[1], "expired") {
 		t.Fatalf("deleted objects = %v, want two retry attempts for expired", driver.deletedKeys)
 	}
 }
@@ -279,7 +282,7 @@ func TestTrashPurgeJobExpiredOrganizationAndMyStorage(t *testing.T) {
 	foundMyKey := false
 	foundOrgKey := false
 	for _, k := range driver.deletedKeys {
-		if k == fMy.ID {
+		if k == fMy.ID || strings.HasSuffix(k, fMy.ID) {
 			foundMyKey = true
 		}
 		if k == orgDiskKey {
@@ -306,5 +309,27 @@ func TestTrashPurgeJobExpiredOrganizationAndMyStorage(t *testing.T) {
 	}
 	if count != 0 {
 		t.Fatalf("expected organization item to be removed from DB")
+	}
+}
+
+func TestTrashPurgeRunner_CleanupExpiredTransferSessions(t *testing.T) {
+	dataDir := t.TempDir()
+	t.Setenv("TEMP_TUS_PATH", filepath.Join(dataDir, "temp", "tus"))
+	tusDir := filepath.Join(dataDir, "temp", "tus")
+	if err := os.MkdirAll(tusDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	staleFile := filepath.Join(tusDir, "01AN4Z07BY79KA1307SR9X4MV3.part")
+	if err := os.WriteFile(staleFile, []byte("stale-upload-bytes"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	staleTime := time.Now().Add(-25 * time.Hour)
+	_ = os.Chtimes(staleFile, staleTime, staleTime)
+
+	runner := &TrashPurgeRunner{}
+	runner.cleanupExpiredTransferSessions(context.Background())
+
+	if _, err := os.Stat(staleFile); !os.IsNotExist(err) {
+		t.Fatalf("expected stale TUS upload part file to be swept by background cleanup, but file still exists")
 	}
 }

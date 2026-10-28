@@ -1,9 +1,10 @@
 <script lang="ts">
+	import { locale } from '$lib/locale.svelte.js';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { toast } from 'svelte-sonner';
-	import type { LargestFileItem } from '$lib/types/drive.js';
+	import type { FileEntry, LargestFileItem } from '$lib/types/drive.js';
 	import { formatSize } from '$lib/mocks/file-tree.js';
 	import { driveView } from '$lib/drive-view.svelte.js';
 	import { myStorageAPI } from '$lib/api/my-storage.js';
@@ -17,6 +18,7 @@
 	import FileGridCard from './file-grid-card.svelte';
 	import DriveViewToggle from './drive-view-toggle.svelte';
 	import { Download, Eye, Loader2, MoreVertical, Sparkles, Trash2 } from '@lucide/svelte';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	let {
 		files: initialFiles,
@@ -53,7 +55,11 @@
 			hasMore = res.has_more;
 			nextOffset = res.next_offset;
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Gagal memuat berkas terbesar');
+			toast.error(
+				error instanceof Error
+					? error.message
+					: tx('Gagal memuat berkas terbesar', 'Failed to load largest files')
+			);
 		} finally {
 			loading = false;
 		}
@@ -69,7 +75,11 @@
 			hasMore = res.has_more;
 			nextOffset = res.next_offset;
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Gagal memuat halaman berikutnya');
+			toast.error(
+				error instanceof Error
+					? error.message
+					: tx('Gagal memuat halaman berikutnya', 'Failed to load the next page')
+			);
 		} finally {
 			loadingMore = false;
 		}
@@ -112,7 +122,7 @@
 		document.body.appendChild(link);
 		link.click();
 		link.remove();
-		toast.info(`Mengunduh “${entry.name}”`, {
+		toast.info(tx(`Mengunduh “${entry.name}”`, `Downloading “${entry.name}”`), {
 			description: formatSize(entry.sizeBytes)
 		});
 	}
@@ -120,7 +130,7 @@
 
 <section class="space-y-3">
 	<div class="flex flex-wrap items-center justify-between gap-2">
-		<h2 class="text-sm font-semibold text-main">Berkas terbesar</h2>
+		<h2 class="text-sm font-semibold text-main">{tx('Berkas terbesar', 'Largest files')}</h2>
 		<div class="flex flex-wrap items-center gap-2">
 			<Button
 				type="button"
@@ -129,11 +139,11 @@
 				onclick={() => (cleanupOpen = true)}
 			>
 				<Sparkles class="size-4 stroke-2" />
-				Saran Pembersihan
+				{tx('Saran Pembersihan', 'Cleanup suggestions')}
 			</Button>
 			<Button type="button" variant="secondary" class="gap-1.5" href="/drive/trash">
 				<Trash2 class="size-4 stroke-2" />
-				Kelola Sampah
+				{tx('Kelola Sampah', 'Manage Trash')}
 			</Button>
 			<DriveViewToggle />
 		</div>
@@ -145,7 +155,9 @@
 			data-testid="loading-largest-files"
 		>
 			<Loader2 class="size-6 animate-spin text-primary" />
-			<span class="ms-2 text-sm font-medium">Memuat berkas terbesar...</span>
+			<span class="ms-2 text-sm font-medium"
+				>{tx('Memuat berkas terbesar...', 'Loading largest files...')}</span
+			>
 		</div>
 	{:else if files.length === 0}
 		<Card.Root
@@ -153,19 +165,26 @@
 			data-testid="empty-largest-files"
 		>
 			<Card.Content class="p-8 text-center text-muted">
-				<p class="text-sm font-medium text-main">Tidak ada berkas di My Storage</p>
+				<p class="text-sm font-medium text-main">
+					{tx('Tidak ada berkas di My Storage', 'No files in My Storage')}
+				</p>
 				<p class="mt-1 text-xs text-muted">
-					Berkas yang Anda simpan di My Storage akan muncul di sini.
+					{tx(
+						'Berkas yang Anda simpan di My Storage akan muncul di sini.',
+						'Files you save in My Storage will appear here.'
+					)}
 				</p>
 			</Card.Content>
 		</Card.Root>
 	{:else if driveView.mode === 'grid'}
-		<DriveFileGrid label="Berkas terbesar">
+		<DriveFileGrid label={tx('Berkas terbesar', 'Largest files')}>
 			{#each files as entry (entry.id)}
 				<FileGridCard
 					kind={entry.kind}
 					name={entry.name}
-					subtitle="{formatSize(entry.sizeBytes)} · {entry.location} · {entry.modifiedAt}"
+					subtitle="{formatSize(entry.sizeBytes)} · {entry.location} · {locale.formatDate(
+						entry.modifiedAt
+					)}"
 					selected={selectedId === entry.id}
 					onSelect={() => (selectedId = entry.id)}
 					onOpen={() => syncPreview(entry.id)}
@@ -180,7 +199,7 @@
 										variant="ghost"
 										size="icon"
 										class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
-										aria-label="Aksi berkas"
+										aria-label={tx('Aksi berkas', 'File actions')}
 										onclick={(e: MouseEvent) => e.stopPropagation()}
 									>
 										<MoreVertical class="size-4 stroke-2" />
@@ -190,11 +209,11 @@
 							<DropdownMenu.Content align="end" class="min-w-40">
 								<DropdownMenu.Item class="gap-2" onclick={() => syncPreview(entry.id)}>
 									<Eye class="size-4 stroke-2" />
-									Pratinjau
+									{tx('Pratinjau', 'Preview')}
 								</DropdownMenu.Item>
 								<DropdownMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 									<Download class="size-4 stroke-2" />
-									Unduh
+									{tx('Unduh', 'Download')}
 								</DropdownMenu.Item>
 							</DropdownMenu.Content>
 						</DropdownMenu.Root>
@@ -204,7 +223,11 @@
 		</DriveFileGrid>
 	{:else}
 		<Card.Root class="rounded-xl border-subtle bg-surface py-0 shadow-none">
-			<Card.Content class="overflow-hidden p-0" role="listbox" aria-label="Berkas terbesar">
+			<Card.Content
+				class="overflow-hidden p-0"
+				role="listbox"
+				aria-label={tx('Berkas terbesar', 'Largest files')}
+			>
 				{#each files as entry (entry.id)}
 					<LargestFileRow
 						{entry}
@@ -227,7 +250,7 @@
 			{#if loadingMore}
 				<div class="flex items-center gap-2 text-xs text-muted">
 					<Loader2 class="size-4 animate-spin text-primary" />
-					<span>Memuat lebih banyak berkas...</span>
+					<span>{tx('Memuat lebih banyak berkas...', 'Loading more files...')}</span>
 				</div>
 			{:else}
 				<Button
@@ -237,7 +260,7 @@
 					class="text-xs text-muted hover:text-main"
 					onclick={() => void loadMore()}
 				>
-					Muat lebih banyak
+					{tx('Muat lebih banyak', 'Load more')}
 				</Button>
 			{/if}
 		</div>
@@ -253,7 +276,7 @@
 			}
 		: null}
 	source="my-storage"
-	onDownload={(e) => onDownload(e as unknown as LargestFileItem)}
+	onDownload={(e: FileEntry) => onDownload(e as unknown as LargestFileItem)}
 	onClose={() => syncPreview(null)}
 />
 <CleanupAdvisorDialog

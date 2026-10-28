@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { locale } from '$lib/locale.svelte.js';
 	import type { LargestFileItem } from '$lib/types/drive.js';
 	import { formatSize } from '$lib/mocks/file-tree.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
@@ -6,6 +7,7 @@
 	import { Download, Eye, MoreVertical } from '@lucide/svelte';
 	import DriveListRow from './drive-list-row.svelte';
 	import FileKindIcon from './explorer/file-kind-icon.svelte';
+	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
 
 	let {
 		entry,
@@ -29,7 +31,8 @@
 	{#snippet meta()}
 		<p class="truncate text-sm font-medium text-main">{entry.name}</p>
 		<p class="truncate text-xs text-muted">
-			{formatSize(entry.sizeBytes)} · Diubah {entry.modifiedAt} · {entry.location}
+			{formatSize(entry.sizeBytes)} · {tx('Diubah', 'Modified')}
+			{locale.formatDate(entry.modifiedAt)} · {entry.location}
 		</p>
 	{/snippet}
 	{#snippet trailing()}
@@ -49,7 +52,7 @@
 						variant="ghost"
 						size="icon"
 						class="bg-surface text-muted hover:bg-primary hover:text-white aria-expanded:bg-primary aria-expanded:text-white"
-						aria-label="Aksi berkas"
+						aria-label={tx('Aksi berkas', 'File actions')}
 						onclick={(e: MouseEvent) => e.stopPropagation()}
 					>
 						<MoreVertical class="size-4 stroke-2" />
@@ -59,11 +62,11 @@
 			<DropdownMenu.Content align="end" class="min-w-40">
 				<DropdownMenu.Item class="gap-2" onclick={() => onPreview(entry)}>
 					<Eye class="size-4 stroke-2" />
-					Pratinjau
+					{tx('Pratinjau', 'Preview')}
 				</DropdownMenu.Item>
 				<DropdownMenu.Item class="gap-2" onclick={() => onDownload(entry)}>
 					<Download class="size-4 stroke-2" />
-					Unduh
+					{tx('Unduh', 'Download')}
 				</DropdownMenu.Item>
 			</DropdownMenu.Content>
 		</DropdownMenu.Root>

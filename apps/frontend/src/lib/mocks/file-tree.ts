@@ -351,9 +351,9 @@ export function getFolderOptions(tree: FileEntry[]): FileEntry[] {
 export function formatSize(bytes: number): string {
 	if (bytes <= 0) return '—';
 	if (bytes < 1024) return `${bytes} B`;
-	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-	if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-	return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KiB`;
+	if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
+	return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GiB`;
 }
 
 export function cloneTree(tree: FileEntry[]): FileEntry[] {

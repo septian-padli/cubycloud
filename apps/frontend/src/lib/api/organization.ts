@@ -1,5 +1,7 @@
 import type { FileEntry } from '$lib/types/drive.js';
 import { downloadBatchZip } from '$lib/api/cloud-transfer.js';
+import { createResumableUploadDriver } from '$lib/api/resumable-upload.js';
+import { locale } from '$lib/locale.svelte.js';
 
 const base = '/api/v1/drive/organization';
 
@@ -12,6 +14,7 @@ export interface VFSNode {
 	modified_at: string;
 	is_starred?: boolean;
 	created_by?: string;
+	storage_available?: boolean;
 }
 
 export type StorageItem = VFSNode;
@@ -26,10 +29,30 @@ export interface FolderListing {
 }
 
 function storageErrorMessage(error: string, status?: number): string {
-	if (error === 'USER_QUOTA_EXCEEDED') return 'Kuota My Storage penuh. Hubungi admin.';
-	if (error === 'STORAGE_POOL_FULL') return 'Penyimpanan server penuh.';
-	if (error === 'name already in use') return 'Nama sudah digunakan di folder tujuan.';
-	return error || `HTTP ${status ?? 'error'}`;
+	if (error === 'USER_QUOTA_EXCEEDED') {
+		return locale.language === 'id'
+			? 'Kuota My Storage penuh. Hubungi admin.'
+			: 'My Storage quota is full. Contact an administrator.';
+	}
+	if (error === 'STORAGE_POOL_FULL') {
+		return locale.language === 'id' ? 'Penyimpanan server penuh.' : 'Server storage is full.';
+	}
+	if (error === 'name already in use') {
+		return locale.language === 'id'
+			? 'Nama sudah digunakan di folder tujuan.'
+			: 'That name is already in use in the destination folder.';
+	}
+	if (error === 'storage_unavailable' || error === 'STORAGE_UNAVAILABLE') {
+		return locale.language === 'id'
+			? 'Node penyimpanan sedang tidak tersedia. Coba lagi nanti.'
+			: 'The storage node is unavailable. Please try again later.';
+	}
+	if (error === 'NETWORK_ERROR') {
+		return locale.language === 'id' ? 'Kesalahan jaringan.' : 'Network error.';
+	}
+	return locale.language === 'id'
+		? `Permintaan Organization gagal (HTTP ${status ?? 'error'})`
+		: `Organization request failed (HTTP ${status ?? 'error'})`;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -52,7 +75,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 	return body as T;
 }
 
-export async function moveOrganizationItem(id: string, targetParentId: string | null): Promise<VFSNode> {
+export async function moveOrganizationItem(
+	id: string,
+	targetParentId: string | null
+): Promise<VFSNode> {
 	return request<VFSNode>(`/items/${encodeURIComponent(id)}/move`, {
 		method: 'PATCH',
 		headers: { 'Content-Type': 'application/json' },
@@ -60,11 +86,15 @@ export async function moveOrganizationItem(id: string, targetParentId: string | 
 	});
 }
 
-export async function toggleOrganizationStar(id: string): Promise<{ id: string; is_starred: boolean }> {
+export async function toggleOrganizationStar(
+	id: string
+): Promise<{ id: string; is_starred: boolean }> {
 	return request<{ id: string; is_starred: boolean }>(`/items/${encodeURIComponent(id)}/star`, {
 		method: 'POST'
 	});
 }
+
+const resumableUpload = createResumableUploadDriver(base, 'organization');
 
 export const organizationAPI = {
 	list(parentId: string | null): Promise<StorageListing> {
@@ -80,13 +110,22 @@ export const organizationAPI = {
 		return request('/folders', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ name, parent_id: parentId, ...(uniqueName ? { unique_name: true } : {}) })
+			body: JSON.stringify({
+				name,
+				parent_id: parentId,
+				...(uniqueName ? { unique_name: true } : {})
+			})
 		});
 	},
 	async findOrCreateFolder(
 		name: string,
 		parentId: string | null,
-		knownFolders?: Array<{ id: string; name: string; parent_id?: string | null; parentId?: string | null }>
+		knownFolders?: Array<{
+			id: string;
+			name: string;
+			parent_id?: string | null;
+			parentId?: string | null;
+		}>
 	): Promise<StorageItem> {
 		if (knownFolders) {
 			const targetParent = parentId ?? null;
@@ -178,7 +217,11 @@ export const organizationAPI = {
 				try {
 					resolve(JSON.parse(xhr.responseText) as StorageItem);
 				} catch {
-					reject(new Error('Respons upload tidak valid'));
+					reject(
+						new Error(
+							locale.language === 'id' ? 'Respons upload tidak valid.' : 'Invalid upload response.'
+						)
+					);
 				}
 			} else {
 				let body: { error?: string } = {};
@@ -187,18 +230,25 @@ export const organizationAPI = {
 				} catch {
 					/* response may be empty */
 				}
-				const err = new Error(storageErrorMessage(body.error ?? '', xhr.status)) as Error & { status?: number; code?: string };
+				const err = new Error(storageErrorMessage(body.error ?? '', xhr.status)) as Error & {
+					status?: number;
+					code?: string;
+				};
 				err.status = xhr.status;
 				err.code = body.error;
 				reject(err);
 			}
 		};
-		xhr.onerror = () => reject(new Error('Network error'));
+		xhr.onerror = () =>
+			reject(new Error(locale.language === 'id' ? 'Kesalahan jaringan.' : 'Network error.'));
 		const form = new FormData();
 		form.append('file', file, file.name);
 		xhr.send(form);
 		return promise;
 	},
+	uploadResumable: resumableUpload.driver,
+	cancelResumable: resumableUpload.cancel,
+
 	async download(id: string, name: string): Promise<void> {
 		const anchor = document.createElement('a');
 		anchor.href = `${base}/${encodeURIComponent(id)}/download`;
@@ -210,14 +260,37 @@ export const organizationAPI = {
 	downloadBatchZip(ids: string[], onError?: (message: string) => void): 'started' {
 		return downloadBatchZip(base, ids, onError);
 	},
+	async compressBatchZip(
+		ids: string[],
+		parentId?: string | null,
+		name?: string
+	): Promise<{ job_id: string; status: string }> {
+		return request<{ job_id: string; status: string }>('/batch/compress-zip', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				ids,
+				parent_id: parentId ?? null,
+				name: name ?? ''
+			})
+		});
+	},
 	toEntry(item: StorageItem): FileEntry {
 		const extension = item.name.split('.').pop()?.toLowerCase() ?? '';
-		const category: FileEntry['kind'] = item.kind === 'folder' ? 'folder'
-			: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'heic'].includes(extension) ? 'image'
-			: ['mp4', 'webm', 'mov', 'mkv'].includes(extension) ? 'video'
-			: ['mp3', 'wav', 'ogg', 'm4a'].includes(extension) ? 'audio'
-			: ['zip', 'rar', '7z', 'tar', 'gz'].includes(extension) ? 'archive'
-			: ['txt', 'csv', 'json', 'sql'].includes(extension) ? 'text' : 'document';
+		const category: FileEntry['kind'] =
+			item.kind === 'folder'
+				? 'folder'
+				: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'heic'].includes(extension)
+					? 'image'
+					: ['mp4', 'webm', 'mov', 'mkv'].includes(extension)
+						? 'video'
+						: ['mp3', 'wav', 'ogg', 'm4a'].includes(extension)
+							? 'audio'
+							: ['zip', 'rar', '7z', 'tar', 'gz'].includes(extension)
+								? 'archive'
+								: ['txt', 'csv', 'json', 'sql'].includes(extension)
+									? 'text'
+									: 'document';
 		return {
 			id: item.id,
 			name: item.name,
@@ -225,7 +298,8 @@ export const organizationAPI = {
 			sizeBytes: item.size_bytes,
 			parentId: item.parent_id,
 			modifiedAt: item.modified_at,
-			starred: item.is_starred ?? false
+			starred: item.is_starred ?? false,
+			storageAvailable: item.kind === 'folder' ? true : (item.storage_available ?? true)
 		};
 	},
 	moveItem: moveOrganizationItem,

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/cubycloud/backend/internal/database"
+	"github.com/cubycloud/backend/internal/modules/jobs"
 	"github.com/cubycloud/backend/internal/storage"
 	"github.com/oklog/ulid/v2"
 	"github.com/uptrace/bun"
@@ -27,21 +28,37 @@ const (
 	SettingPlacementStrategy  = "placement_strategy"
 )
 
-type Service struct {
-	repo        *Repository
-	db          *bun.DB
-	storage     storage.StorageDriver
-	dataDirPath string
-	nodeNameMu  sync.Mutex
+type ConcurrencyController interface {
+	SetConcurrency(limit int)
 }
 
-func NewService(db *bun.DB, storage storage.StorageDriver, dataDirPath string) *Service {
+type Service struct {
+	repo           *Repository
+	db             *bun.DB
+	storage        storage.StorageDriver
+	dataDirPath    string
+	queue          *jobs.Queue
+	concurrencyCtl ConcurrencyController
+	nodeNameMu     sync.Mutex
+}
+func NewService(db *bun.DB, storage storage.StorageDriver, dataDirPath string, queue ...*jobs.Queue) *Service {
+	var q *jobs.Queue
+	if len(queue) > 0 && queue[0] != nil {
+		q = queue[0]
+	} else {
+		q = jobs.NewQueue(db)
+	}
 	return &Service{
 		repo:        NewRepository(db),
 		db:          db,
 		storage:     storage,
 		dataDirPath: dataDirPath,
+		queue:       q,
 	}
+}
+
+func (s *Service) SetConcurrencyController(ctl ConcurrencyController) {
+	s.concurrencyCtl = ctl
 }
 
 // GetSystemSettings retrieves all system settings
@@ -98,6 +115,11 @@ func (s *Service) Checkpoint(ctx context.Context) error {
 	return s.repo.Checkpoint(ctx)
 }
 
+// BackupTo writes a consistent database snapshot to a new file.
+func (s *Service) BackupTo(ctx context.Context, destPath string) error {
+	return s.repo.BackupTo(ctx, destPath)
+}
+
 // UpdateSystemSettings updates system settings with validation
 func (s *Service) UpdateSystemSettings(ctx context.Context, req *UpdateSettingsRequest) error {
 	if req.DefaultQuota != nil {
@@ -136,8 +158,10 @@ func (s *Service) UpdateSystemSettings(ctx context.Context, req *UpdateSettingsR
 		if err := s.repo.SetSetting(ctx, SettingWorkerConcurrency, strconv.Itoa(concurrency)); err != nil {
 			return fmt.Errorf("set worker concurrency: %w", err)
 		}
+		if s.concurrencyCtl != nil {
+			s.concurrencyCtl.SetConcurrency(concurrency)
+		}
 	}
-
 	if req.PlacementStrategy != nil {
 		strategy := *req.PlacementStrategy
 		if strategy != "FILL_FIRST" && strategy != "ROUND_ROBIN" && strategy != "MOST_FREE_SPACE" {
@@ -217,6 +241,32 @@ func (s *Service) GetStorageNodes(ctx context.Context) ([]StorageNodeResponse, e
 			ID: node.ID, Type: node.Type, Name: node.Name, CapacityCapGB: capGB,
 			TotalGB: capGB, UsedBytes: used, Enabled: node.Enabled,
 			FreeGB: freeBytes / (1024 * 1024 * 1024),
+			SafeToDisconnect: !node.Enabled && used == 0,
+		}
+		var migrationJob database.Job
+		if err := s.db.NewSelect().Model(&migrationJob).
+			Where("type = ?", jobs.TypeNodeMigration).
+			Where("json_extract(payload, '$.source_node_id') = ?", node.ID).
+			Order("created_at DESC").
+			Limit(1).
+			Scan(ctx); err == nil {
+			nodeResp.MigrationJobID = migrationJob.ID
+			switch migrationJob.Status {
+			case jobs.StatusPending, jobs.StatusProcessing:
+				nodeResp.MigrationStatus = "MIGRATING"
+				nodeResp.SafeToDisconnect = false
+			case jobs.StatusFailed:
+				nodeResp.MigrationStatus = "FAILED"
+				nodeResp.SafeToDisconnect = false
+			case jobs.StatusCompleted:
+				if used == 0 {
+					nodeResp.MigrationStatus = "COMPLETED"
+					nodeResp.SafeToDisconnect = true
+				} else {
+					nodeResp.MigrationStatus = "FAILED"
+					nodeResp.SafeToDisconnect = false
+				}
+			}
 		}
 		if node.Type == "LOCAL" && node.Path != nil {
 			nodeResp.Path = *node.Path
@@ -261,6 +311,60 @@ func (s *Service) DisableStorageNode(ctx context.Context, nodeID string) error {
 	}
 
 	return nil
+}
+
+// DetachStorageNode disables a storage node and enqueues a physical migration background job if files exist
+func (s *Service) DetachStorageNode(ctx context.Context, nodeID, targetNodeID, adminUserID string) (*DetachNodeResponse, error) {
+	node, err := s.repo.GetStorageNodeByID(ctx, nodeID)
+	if err != nil {
+		return nil, fmt.Errorf("get node: %w", err)
+	}
+	if node == nil {
+		return nil, fmt.Errorf("node not found")
+	}
+
+	// Immediately disable node to halt any new uploads or allocations
+	if node.Enabled {
+		if err := s.repo.DisableNode(ctx, nodeID); err != nil {
+			return nil, fmt.Errorf("disable node: %w", err)
+		}
+	}
+
+	legacyNodeID, err := s.legacyLocalNodeID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	used, err := s.repo.StorageNodeUsedBytes(ctx, node.ID, legacyNodeID)
+	if err != nil {
+		return nil, fmt.Errorf("check node usage: %w", err)
+	}
+
+	if used == 0 {
+		return &DetachNodeResponse{
+			Message:          "node detached successfully (no files to migrate)",
+			SafeToDisconnect: true,
+		}, nil
+	}
+
+	if s.queue == nil {
+		s.queue = jobs.NewQueue(s.db)
+	}
+
+	payload := jobs.NodeMigrationPayload{
+		SourceNodeID: nodeID,
+		TargetNodeID: targetNodeID,
+	}
+
+	enqueuedJob, err := s.queue.Enqueue(ctx, jobs.TypeNodeMigration, adminUserID, payload)
+	if err != nil {
+		return nil, fmt.Errorf("enqueue migration job: %w", err)
+	}
+
+	return &DetachNodeResponse{
+		Message:          "node detachment and migration started",
+		JobID:            &enqueuedJob.ID,
+		SafeToDisconnect: false,
+	}, nil
 }
 
 // RescanStorageNodes rescans local storage nodes
@@ -320,8 +424,9 @@ func (s *Service) RescanStorageNodes(ctx context.Context) ([]StorageNodeResponse
 		}
 
 		if existingNode != nil {
-			// Update capacity
-			existingNode.CapacityBytes = capacity
+			if existingNode.CapacityBytes <= 0 {
+				existingNode.CapacityBytes = capacity
+			}
 			if err := s.repo.UpsertStorageNode(ctx, existingNode); err != nil {
 				continue
 			}
@@ -415,14 +520,17 @@ func (s *Service) CreateCloudNode(ctx context.Context, req *CreateCloudNodeReque
 		return nil, fmt.Errorf("validate cloud credentials: %w", err)
 	}
 
-	keyMaterial := []byte(s.dataDirPath)
+	keyMaterial, err := storage.InitMasterKey(s.dataDirPath, os.Getenv("CUBYCLOUD_MASTER_KEY"), os.Getenv("CUBYCLOUD_MASTER_KEY_FILE"), s.db)
+	if err != nil {
+		return nil, fmt.Errorf("initialize credential encryption: %w", err)
+	}
 	accessEnc, err := storage.EncryptCredential([]byte(req.AccessKey), keyMaterial)
 	if err != nil {
-		return nil, fmt.Errorf("encrypt access key: %w", err)
+		return nil, errors.New("encrypt cloud credentials")
 	}
 	secretEnc, err := storage.EncryptCredential([]byte(req.SecretKey), keyMaterial)
 	if err != nil {
-		return nil, fmt.Errorf("encrypt secret key: %w", err)
+		return nil, errors.New("encrypt cloud credentials")
 	}
 
 	node := &database.StorageNode{
@@ -526,7 +634,7 @@ func (s *Service) GetDefaultQuotaBytes(ctx context.Context) (int64, error) {
 
 // ListUsers lists all registered users with their quota and storage usage
 func (s *Service) ListUsers(ctx context.Context) (*AdminUsersListResponse, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, username, email, role, COALESCE(quota_mode, 'DEFAULT'), quota_bytes, created_at FROM users WHERE deleted_at IS NULL ORDER BY created_at ASC, id ASC`)
+ 	rows, err := s.db.QueryContext(ctx, `SELECT id, username, email, role, status, COALESCE(quota_mode, 'DEFAULT'), quota_bytes, created_at FROM users WHERE deleted_at IS NULL ORDER BY created_at ASC, id ASC`)
 	if err != nil {
 		return nil, fmt.Errorf("query users: %w", err)
 	}
@@ -537,6 +645,7 @@ func (s *Service) ListUsers(ctx context.Context) (*AdminUsersListResponse, error
 		Username   string
 		Email      string
 		Role       string
+		Status     string
 		QuotaMode  string
 		QuotaBytes int64
 		CreatedAt  time.Time
@@ -544,7 +653,7 @@ func (s *Service) ListUsers(ctx context.Context) (*AdminUsersListResponse, error
 	var rawUsers []rawUser
 	for rows.Next() {
 		var u rawUser
-		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.Role, &u.QuotaMode, &u.QuotaBytes, &u.CreatedAt); err != nil {
+ 		if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.Role, &u.Status, &u.QuotaMode, &u.QuotaBytes, &u.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan user: %w", err)
 		}
 		rawUsers = append(rawUsers, u)
@@ -591,6 +700,7 @@ func (s *Service) ListUsers(ctx context.Context) (*AdminUsersListResponse, error
 			quotaGB = &q
 		}
 		users = append(users, AdminUserResponse{
+			Status:     u.Status,
 			ID:         u.ID,
 			Username:   u.Username,
 			Email:      u.Email,
@@ -607,95 +717,58 @@ func (s *Service) ListUsers(ctx context.Context) (*AdminUsersListResponse, error
 	return &AdminUsersListResponse{Users: users}, nil
 }
 
-// CreateUser creates a new regular user with snapshot quota
+
+// CreateUser creates a pending regular user and returns a one-time invitation credential.
 func (s *Service) CreateUser(ctx context.Context, req *CreateUserRequest) (*AdminUserResponse, error) {
 	username := strings.TrimSpace(req.Username)
-	if username == "" {
-		return nil, fmt.Errorf("username is required")
-	}
+	if username == "" { return nil, fmt.Errorf("username is required") }
 	email := strings.TrimSpace(req.Email)
-	if email == "" {
-		return nil, fmt.Errorf("email is required")
-	}
-	if !strings.Contains(email, "@") || !strings.Contains(email, ".") {
-		return nil, fmt.Errorf("invalid email format")
-	}
-	if len(req.Password) < 8 {
-		return nil, fmt.Errorf("password must be at least 8 characters")
-	}
-
+	if email == "" { return nil, fmt.Errorf("email is required") }
+	if !strings.Contains(email, "@") || !strings.Contains(email, ".") { return nil, fmt.Errorf("invalid email format") }
 	var count int
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE LOWER(username) = LOWER(?)`, username).Scan(&count); err != nil {
-		return nil, fmt.Errorf("check username: %w", err)
-	}
-	if count > 0 {
-		return nil, fmt.Errorf("username already exists")
-	}
-
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE LOWER(email) = LOWER(?)`, email).Scan(&count); err != nil {
-		return nil, fmt.Errorf("check email: %w", err)
-	}
-	if count > 0 {
-		return nil, fmt.Errorf("email already exists")
-	}
-
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE LOWER(username) = LOWER(?)`, username).Scan(&count); err != nil { return nil, fmt.Errorf("check username: %w", err) }
+	if count > 0 { return nil, fmt.Errorf("username already exists") }
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE LOWER(email) = LOWER(?)`, email).Scan(&count); err != nil { return nil, fmt.Errorf("check email: %w", err) }
+	if count > 0 { return nil, fmt.Errorf("email already exists") }
 	mode := strings.ToUpper(strings.TrimSpace(req.QuotaMode))
-	if mode == "" {
-		mode = "DEFAULT"
-	}
-
+	if mode == "" { mode = "DEFAULT" }
 	var quotaBytes int64
 	switch mode {
 	case "DEFAULT":
-		defaultBytes, err := s.GetDefaultQuotaBytes(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("get default quota: %w", err)
-		}
-		quotaBytes = defaultBytes
+		var err error
+		quotaBytes, err = s.GetDefaultQuotaBytes(ctx)
+		if err != nil { return nil, fmt.Errorf("get default quota: %w", err) }
 	case "CUSTOM":
-		if req.QuotaGB == nil || *req.QuotaGB < 0 {
-			return nil, fmt.Errorf("quota_gb must be greater than or equal to 0")
-		}
+		if req.QuotaGB == nil || *req.QuotaGB < 0 { return nil, fmt.Errorf("quota_gb must be greater than or equal to 0") }
 		quotaBytes = int64(math.Round(*req.QuotaGB * 1024 * 1024 * 1024))
-	case "UNLIMITED":
-		quotaBytes = -1
-	default:
-		return nil, fmt.Errorf("invalid quota mode: %s", req.QuotaMode)
+	case "UNLIMITED": quotaBytes = -1
+	default: return nil, fmt.Errorf("invalid quota mode: %s", req.QuotaMode)
 	}
-
-	passwordHash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 10)
-	if err != nil {
-		return nil, fmt.Errorf("hash password: %w", err)
-	}
-
 	id := ulid.Make().String()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil { return nil, fmt.Errorf("begin transaction: %w", err) }
+	defer tx.Rollback()
 	now := time.Now()
-	_, err = s.db.ExecContext(ctx, `
-		INSERT INTO users(id, username, email, password_hash, role, quota_mode, quota_bytes, created_at, updated_at)
-		VALUES(?, ?, ?, ?, 'REGULAR', ?, ?, ?, ?)
-	`, id, username, email, string(passwordHash), mode, quotaBytes, now, now)
-	if err != nil {
-		return nil, fmt.Errorf("insert user: %w", err)
+	initialStatus := "PENDING_ACTIVATION"
+	initialPasswordHash := ""
+	if strings.TrimSpace(req.Password) != "" {
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), 10)
+		if err != nil {
+			return nil, fmt.Errorf("hash password: %w", err)
+		}
+		initialPasswordHash = string(hash)
+		initialStatus = "ACTIVE"
 	}
-
+	if _, err := tx.ExecContext(ctx, `INSERT INTO users(id, username, email, password_hash, role, status, quota_mode, quota_bytes, created_at, updated_at) VALUES(?, ?, ?, ?, 'REGULAR', ?, ?, ?, ?, ?)`, id, username, email, initialPasswordHash, initialStatus, mode, quotaBytes, now, now); err != nil { return nil, fmt.Errorf("insert user: %w", err) }
+	secret, tokenHash, tokenID, err := database.GenerateAuthToken()
+	if err != nil { return nil, fmt.Errorf("generate invitation token: %w", err) }
+	if initialStatus == "PENDING_ACTIVATION" {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO auth_tokens(id, user_id, token_hash, token_type, expires_at) VALUES(?, ?, ?, 'INVITATION', ?)`, tokenID, id, tokenHash, now.Add(24*time.Hour)); err != nil { return nil, fmt.Errorf("insert invitation token: %w", err) }
+	}
+	if err := tx.Commit(); err != nil { return nil, fmt.Errorf("commit user creation: %w", err) }
 	var quotaGB *float64
-	if quotaBytes >= 0 {
-		q := float64(quotaBytes) / (1024.0 * 1024.0 * 1024.0)
-		quotaGB = &q
-	}
-
-	return &AdminUserResponse{
-		ID:         id,
-		Username:   username,
-		Email:      email,
-		Role:       "REGULAR",
-		QuotaMode:  mode,
-		QuotaBytes: quotaBytes,
-		QuotaGB:    quotaGB,
-		UsedBytes:  0,
-		UsedGB:     0,
-		CreatedAt:  now.Format(time.RFC3339),
-	}, nil
+	if quotaBytes >= 0 { q := float64(quotaBytes) / (1024.0*1024.0*1024.0); quotaGB = &q }
+	return &AdminUserResponse{ID:id, Username:username, Email:email, Role:"REGULAR", Status:"PENDING_ACTIVATION", QuotaMode:mode, QuotaBytes:quotaBytes, QuotaGB:quotaGB, CreatedAt:now.Format(time.RFC3339), InvitationToken:secret, InvitationURL:"/set-password#token="+secret}, nil
 }
 
 // UpdateUserQuota updates quota mode and quota bytes for a regular user
@@ -883,6 +956,69 @@ func (s *Service) DeleteUser(ctx context.Context, actorID, targetID string, req 
 	return nil
 }
 
+// ResetUserPassword invalidates existing sessions and issues a one-time reset token.
+func (s *Service) ResetUserPassword(ctx context.Context, actorID, targetID string) (string, time.Time, error) {
+	if strings.TrimSpace(targetID) == "" { return "", time.Time{}, fmt.Errorf("user ID required") }
+	if actorID != "" && actorID == targetID { return "", time.Time{}, fmt.Errorf("cannot reset your own password") }
+	var role string
+	err := s.db.QueryRowContext(ctx, `SELECT role FROM users WHERE id = ? AND deleted_at IS NULL`, targetID).Scan(&role)
+	if errors.Is(err, sql.ErrNoRows) { return "", time.Time{}, fmt.Errorf("user not found") }
+	if err != nil { return "", time.Time{}, fmt.Errorf("query user: %w", err) }
+ 	secret, tokenHash, tokenID, err := database.GenerateAuthToken()
+ 	if err != nil { return "", time.Time{}, fmt.Errorf("generate reset token: %w", err) }
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil { return "", time.Time{}, fmt.Errorf("begin transaction: %w", err) }
+	defer tx.Rollback()
+	now := time.Now()
+	if _, err := tx.ExecContext(ctx, `UPDATE auth_tokens SET consumed_at = ? WHERE user_id = ? AND token_type = 'PASSWORD_RESET' AND consumed_at IS NULL`, now, targetID); err != nil { return "", time.Time{}, fmt.Errorf("revoke previous reset tokens: %w", err) }
+	if _, err := tx.ExecContext(ctx, `UPDATE users SET password_hash = '', token_version = token_version + 1, updated_at = ? WHERE id = ? AND deleted_at IS NULL`, now, targetID); err != nil { return "", time.Time{}, fmt.Errorf("disable user password: %w", err) }
+	expires := now.Add(30*time.Minute)
+ 	if _, err := tx.ExecContext(ctx, `INSERT INTO auth_tokens(id, user_id, token_hash, token_type, expires_at) VALUES(?, ?, ?, 'PASSWORD_RESET', ?)`, tokenID, targetID, tokenHash, expires); err != nil { return "", time.Time{}, fmt.Errorf("insert reset token: %w", err) }
+	if err := tx.Commit(); err != nil { return "", time.Time{}, fmt.Errorf("commit reset token: %w", err) }
+	return secret, expires, nil
+}
+// RegenerateInvitation issues a fresh invitation for a pending user.
+func (s *Service) RegenerateInvitation(ctx context.Context, targetID string) (string, time.Time, error) {
+	if strings.TrimSpace(targetID) == "" {
+		return "", time.Time{}, fmt.Errorf("user ID required")
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	var status string
+	err = tx.QueryRowContext(ctx, `SELECT status FROM users WHERE id = ? AND deleted_at IS NULL`, targetID).Scan(&status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", time.Time{}, fmt.Errorf("user not found")
+	}
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("query user: %w", err)
+	}
+	if status != "PENDING_ACTIVATION" {
+		return "", time.Time{}, fmt.Errorf("user is not pending activation")
+	}
+
+	secret, tokenHash, tokenID, err := database.GenerateAuthToken()
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("generate invitation token: %w", err)
+	}
+	now := time.Now()
+	if _, err := tx.ExecContext(ctx, `UPDATE auth_tokens SET consumed_at = ? WHERE user_id = ? AND token_type = 'INVITATION' AND consumed_at IS NULL`, now, targetID); err != nil {
+		return "", time.Time{}, fmt.Errorf("consume previous invitation tokens: %w", err)
+	}
+	expires := now.Add(24 * time.Hour)
+	if _, err := tx.ExecContext(ctx, `INSERT INTO auth_tokens(id, user_id, token_hash, token_type, expires_at) VALUES(?, ?, ?, 'INVITATION', ?)`, tokenID, targetID, tokenHash, expires); err != nil {
+		return "", time.Time{}, fmt.Errorf("insert invitation token: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return "", time.Time{}, fmt.Errorf("commit invitation token: %w", err)
+	}
+	return secret, expires, nil
+}
+
 func detectFileCategory(name string) string {
 	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(name)), ".")
 	switch ext {
@@ -911,14 +1047,19 @@ func (s *Service) GetAdminStorageStats(ctx context.Context) (*AdminStorageStatsR
 
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT
-			COALESCE(disk_key, id) AS k,
+			disk_key AS k,
 			MAX(size_bytes) AS size_bytes,
 			MAX(CASE WHEN deleted_at IS NULL THEN name ELSE '' END) AS active_name,
 			MAX(name) AS any_name,
 			COUNT(CASE WHEN deleted_at IS NULL THEN 1 END) AS active_count
-		FROM my_storage_items
-		WHERE kind = 'file' AND disk_key IS NOT NULL
-		GROUP BY k
+		FROM (
+			SELECT disk_key, size_bytes, name, deleted_at FROM my_storage_items
+			WHERE kind = 'file' AND disk_key IS NOT NULL
+			UNION ALL
+			SELECT disk_key, size_bytes, name, deleted_at FROM organization_items
+			WHERE kind = 'file' AND disk_key IS NOT NULL
+		) AS items
+		GROUP BY disk_key
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("query storage usage stats: %w", err)

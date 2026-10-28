@@ -1,10 +1,10 @@
-import Root from "./select.svelte";
-import Content from "./select-content.svelte";
-import Group from "./select-group.svelte";
-import GroupHeading from "./select-group-heading.svelte";
-import Item from "./select-item.svelte";
-import Trigger from "./select-trigger.svelte";
-import Value from "./select-value.svelte";
+import Root from './select.svelte';
+import Content from './select-content.svelte';
+import Group from './select-group.svelte';
+import GroupHeading from './select-group-heading.svelte';
+import Item from './select-item.svelte';
+import Trigger from './select-trigger.svelte';
+import Value from './select-value.svelte';
 
 export {
 	Root,
@@ -21,5 +21,5 @@ export {
 	GroupHeading as SelectGroupHeading,
 	Item as SelectItem,
 	Trigger as SelectTrigger,
-	Value as SelectValue,
+	Value as SelectValue
 };

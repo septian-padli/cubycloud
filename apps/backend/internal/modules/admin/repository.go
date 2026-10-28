@@ -51,6 +51,12 @@ func (r *Repository) Checkpoint(ctx context.Context) error {
 	return err
 }
 
+// BackupTo writes a consistent database snapshot to a new file.
+func (r *Repository) BackupTo(ctx context.Context, destPath string) error {
+	_, err := r.db.ExecContext(ctx, "VACUUM INTO '"+strings.ReplaceAll(destPath, "'", "''")+"'")
+	return err
+}
+
 // GetAllStorageNodes retrieves all storage nodes
 func (r *Repository) GetAllStorageNodes(ctx context.Context) ([]database.StorageNode, error) {
 	var nodes []database.StorageNode

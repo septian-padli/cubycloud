@@ -1,0 +1,25 @@
+services:
+  cubycloud:
+    # Set explicit version tag (e.g. v0.0.1-alpha.1) via CUBYCLOUD_VERSION or .env
+    image: ${CUBYCLOUD_IMAGE:-ghcr.io/septian-padli/cubycloud}:${CUBYCLOUD_VERSION:-latest}
+    container_name: cubycloud
+    restart: unless-stopped
+    ports:
+      - "${CUBYCLOUD_PORT:-8383}:8383"
+    volumes:
+      - cubycloud_data:/app/data
+    environment:
+      - ENV=production
+      - PORT=${CUBYCLOUD_PORT:-8383}
+      # Set COOKIE_SECURE=true when running behind an HTTPS reverse proxy
+      # - COOKIE_SECURE=true
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8383/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  cubycloud_data:
+    name: ${CUBYCLOUD_VOLUME_NAME:-cubycloud_data}

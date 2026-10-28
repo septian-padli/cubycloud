@@ -76,6 +76,7 @@ func (r *Repository) UpdatePasswordAndRecoveryKeyTx(
 		Model((*database.User)(nil)).
 		Set("password_hash = ?", passwordHash).
 		Set("recovery_key_hash = ?", newRecoveryHash).
+		Set("token_version = token_version + 1").
 		Set("updated_at = ?", time.Now()).
 		Where("id = ? AND recovery_key_hash = ?", userID, oldRecoveryHash).
 		Exec(ctx)

@@ -201,8 +201,8 @@ func NodeUsedBytes(ctx context.Context, q QueryRunner, nodeID string) (int64, er
 }
 
 // CheckNodeCapacityTx verifies within a database transaction that a LOCAL storage node
-// has enough remaining capacity for additionalBytes, taking into account the combined
-// usage from my_storage_items, organization_items, and active physical disk stats.
+// has enough remaining configured capacity for additionalBytes, taking into account
+// the combined usage and active physical disk safety threshold.
 func CheckNodeCapacityTx(ctx context.Context, tx QueryRunner, driver StorageDriver, nodeID string, additionalBytes int64) error {
 	if nodeID == "" {
 		return nil
@@ -229,26 +229,24 @@ func CheckNodeCapacityTx(ctx context.Context, tx QueryRunner, driver StorageDriv
 		return err
 	}
 
-	var free int64
 	if capacity <= 0 {
-		free = 1000 * 1024 * 1024 * 1024 - used
-	} else {
-		reserve := capacity / 20
-		if capacity%20 != 0 {
-			reserve++
-		}
-		free = capacity - reserve - used
+		capacity = 1000 * 1024 * 1024 * 1024
 	}
+	reserve := capacity / 20
+	if capacity%20 != 0 {
+		reserve++
+	}
+	free := capacity - reserve - used
 
 	if driver != nil && nodePath != "" {
 		total, physicalFree, statErr := driver.StatLocal(ctx, nodePath)
 		if statErr == nil && total > 0 {
-			reserve := total / 20
+			physicalReserve := total / 20
 			if total%20 != 0 {
-				reserve++
+				physicalReserve++
 			}
-			if physicalFree-reserve < free {
-				free = physicalFree - reserve
+			if physicalFree <= physicalReserve {
+				return ErrPoolFull
 			}
 		}
 	}

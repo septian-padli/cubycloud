@@ -43,8 +43,7 @@ export function errorPageContent(status: number, fallbackMessage?: string): Erro
 	return {
 		title: 'Terjadi kesalahan',
 		description:
-			fallbackMessage?.trim() ||
-			'Terjadi kesalahan saat memuat halaman. Silakan coba lagi.',
+			fallbackMessage?.trim() || 'Terjadi kesalahan saat memuat halaman. Silakan coba lagi.',
 		illustration: errorIllustrationFor(status)
 	};
 }

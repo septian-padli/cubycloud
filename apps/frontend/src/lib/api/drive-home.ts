@@ -1,3 +1,4 @@
+import { locale } from '$lib/locale.svelte.js';
 import type { ActivityItem, FileKind, QuickAccessItem } from '$lib/types/drive.js';
 
 export interface BackendQuickAccessItem {
@@ -40,32 +41,34 @@ export function formatFileSize(bytes: number, kind: string): string {
 	if (kind === 'folder') return 'Folder';
 	if (bytes === 0) return '0 B';
 	const k = 1024;
-	const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+	const sizes = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
 	const i = Math.floor(Math.log(bytes) / Math.log(k));
 	const val = bytes / Math.pow(k, i);
-	return `${Number.isInteger(val) ? val : val.toFixed(1)} ${sizes[i]}`;
+	return `${Number.isInteger(val) ? val : val.toFixed(1).replace('.', locale.language === 'id' ? ',' : '.')} ${sizes[i]}`;
 }
 
 export function formatTimeAgo(dateStr: string): string {
+	const id = locale.language === 'id';
 	try {
 		const date = new Date(dateStr);
 		const now = new Date();
 		const diffMs = now.getTime() - date.getTime();
 		if (isNaN(diffMs)) return dateStr;
 		const diffSec = Math.floor(diffMs / 1000);
-		if (diffSec < 60) return 'Baru saja';
+		if (diffSec < 60) return id ? 'Baru saja' : 'Just now';
 		const diffMin = Math.floor(diffSec / 60);
-		if (diffMin < 60) return `${diffMin} menit lalu`;
+		if (diffMin < 60) return id ? `${diffMin} menit lalu` : `${diffMin} minutes ago`;
 		const diffHour = Math.floor(diffMin / 60);
-		if (diffHour < 24) return `${diffHour} jam lalu`;
+		if (diffHour < 24) return id ? `${diffHour} jam lalu` : `${diffHour} hours ago`;
 		const diffDay = Math.floor(diffHour / 24);
-		if (diffDay === 1) return 'Kemarin';
-		if (diffDay < 7) return `${diffDay} hari lalu`;
+		if (diffDay === 1) return id ? 'Kemarin' : 'Yesterday';
+		if (diffDay < 7) return id ? `${diffDay} hari lalu` : `${diffDay} days ago`;
 		const diffWeek = Math.floor(diffDay / 7);
-		if (diffWeek < 4) return `${diffWeek} minggu lalu`;
+		if (diffWeek < 4) return id ? `${diffWeek} minggu lalu` : `${diffWeek} weeks ago`;
 		const diffMonth = Math.floor(diffDay / 30);
-		if (diffMonth < 12) return `${diffMonth} bulan lalu`;
-		return `${Math.floor(diffDay / 365)} tahun lalu`;
+		if (diffMonth < 12) return id ? `${diffMonth} bulan lalu` : `${diffMonth} months ago`;
+		const years = Math.floor(diffDay / 365);
+		return id ? `${years} tahun lalu` : `${years} years ago`;
 	} catch {
 		return dateStr;
 	}
@@ -77,7 +80,11 @@ export async function fetchHomeData(): Promise<{
 }> {
 	const resp = await fetch('/api/v1/drive/home', { credentials: 'include' });
 	if (!resp.ok) {
-		throw new Error(`Gagal memuat data beranda: HTTP ${resp.status}`);
+		throw new Error(
+			locale.language === 'id'
+				? `Gagal memuat data beranda: HTTP ${resp.status}`
+				: `Failed to load home data (HTTP ${resp.status})`
+		);
 	}
 	const data: BackendHomeResponse = await resp.json();
 
@@ -86,7 +93,7 @@ export async function fetchHomeData(): Promise<{
 		name: item.name,
 		kind: guessKind(item.name, item.kind),
 		sizeLabel: formatFileSize(item.size_bytes, item.kind),
-		openedAgo: formatTimeAgo(item.accessed_at),
+		accessedAt: item.accessed_at,
 		source: item.source
 	}));
 
@@ -94,7 +101,7 @@ export async function fetchHomeData(): Promise<{
 		id: item.id,
 		action: item.action,
 		fileName: item.file_name,
-		at: formatTimeAgo(item.created_at),
+		createdAt: item.created_at,
 		itemKind: guessKind(item.file_name, item.item_kind),
 		source: item.source,
 		itemId: item.item_id

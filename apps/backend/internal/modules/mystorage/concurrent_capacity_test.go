@@ -134,18 +134,14 @@ func getNodeStoredBytes(t *testing.T, db *bun.DB, nodeID string) int64 {
 func getPhysicalDirBytes(t *testing.T, nodePath string) int64 {
 	t.Helper()
 	var total int64
-	entries, err := os.ReadDir(nodePath)
-	if err != nil {
-		return 0
-	}
-	for _, e := range entries {
-		if !e.IsDir() {
-			info, err := e.Info()
-			if err == nil {
+	_ = filepath.WalkDir(nodePath, func(_ string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			if info, err := d.Info(); err == nil {
 				total += info.Size()
 			}
 		}
-	}
+		return nil
+	})
 	return total
 }
 
