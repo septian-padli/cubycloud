@@ -103,7 +103,9 @@ test('Account profile edits persist, other-user profiles are read-only, and pass
 
 		await page.goto(`/drive/profile/${created.id}`);
 		await expect(page.getByRole('heading', { name: username, exact: true })).toBeVisible();
-		await expect(page.getByText(/[2][.,]5 GiB · (terpakai|used) 0[.,]0 GiB/)).toBeVisible();
+		const effectiveQuotaSection = page.locator('div').filter({ hasText: /^Kuota efektif/ });
+		await expect(effectiveQuotaSection).toBeVisible();
+		await expect(effectiveQuotaSection.getByText(/2[.,]5 GiB/)).toBeVisible();
 		await expect(page.getByText(/^(User|Pengguna)$/i)).toBeVisible();
 		await expect(page.getByRole('button', { name: 'Edit Profil' })).toBeDisabled();
 
