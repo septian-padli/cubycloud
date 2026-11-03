@@ -29,8 +29,8 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -ldflags
 
 # Stage 3: Final Minimal Runtime Image (< 150MB target)
 FROM alpine:3.21.3
-LABEL org.opencontainers.image.title="CubyCloud"
-LABEL org.opencontainers.image.description="Self-hosted cloud storage orchestrator"
+LABEL org.opencontainers.image.title="CubyCrate"
+LABEL org.opencontainers.image.description="Lightweight, open-source, self-hosted file drive"
 LABEL org.opencontainers.image.source="https://github.com/septian-padli/cubycloud"
 LABEL org.opencontainers.image.licenses="AGPL-3.0"
 

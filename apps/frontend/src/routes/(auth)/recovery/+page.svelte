@@ -4,12 +4,12 @@
 </script>
 
 <svelte:head>
-	<title>{locale.language === 'id' ? 'Pulihkan Akses' : 'Recover Access'} — CubyCloud</title>
+	<title>{locale.language === 'id' ? 'Pulihkan Akses' : 'Recover Access'} — CubyCrate</title>
 	<meta
 		name="description"
 		content={locale.language === 'id'
-			? 'Atur ulang kata sandi Super Admin CubyCloud dengan Emergency Recovery Key.'
-			: 'Reset your CubyCloud Super Admin password with an Emergency Recovery Key.'}
+			? 'Atur ulang kata sandi Super Admin CubyCrate dengan Emergency Recovery Key.'
+			: 'Reset your CubyCrate Super Admin password with an Emergency Recovery Key.'}
 	/>
 </svelte:head>
 

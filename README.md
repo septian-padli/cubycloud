@@ -1,8 +1,8 @@
-# CubyCloud
+# CubyCrate
 
 **Your files. Your server. Your rules.**
 
-CubyCloud is a self-hosted file drive for people who want a familiar way to organize and share files while choosing where those files live. It combines a Go API, a SvelteKit web app, SQLite, local storage, and optional S3-compatible storage.
+CubyCrate is a self-hosted file drive for people who want a familiar way to organize and share files while choosing where those files live. It combines a Go API, a SvelteKit web app, SQLite, local storage, and optional S3-compatible storage.
 
 [![CI Quality Gates](https://github.com/septian-padli/cubycloud/actions/workflows/ci.yml/badge.svg)](https://github.com/septian-padli/cubycloud/actions/workflows/ci.yml)
 [![Release Automation](https://github.com/septian-padli/cubycloud/actions/workflows/release.yml/badge.svg)](https://github.com/septian-padli/cubycloud/actions/workflows/release.yml)
@@ -13,9 +13,9 @@ CubyCloud is a self-hosted file drive for people who want a familiar way to orga
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL_3.0-blue.svg)](LICENSE)
 ![Self-hosted](https://img.shields.io/badge/self--hosted-yes-61764B)
 
-![CubyCloud Drive home showing quick access, recent activity, and storage summary](docs/assets/drive-home.png)
+![CubyCrate Drive home showing quick access, recent activity, and storage summary](docs/assets/drive-home.png)
 
-## Why CubyCloud?
+## Why CubyCrate?
 
 - **Single self-contained container.** The SvelteKit 5 frontend is embedded directly into the Go binary. No Node.js runtime container, PHP-FPM, or separate web server is required.
 - **Zero external dependencies.** Powered by SQLite in WAL mode with embedded migrations. You do not need to install, configure, or maintain PostgreSQL, MySQL, Redis, or external brokers.
@@ -44,7 +44,7 @@ CubyCloud is a self-hosted file drive for people who want a familiar way to orga
 
 ### First-run setup
 
-![CubyCloud first-run setup wizard](docs/assets/setup-wizard.png)
+![CubyCrate first-run setup wizard](docs/assets/setup-wizard.png)
 
 ### Storage administration
 
@@ -56,7 +56,7 @@ The screenshots were captured from the running application using synthetic local
 
 ### Docker Compose (recommended)
 
-CubyCloud runs as a single self-contained container with embedded frontend and backend. The Compose file pulls the image from GHCR; it does not build from source. No manual `.env` or secret generation is needed for a standard installation. The image must be publicly available on GHCR before this download-only path works.
+CubyCrate runs as a single self-contained container with embedded frontend and backend. The Compose file pulls the image from GHCR; it does not build from source. No manual `.env` or secret generation is needed for a standard installation. The image must be publicly available on GHCR before this download-only path works.
 
 1. Download `compose.yaml`:
    ```bash
@@ -70,7 +70,7 @@ CubyCloud runs as a single self-contained container with embedded frontend and b
 
 Compose publishes port **8383** on all host interfaces by default, so devices on the LAN can connect. To use another host port, run `CUBYCLOUD_PORT=9000 docker compose up -d` and open `http://<IP-server>:9000/setup`. The container still listens on port 8383. You can also set `CUBYCLOUD_PORT=9000` in a `.env` file beside `compose.yaml`; this file configures Compose, not the application. Do not forward this HTTP port directly to the internet; restrict access with your firewall.
 
-#### Updating CubyCloud
+#### Updating CubyCrate
 
 To update an existing installation to the latest published release:
 
@@ -94,7 +94,7 @@ The Compose file does not include a reverse proxy. To use an existing HTTPS reve
 For HTTPS-only login, enable `COOKIE_SECURE=true` in the Compose environment. This prevents login over direct HTTP on the LAN. With the current application code, allowing authenticated HTTP LAN and HTTPS proxy access at the same time cannot provide `Secure` cookies on HTTPS without trusting a client-supplied `X-Forwarded-Proto` header on the published LAN port. Do not enable `TRUST_PROXY=true` on that exposed port as a workaround. The embedded frontend uses same-origin API requests, so `ALLOWED_ORIGINS` is not needed for a normal same-domain proxy setup. Use `GET /api/health` for readiness checks; see the [Reverse Proxy Guide](docs/reverse-proxy.md) for proxy examples.
 #### Backup and Restore
 
-All state is contained within `/app/data`. To back up CubyCloud, copy or snapshot the entire `/app/data` volume or directory while the service is stopped or using SQLite WAL-safe backup:
+All state is contained within `/app/data`. To back up CubyCrate, copy or snapshot the entire `/app/data` volume or directory while the service is stopped or using SQLite WAL-safe backup:
 - `db/cubycloud.db`: database tables and metadata
 - `secrets/jwt.key`: session authentication key
 - `secrets/master.key`: master encryption key for encrypted cloud storage credentials
@@ -129,7 +129,7 @@ bun run dev --host 127.0.0.1 --port 5188
 Open [http://localhost:5188/setup](http://localhost:5188/setup), create the first administrator, and complete the setup wizard.
 ## System requirements
 
-CubyCloud is designed to run efficiently on low-power homelab servers, single-board computers, and virtual private servers.
+CubyCrate is designed to run efficiently on low-power homelab servers, single-board computers, and virtual private servers.
 
 - **Minimum hardware:** 1 CPU core, 1 GB RAM (suitable for single-user personal storage on Raspberry Pi 4 or entry-level VPS).
 - **Recommended hardware:** 2 CPU cores, 2 GB RAM (optimized for Intel Celeron mini PCs, small offices, or active family drives).
@@ -169,9 +169,9 @@ make test
 - [Security policy and reporting](SECURITY.md)
 ## Security and privacy
 
-CubyCloud runs on infrastructure you control and stores application data beneath its configured data directory. Implemented safeguards include bcrypt password hashing, HTTP-only `SameSite=Lax` session cookies, rate limiting for login and public-share unlock requests, and encryption of saved S3-compatible storage credentials.
+CubyCrate runs on infrastructure you control and stores application data beneath its configured data directory. Implemented safeguards include bcrypt password hashing, HTTP-only `SameSite=Lax` session cookies, rate limiting for login and public-share unlock requests, and encryption of saved S3-compatible storage credentials.
 
-These safeguards do not replace TLS, host security, or backups. CubyCloud does not claim end-to-end encryption for uploaded file contents. See [SECURITY.md](SECURITY.md) for the current vulnerability-reporting guidance; a dedicated private contact channel is not published yet.
+These safeguards do not replace TLS, host security, or backups. CubyCrate does not claim end-to-end encryption for uploaded file contents. See [SECURITY.md](SECURITY.md) for the current vulnerability-reporting guidance; a dedicated private contact channel is not published yet.
 
 ## Contributing and community
 
@@ -179,6 +179,6 @@ Bug reports, reproducible examples, and focused pull requests are welcome. Read 
 
 ## License
 
-Copyright (C) 2026 CubyCloud contributors. CubyCloud is licensed under the GNU Affero General Public License, version 3 or (at your option) any later version. See [LICENSE](LICENSE).
+Copyright (C) 2026 CubyCrate contributors. CubyCrate is licensed under the GNU Affero General Public License, version 3 or (at your option) any later version. See [LICENSE](LICENSE).
 
 Modified versions used over a network must offer their users access to the corresponding source code under AGPL-3.0 section 13. The source repository is available at [github.com/septian-padli/cubycloud](https://github.com/septian-padli/cubycloud).

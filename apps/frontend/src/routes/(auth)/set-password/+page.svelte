@@ -75,10 +75,10 @@
 </script>
 
 <svelte:head>
-	<title>{tx('Atur kata sandi', 'Set password')} | CubyCloud</title>
+	<title>{tx('Atur kata sandi', 'Set password')} | CubyCrate</title>
 	<meta
 		name="description"
-		content={tx('Atur kata sandi akun CubyCloud.', 'Set your CubyCloud account password.')}
+		content={tx('Atur kata sandi akun CubyCrate.', 'Set your CubyCrate account password.')}
 	/>
 </svelte:head>
 

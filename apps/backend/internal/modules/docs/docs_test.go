@@ -134,14 +134,14 @@ func TestDocsAccessControl(t *testing.T) {
 			path:      "/api/docs",
 			cookieVal: adminToken,
 			wantCode:  http.StatusOK,
-			wantBody:  "CubyCloud API Documentation",
+			wantBody:  "CubyCrate API Documentation",
 		},
 		{
 			name:       "Super Admin via bearer /api/docs",
 			path:       "/api/docs",
 			authHeader: "Bearer " + adminToken,
 			wantCode:   http.StatusOK,
-			wantBody:   "CubyCloud API Documentation",
+			wantBody:   "CubyCrate API Documentation",
 		},
 		{
 			name:      "Super Admin /api/docs/openapi.yaml",

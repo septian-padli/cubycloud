@@ -23,10 +23,10 @@
 </script>
 
 <svelte:head>
-	<title>CubyCloud — {tx('Penyiapan', 'Setup')}</title>
+	<title>CubyCrate — {tx('Penyiapan', 'Setup')}</title>
 	<meta
 		name="description"
-		content={tx('Wizard konfigurasi awal CubyCloud.', 'CubyCloud initial configuration wizard.')}
+		content={tx('Wizard konfigurasi awal CubyCrate.', 'CubyCrate initial configuration wizard.')}
 	/>
 </svelte:head>
 

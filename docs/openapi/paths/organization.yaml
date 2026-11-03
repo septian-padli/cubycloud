@@ -407,7 +407,7 @@
       '200':
         description: ZIP stream.
         headers:
-          Content-Disposition: { schema: { type: string, example: 'attachment; filename="cubycloud-archive.zip"' } }
+          Content-Disposition: { schema: { type: string, example: 'attachment; filename="cubycrate-archive.zip"' } }
         content:
           application/zip: { schema: { type: string, format: binary } }
       '400': { description: Request invalid or no IDs supplied., content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } }}

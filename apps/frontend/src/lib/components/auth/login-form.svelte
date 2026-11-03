@@ -60,8 +60,8 @@
 		<Card.Title class="text-lg font-semibold text-main">{tx('Masuk', 'Sign in')}</Card.Title>
 		<Card.Description class="text-sm text-muted">
 			{tx(
-				'Masuk ke CubyCloud dengan nama pengguna atau email dan kata sandi.',
-				'Sign in to CubyCloud with your username or email and password.'
+				'Masuk ke CubyCrate dengan nama pengguna atau email dan kata sandi.',
+				'Sign in to CubyCrate with your username or email and password.'
 			)}
 		</Card.Description>
 	</Card.Header>
@@ -72,8 +72,8 @@
 				<Alert.Title>{tx('Pemulihan tanpa email', 'Recovery without email')}</Alert.Title>
 				<Alert.Description>
 					{tx(
-						'CubyCloud v1.0 tidak mengirim email untuk pengaturan ulang kata sandi melalui SMTP. Super Admin memulihkan akses dengan Emergency Recovery Key di halaman Pulihkan Akses.',
-						'CubyCloud v1.0 does not send password resets by email. The Super Admin can restore access with the Emergency Recovery Key on the Access Recovery page.'
+						'CubyCrate v1.0 tidak mengirim email untuk pengaturan ulang kata sandi melalui SMTP. Super Admin memulihkan akses dengan Emergency Recovery Key di halaman Pulihkan Akses.',
+						'CubyCrate v1.0 does not send password resets by email. The Super Admin can restore access with the Emergency Recovery Key on the Access Recovery page.'
 					)}
 				</Alert.Description>
 			</Alert.Root>

@@ -53,7 +53,7 @@
 </script>
 
 <svelte:head>
-	<title>{tx('Penyimpanan Sistem', 'System Storage')} — CubyCloud</title>
+	<title>{tx('Penyimpanan Sistem', 'System Storage')} — CubyCrate</title>
 	<meta
 		name="description"
 		content={tx(

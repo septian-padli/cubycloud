@@ -114,7 +114,7 @@
 </script>
 
 <svelte:head>
-	<title>{viewUser?.displayName || tx('Profil', 'Profile')} — CubyCloud</title>
+	<title>{viewUser?.displayName || tx('Profil', 'Profile')} — CubyCrate</title>
 	<meta
 		name="description"
 		content={tx(

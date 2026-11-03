@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="900" height="1600" viewBox="0 0 900 1600" fill="none">
-	<title>CubyCloud auth hero placeholder</title>
+	<title>CubyCrate auth hero placeholder</title>
 	<defs>
 		<linearGradient id="bg" x1="0" y1="0" x2="900" y2="1600" gradientUnits="userSpaceOnUse">
 			<stop offset="0%" stop-color="#283618"/>
@@ -29,7 +29,7 @@
 		font-family="Montserrat, sans-serif"
 		font-size="36"
 		font-weight="600"
-	>CubyCloud</text>
+	>CubyCrate</text>
 	<text
 		x="450"
 		y="1235"

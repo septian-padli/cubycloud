@@ -1,12 +1,12 @@
 openapi: 3.1.0
 info:
-  title: CubyCloud API
+  title: CubyCrate API
   version: 1.0.0
   description: |
-    Comprehensive HTTP API documentation for **CubyCloud**, a self-hosted single-container cloud storage platform.
+    Comprehensive HTTP API documentation for **CubyCrate**, a self-hosted single-container cloud storage platform.
     
     ### Authentication & Sessions
-    CubyCloud uses HTTP-only cookie session authentication (`cuby_token`).
+    CubyCrate uses HTTP-only cookie session authentication (`cuby_token`).
     Interactive API exploration via **Try it out** automatically sends this cookie from your active browser session.
     A fallback `Authorization: Bearer <token>` header is also supported.
     
@@ -16,7 +16,7 @@ info:
     - **Super Admin Only**: Endpoints restricted strictly to users with the `SUPER_ADMIN` role (e.g. `/api/v1/admin/*`, `/api/docs/*`).
 servers:
   - url: /
-    description: Current CubyCloud instance (relative root)
+    description: Current CubyCrate instance (relative root)
 tags:
   - name: Setup
     description: Initial system configuration and storage initialization

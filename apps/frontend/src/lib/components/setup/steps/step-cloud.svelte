@@ -215,7 +215,7 @@
 					<Label for="cloud-bucket">{tx('Nama bucket', 'Bucket name')}</Label>
 					<Input
 						id="cloud-bucket"
-						placeholder="cubycloud-files"
+						placeholder="cubycrate-files"
 						bind:value={cloud.bucket}
 						oninput={() => {
 							testState = 'idle';

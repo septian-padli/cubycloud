@@ -34,7 +34,7 @@ Jika relevan, lampirkan screenshot atau log error dari browser console / contain
 
 ## Lingkungan
 
-- **Versi CubyCloud:** (contoh: `v0.0.1-alpha.1`)
+- **Versi CubyCrate:** (contoh: `v0.0.1-alpha.1`)
 - **Cara instalasi:** Docker / Docker Compose
 - **OS / Platform:** (contoh: Ubuntu 22.04, macOS 14)
 - **Browser:** (contoh: Chrome 130, Firefox 131)

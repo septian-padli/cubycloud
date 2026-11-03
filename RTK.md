@@ -1,4 +1,4 @@
-# RTK — Rust Token Killer (CubyCloud)
+# RTK — Rust Token Killer (CubyCrate)
 
 Token-optimized CLI proxy (~60–90% savings on dev command output). **Wajib** dipakai agent AI saat menjalankan perintah shell di repo ini.
 

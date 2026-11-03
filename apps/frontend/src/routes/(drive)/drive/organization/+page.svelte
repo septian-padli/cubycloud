@@ -12,10 +12,10 @@
 </script>
 
 <svelte:head>
-	<title>{tx('Organisasi — CubyCloud', 'Organization — CubyCloud')}</title>
+	<title>{tx('Organisasi — CubyCrate', 'Organization — CubyCrate')}</title>
 	<meta
 		name="description"
-		content={tx('Drive bersama organisasi CubyCloud.', 'CubyCloud organization shared drive.')}
+		content={tx('Drive bersama organisasi CubyCrate.', 'CubyCrate organization shared drive.')}
 	/>
 </svelte:head>
 

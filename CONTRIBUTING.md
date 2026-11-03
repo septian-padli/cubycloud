@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for considering a contribution to CubyCloud.
+Thank you for considering a contribution to CubyCrate.
 
 ## Before you start
 

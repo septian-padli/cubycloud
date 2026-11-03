@@ -7,7 +7,7 @@
 		{@render children()}
 	</main>
 	<footer class="mx-auto w-full max-w-5xl px-6 py-4 text-xs text-muted md:px-10">
-		Copyright (C) 2026 CubyCloud contributors. You may convey this work under AGPL-3.0-or-later. No
+		Copyright (C) 2026 CubyCrate contributors. You may convey this work under AGPL-3.0-or-later. No
 		warranty.
 		<a
 			class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"

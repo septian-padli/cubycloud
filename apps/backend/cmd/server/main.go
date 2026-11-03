@@ -37,7 +37,7 @@ import (
 func main() {
 	// 1. Load config
 	cfg := config.Load()
-	log.Printf("Starting CubyCloud on port %s", cfg.Port)
+	log.Printf("Starting CubyCrate on port %s", cfg.Port)
 
 	// 2. Ensure directories exist
 	for _, dir := range []string{cfg.DBPath, cfg.StoragePath, cfg.TempTUSPath} {

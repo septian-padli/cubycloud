@@ -39,7 +39,7 @@ export const MOCK_STARRED_FILES: StarredFileItem[] = [
 	},
 	{
 		id: 'org-file-logo',
-		name: 'Logo CubyCloud.svg',
+		name: 'Logo CubyCrate.svg',
 		kind: 'image',
 		sizeBytes: 42_000,
 		modifiedAt: '2 minggu lalu',

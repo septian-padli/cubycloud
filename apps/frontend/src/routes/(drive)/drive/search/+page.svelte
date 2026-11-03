@@ -135,13 +135,13 @@
 	<title>
 		{query
 			? tx(`Hasil pencarian untuk "${query}"`, `Search results for "${query}"`)
-			: tx('Pencarian Berkas', 'File Search')} — CubyCloud
+			: tx('Pencarian Berkas', 'File Search')} — CubyCrate
 	</title>
 	<meta
 		name="description"
 		content={tx(
-			'Hasil pencarian berkas dan folder di CubyCloud.',
-			'Search results for files and folders in CubyCloud.'
+			'Hasil pencarian berkas dan folder di CubyCrate.',
+			'Search results for files and folders in CubyCrate.'
 		)}
 	/>
 </svelte:head>

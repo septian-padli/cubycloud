@@ -181,7 +181,7 @@
 </script>
 
 <svelte:head>
-	<title>{tx('Pengguna & Kuota', 'Users & Quotas')} — CubyCloud</title>
+	<title>{tx('Pengguna & Kuota', 'Users & Quotas')} — CubyCrate</title>
 	<meta
 		name="description"
 		content={tx('Kelola pengguna dan kuota My Storage.', 'Manage My Storage users and quotas.')}
