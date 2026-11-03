@@ -24,7 +24,7 @@
 			alt="CubyCrate"
 			width="1216"
 			height="372"
-			class="{imgClass} aspect-[1216/372] object-contain hidden dark:block"
+			class="{imgClass} hidden aspect-[1216/372] object-contain dark:block"
 		/>
 	{:else}
 		<img
@@ -39,7 +39,7 @@
 			alt="CubyCrate"
 			width="612"
 			height="760"
-			class="{imgClass} aspect-[612/760] object-contain hidden dark:block"
+			class="{imgClass} hidden aspect-[612/760] object-contain dark:block"
 		/>
 	{/if}
 </span>
