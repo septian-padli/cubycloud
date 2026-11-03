@@ -328,9 +328,9 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 		.toBeTruthy();
 
 	// Reload persisted S3 node settings from the restarted process.
-	await page
-		.goto('/admin/settings', { waitUntil: 'domcontentloaded' })
-		.catch(() => page.goto('/admin/settings'));
+	await page.waitForURL('**/drive/organization');
+	await page.getByRole('link', { name: 'Pengaturan Admin' }).click();
+	await expect(page).toHaveURL(/\/admin\/settings$/);
 	await expect(page.getByText(nodeName).first()).toBeVisible();
 	await expect(page.getByText('Bucket: cubycloud-dev').first()).toBeVisible();
 	await expect(page.getByText('S3').first()).toBeVisible();
