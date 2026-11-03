@@ -301,7 +301,7 @@
 			? `${rootEntry.name} — ${locale.language === 'id' ? 'Dibagikan' : 'Shared'}`
 			: locale.language === 'id'
 				? 'Tautan Berbagi'
-				: 'Shared Link'} — CubyCloud
+				: 'Shared Link'} — CubyCrate
 	</title>
 	<meta name="robots" content="noindex" />
 </svelte:head>
@@ -336,11 +336,11 @@
 				title={rootEntry.name}
 				description={rootEntry.kind === 'folder'
 					? locale.language === 'id'
-						? 'Folder dibagikan secara publik melalui CubyCloud.'
-						: 'This folder is publicly shared through CubyCloud.'
+						? 'Folder dibagikan secara publik melalui CubyCrate.'
+						: 'This folder is publicly shared through CubyCrate.'
 					: locale.language === 'id'
-						? 'Berkas dibagikan secara publik melalui CubyCloud.'
-						: 'This file is publicly shared through CubyCloud.'}
+						? 'Berkas dibagikan secara publik melalui CubyCrate.'
+						: 'This file is publicly shared through CubyCrate.'}
 			>
 				{#snippet actions()}
 					<div class="flex items-center gap-2">
@@ -366,8 +366,8 @@
 							</p>
 							<p class="text-xs text-muted">
 								{locale.language === 'id'
-									? 'Masuk ke akun CubyCloud Anda untuk mengunggah berkas, membuat folder, atau mengedit isi folder ini.'
-									: 'Sign in to your CubyCloud account to upload files, create folders, or edit this folder.'}
+									? 'Masuk ke akun CubyCrate Anda untuk mengunggah berkas, membuat folder, atau mengedit isi folder ini.'
+									: 'Sign in to your CubyCrate account to upload files, create folders, or edit this folder.'}
 							</p>
 						</div>
 					</div>

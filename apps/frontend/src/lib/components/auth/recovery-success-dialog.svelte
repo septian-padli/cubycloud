@@ -41,7 +41,7 @@
 		const url = URL.createObjectURL(blob);
 		const link = document.createElement('a');
 		link.href = url;
-		link.download = `cubycloud-recovery-key-${Date.now()}.txt`;
+		link.download = `cubycrate-recovery-key-${Date.now()}.txt`;
 		document.body.appendChild(link);
 		link.click();
 		link.remove();

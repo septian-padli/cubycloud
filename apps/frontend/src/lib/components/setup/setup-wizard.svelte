@@ -352,7 +352,7 @@
 	<div class="min-w-0 flex-1 space-y-4">
 		<div>
 			<h1 class="text-2xl leading-tight font-bold text-main">
-				{tx('Setup CubyCloud', 'CubyCloud Setup')}
+				{tx('Setup CubyCrate', 'CubyCrate Setup')}
 			</h1>
 			<p class="mt-1 text-sm text-muted">
 				{locale.language === 'id'
@@ -402,7 +402,7 @@
 				{canNext}
 				isLast={currentStep === 5}
 				showSkip={currentStep === 3}
-				nextLabel={tx('Selesaikan Setup & Masuk ke CubyCloud', 'Complete Setup & Enter CubyCloud')}
+				nextLabel={tx('Selesaikan Setup & Masuk ke CubyCrate', 'Complete Setup & Enter CubyCrate')}
 				onBack={goBack}
 				onNext={goNext}
 				onSkip={skipCloud}

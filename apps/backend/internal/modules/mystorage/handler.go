@@ -475,7 +475,7 @@ func (h *Handler) batchDownloadZip(c echo.Context) error {
 	}
 	defer r.Close()
 	c.Response().Header().Set(echo.HeaderContentType, "application/zip")
-	c.Response().Header().Set(echo.HeaderContentDisposition, `attachment; filename="cubycloud-archive.zip"`)
+	c.Response().Header().Set(echo.HeaderContentDisposition, `attachment; filename="cubycrate-archive.zip"`)
 	return c.Stream(http.StatusOK, "application/zip", r)
 }
 

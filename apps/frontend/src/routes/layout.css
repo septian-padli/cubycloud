@@ -16,7 +16,7 @@
 		--text-muted: #5a6b46;
 		--border-subtle: rgba(0, 0, 0, 0.06);
 
-		/* shadcn-svelte theme mapped to CubyCloud tokens */
+		/* shadcn-svelte theme mapped to CubyCrate tokens */
 		--radius: 0.5rem;
 		--background: var(--bg-app);
 		--foreground: var(--text-main);

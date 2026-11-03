@@ -14,7 +14,7 @@ export function errorIllustrationFor(_status: number): string {
 const COPY: Record<number, Omit<ErrorPageContent, 'illustration'>> = {
 	401: {
 		title: 'Perlu masuk',
-		description: 'Silakan masuk ke akun CubyCloud untuk melanjutkan.'
+		description: 'Silakan masuk ke akun CubyCrate untuk melanjutkan.'
 	},
 	403: {
 		title: 'Akses ditolak',

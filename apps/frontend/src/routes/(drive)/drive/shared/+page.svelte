@@ -7,12 +7,12 @@
 </script>
 
 <svelte:head>
-	<title>{tx('Dibagikan pada saya', 'Shared with me')} — CubyCloud</title>
+	<title>{tx('Dibagikan pada saya', 'Shared with me')} — CubyCrate</title>
 	<meta
 		name="description"
 		content={tx(
-			'Berkas yang dibagikan ke akun CubyCloud Anda.',
-			'Files shared with your CubyCloud account.'
+			'Berkas yang dibagikan ke akun CubyCrate Anda.',
+			'Files shared with your CubyCrate account.'
 		)}
 	/>
 </svelte:head>

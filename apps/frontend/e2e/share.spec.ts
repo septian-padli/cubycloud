@@ -134,7 +134,7 @@ test('File and folder sharing end-to-end: direct share to registered user and pu
 	await expect(linkTab).toHaveAttribute('aria-selected', 'false');
 	await expectTabColors(usersTab, true);
 	await expectTabColors(linkTab, false);
-	await expect(sheet.getByLabel('Cari pengguna CubyCloud')).toBeVisible();
+	await expect(sheet.getByLabel('Cari pengguna CubyCrate')).toBeVisible();
 	await expect(sheet.getByLabel('Aktifkan kata sandi')).not.toBeVisible();
 	await linkTab.click();
 	await expect(linkTab).toHaveAttribute('aria-selected', 'true');
@@ -142,16 +142,16 @@ test('File and folder sharing end-to-end: direct share to registered user and pu
 	await expectTabColors(linkTab, true);
 	await expectTabColors(usersTab, false);
 	await expect(sheet.getByLabel('Aktifkan kata sandi')).toBeVisible();
-	await expect(sheet.getByLabel('Cari pengguna CubyCloud')).not.toBeVisible();
+	await expect(sheet.getByLabel('Cari pengguna CubyCrate')).not.toBeVisible();
 	await usersTab.click();
 	await expect(usersTab).toHaveAttribute('aria-selected', 'true');
 	await expect(linkTab).toHaveAttribute('aria-selected', 'false');
 	await expectTabColors(usersTab, true);
 	await expectTabColors(linkTab, false);
-	await expect(sheet.getByLabel('Cari pengguna CubyCloud')).toBeVisible();
+	await expect(sheet.getByLabel('Cari pengguna CubyCrate')).toBeVisible();
 
 	// 5. Bagikan ke user Bob dengan izin Editor
-	const userSearchInput = sheet.getByLabel('Cari pengguna CubyCloud');
+	const userSearchInput = sheet.getByLabel('Cari pengguna CubyCrate');
 	await userSearchInput.fill(userBob.username);
 	const suggestion = sheet.getByRole('button', { name: new RegExp(userBob.username, 'i') }).first();
 	await expect(suggestion).toBeVisible({ timeout: 5000 });

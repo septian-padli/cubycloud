@@ -18,8 +18,8 @@
 			</Card.Title>
 			<Card.Description class="text-sm text-muted">
 				{locale.language === 'id'
-					? 'Tautan ini dibatasi. Masuk ke akun CubyCloud untuk melihat isinya.'
-					: 'This link is restricted. Sign in to your CubyCloud account to view its contents.'}
+					? 'Tautan ini dibatasi. Masuk ke akun CubyCrate untuk melihat isinya.'
+					: 'This link is restricted. Sign in to your CubyCrate account to view its contents.'}
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="flex flex-col gap-3">

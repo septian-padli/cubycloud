@@ -138,7 +138,7 @@
 </script>
 
 <svelte:head>
-	<title>{tx('Berbintang', 'Starred')} — CubyCloud</title>
+	<title>{tx('Berbintang', 'Starred')} — CubyCrate</title>
 	<meta
 		name="description"
 		content={tx(

@@ -248,12 +248,12 @@
 </script>
 
 <svelte:head>
-	<title>{tx('Pengaturan Admin', 'Admin Settings')} — CubyCloud</title>
+	<title>{tx('Pengaturan Admin', 'Admin Settings')} — CubyCrate</title>
 	<meta
 		name="description"
 		content={tx(
-			'Kelola node penyimpanan dan pengaturan sistem CubyCloud.',
-			'Manage CubyCloud storage nodes and system settings.'
+			'Kelola node penyimpanan dan pengaturan sistem CubyCrate.',
+			'Manage CubyCrate storage nodes and system settings.'
 		)}
 	/>
 </svelte:head>

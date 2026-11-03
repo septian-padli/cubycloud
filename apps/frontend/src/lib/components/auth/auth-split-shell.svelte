@@ -1,6 +1,7 @@
 <script lang="ts">
 	import ThemeToggle from '$lib/components/theme-toggle.svelte';
 	import LanguagePicker from '$lib/components/language-picker.svelte';
+	import BrandLogo from '$lib/components/brand-logo.svelte';
 	import authHero from '$lib/assets/auth-hero-placeholder.svg';
 	import type { Snippet } from 'svelte';
 
@@ -28,7 +29,13 @@
 	<!-- Form panel -->
 	<section class="relative flex min-h-dvh flex-col">
 		<header class="flex items-center justify-between px-6 py-4 md:px-10">
-			<a href="/" class="text-sm font-semibold text-main">CubyCloud</a>
+			<a
+				href="/"
+				class="inline-flex items-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+				aria-label="CubyCrate"
+			>
+				<BrandLogo variant="horizontal" imgClass="h-6 w-auto" />
+			</a>
 			<div class="flex items-center gap-3">
 				<ThemeToggle />
 				<LanguagePicker />
@@ -40,7 +47,7 @@
 			</div>
 		</div>
 		<p class="px-6 pb-4 text-xs text-muted md:px-10">
-			Copyright (C) 2026 CubyCloud contributors. You may convey this work under AGPL-3.0-or-later.
+			Copyright (C) 2026 CubyCrate contributors. You may convey this work under AGPL-3.0-or-later.
 			No warranty.
 			<a
 				class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"

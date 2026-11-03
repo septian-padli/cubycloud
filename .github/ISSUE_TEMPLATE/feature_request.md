@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Usulkan fitur atau peningkatan untuk CubyCloud
+about: Usulkan fitur atau peningkatan untuk CubyCrate
 title: "[Feature] "
 labels: enhancement
 assignees: septian-padli

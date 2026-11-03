@@ -105,8 +105,8 @@
 			<Alert.Title>{tx('Tanpa email pemulihan', 'No recovery email')}</Alert.Title>
 			<Alert.Description>
 				{tx(
-					'CubyCloud tidak mengirim email pemulihan. Gunakan Emergency Recovery Key terbaru yang disimpan saat penyiapan.',
-					'CubyCloud does not send recovery emails. Use the latest Emergency Recovery Key saved during setup.'
+					'CubyCrate tidak mengirim email pemulihan. Gunakan Emergency Recovery Key terbaru yang disimpan saat penyiapan.',
+					'CubyCrate does not send recovery emails. Use the latest Emergency Recovery Key saved during setup.'
 				)}
 			</Alert.Description>
 		</Alert.Root>

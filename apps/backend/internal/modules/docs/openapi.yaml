@@ -2688,10 +2688,10 @@ components:
             type: apiKey
 info:
     description: |
-        Comprehensive HTTP API documentation for **CubyCloud**, a self-hosted single-container cloud storage platform.
+        Comprehensive HTTP API documentation for **CubyCrate**, a self-hosted single-container cloud storage platform.
 
         ### Authentication & Sessions
-        CubyCloud uses HTTP-only cookie session authentication (`cuby_token`).
+        CubyCrate uses HTTP-only cookie session authentication (`cuby_token`).
         Interactive API exploration via **Try it out** automatically sends this cookie from your active browser session.
         A fallback `Authorization: Bearer <token>` header is also supported.
 
@@ -2699,7 +2699,7 @@ info:
         - **Public**: Endpoints accessible without authentication (e.g. `/health`, setup status, public links).
         - **Authenticated**: Endpoints requiring an active user session (`USER` or `SUPER_ADMIN` role).
         - **Super Admin Only**: Endpoints restricted strictly to users with the `SUPER_ADMIN` role (e.g. `/api/v1/admin/*`, `/api/docs/*`).
-    title: CubyCloud API
+    title: CubyCrate API
     version: 1.0.0
 openapi: 3.1.0
 paths:
@@ -4983,7 +4983,7 @@ paths:
                     description: ZIP archive stream.
                     headers:
                         Content-Disposition:
-                            example: attachment; filename="cubycloud-archive.zip"
+                            example: attachment; filename="cubycrate-archive.zip"
                             schema:
                                 type: string
                 "400":
@@ -6190,7 +6190,7 @@ paths:
                     headers:
                         Content-Disposition:
                             schema:
-                                example: attachment; filename="cubycloud-archive.zip"
+                                example: attachment; filename="cubycrate-archive.zip"
                                 type: string
                 "400":
                     content:
@@ -8901,7 +8901,7 @@ security:
     - CookieAuth: []
     - BearerAuth: []
 servers:
-    - description: Current CubyCloud instance (relative root)
+    - description: Current CubyCrate instance (relative root)
       url: /
 tags:
     - description: Initial system configuration and storage initialization
