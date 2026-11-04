@@ -136,7 +136,7 @@ test('Grid mode renders client-side thumbnail preview for image, video, and PDF,
 	await videoCard.dblclick();
 	const dialog = page.getByRole('dialog');
 	await expect(dialog).toBeVisible();
-	await expect(dialog.getByText('thumb-video.webm')).toBeVisible();
+	await expect(dialog.getByTestId('video-preview').getByText('thumb-video.webm')).toBeVisible();
 	await expect(dialog.getByTestId('video-preview')).toBeVisible();
 	await dialog.getByRole('button', { name: 'Tutup' }).first().click();
 	await expect(dialog).not.toBeVisible();
