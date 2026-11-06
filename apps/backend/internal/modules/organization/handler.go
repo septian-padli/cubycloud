@@ -10,10 +10,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/cubycloud/backend/internal/database"
-	"github.com/cubycloud/backend/internal/modules/jobs"
-	"github.com/cubycloud/backend/internal/modules/mystorage"
-	"github.com/cubycloud/backend/internal/storage"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/database"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/modules/jobs"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/modules/mystorage"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/storage"
 	"github.com/labstack/echo/v4"
 	"github.com/uptrace/bun"
 )

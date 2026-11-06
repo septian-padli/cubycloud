@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/cubycloud/backend/internal/storage"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/storage"
 )
 
 type listAvailabilityDriver struct {

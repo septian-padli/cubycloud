@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"github.com/cubycloud/backend/internal/database"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/database"
 )
 
 func TestValidateCloudCredentialsInvalid(t *testing.T) {

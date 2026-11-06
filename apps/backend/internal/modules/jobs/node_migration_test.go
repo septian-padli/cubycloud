@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cubycloud/backend/internal/database"
-	"github.com/cubycloud/backend/internal/modules/jobs"
-	"github.com/cubycloud/backend/internal/storage"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/database"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/modules/jobs"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/storage"
 	"github.com/oklog/ulid/v2"
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"

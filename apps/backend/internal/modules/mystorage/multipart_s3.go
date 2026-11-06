@@ -12,8 +12,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
-	appconfig "github.com/cubycloud/backend/internal/config"
-	"github.com/cubycloud/backend/internal/storage"
+	appconfig "github.com/septian-padli/cubycrate/apps/backend/internal/config"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/storage"
 	"github.com/uptrace/bun"
 )
 
