@@ -75,7 +75,7 @@ func TestStartupOrphanBlobReconciliation_LocalAndS3(t *testing.T) {
 	instanceID, err := storage.InstanceID(ctx, db)
 	require.NoError(t, err)
 
-	localBlobPrefix := filepath.Join(localNodePath, "cubycloud", instanceID, "local-node-1", "blobs")
+	localBlobPrefix := filepath.Join(localNodePath, "cubycrate", instanceID, "local-node-1", "blobs")
 	require.NoError(t, os.MkdirAll(localBlobPrefix, 0o755))
 
 	// File outside owned namespace (must NEVER be deleted)
@@ -337,7 +337,7 @@ func TestAuditLogMiddleware_MutationsAndRedactionAndRetention(t *testing.T) {
 	assert.Contains(t, *failedDelete.ErrorMessage, "404")
 
 	// Test Admin API endpoint GET /api/v1/admin/audit-logs
-	adminHandler := admin.NewHandler(db, storage.NewLocalDriver(dataDir), dataDir, filepath.Join(dataDir, "db", "cubycloud.db"))
+	adminHandler := admin.NewHandler(db, storage.NewLocalDriver(dataDir), dataDir, filepath.Join(dataDir, "db", "cubycrate.db"))
 	eAdmin := echo.New()
 	eAdmin.GET("/api/v1/admin/audit-logs", adminHandler.GetAuditLogs)
 

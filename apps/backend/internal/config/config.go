@@ -97,12 +97,12 @@ func LoadConfig() (*Config, error) {
 			allowedOrigins = []string{"*"}
 		}
 	}
-	masterKey := os.Getenv("CUBYCLOUD_MASTER_KEY")
-	masterKeyFile := os.Getenv("CUBYCLOUD_MASTER_KEY_FILE")
+	masterKey := os.Getenv("CUBYCRATE_MASTER_KEY")
+	masterKeyFile := os.Getenv("CUBYCRATE_MASTER_KEY_FILE")
 	cleanupDryRun := true
-	if val := strings.TrimSpace(os.Getenv("CUBYCLOUD_STORAGE_CLEANUP_DRY_RUN")); val != "" {
+	if val := strings.TrimSpace(os.Getenv("CUBYCRATE_STORAGE_CLEANUP_DRY_RUN")); val != "" {
 		cleanupDryRun = !strings.EqualFold(val, "false")
-	} else if val := strings.TrimSpace(os.Getenv("CUBYCLOUD_STORAGE_CLEANUP_ENABLED")); strings.EqualFold(val, "true") {
+	} else if val := strings.TrimSpace(os.Getenv("CUBYCRATE_STORAGE_CLEANUP_ENABLED")); strings.EqualFold(val, "true") {
 		cleanupDryRun = false
 	}
 
@@ -110,7 +110,7 @@ func LoadConfig() (*Config, error) {
 		Port:                port,
 		DataDirPath:         dataDir,
 		JWTSecret:           jwtSecret,
-		DBPath:              filepath.Join(dataDir, "db", "cubycloud.db"),
+		DBPath:              filepath.Join(dataDir, "db", "cubycrate.db"),
 		StoragePath:         filepath.Join(dataDir, "storage"),
 		TempTUSPath:         filepath.Join(dataDir, "temp", "tus"),
 		IsProduction:        isProduction,
@@ -207,7 +207,7 @@ func isDirWritable(path string) bool {
 	}
 
 	// Test write permission by creating and removing a test file
-	testFile := filepath.Join(path, ".cubycloud_write_test")
+	testFile := filepath.Join(path, ".cubycrate_write_test")
 	if err := os.WriteFile(testFile, []byte(""), 0600); err != nil {
 		return false
 	}
@@ -230,7 +230,7 @@ func loadOrCreateJWTSecret(dataDir string) (string, error) {
 	}
 
 	// File does not exist. Check if an existing database exists.
-	dbPath := filepath.Join(dataDir, "db", "cubycloud.db")
+	dbPath := filepath.Join(dataDir, "db", "cubycrate.db")
 	if fi, statErr := os.Stat(dbPath); statErr == nil && fi.Size() > 0 {
 		return "", errors.New("JWT secret is missing while existing database is present; restore secrets/jwt.key or provide JWT_SECRET environment variable")
 	}

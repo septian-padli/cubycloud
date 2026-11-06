@@ -293,7 +293,7 @@ func TestPermissionEnforcement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	part.Write([]byte("Hello CubyCloud Shared!"))
+	part.Write([]byte("Hello CubyCrate Shared!"))
 	writer.Close()
 
 	req = httptest.NewRequest("POST", fmt.Sprintf("/api/v1/drive/shared/folders/%s/upload", teamFolder.ID), &body)

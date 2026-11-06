@@ -60,7 +60,7 @@ func (c *S3MultipartClient) client(ctx context.Context, nodeID string) (*s3.Clie
 		if dataDir == "" {
 			dataDir = appconfig.Load().DataDirPath
 		}
-		if _, err := storage.InitMasterKey(dataDir, os.Getenv("CUBYCLOUD_MASTER_KEY"), os.Getenv("CUBYCLOUD_MASTER_KEY_FILE"), c.db); err != nil {
+		if _, err := storage.InitMasterKey(dataDir, os.Getenv("CUBYCRATE_MASTER_KEY"), os.Getenv("CUBYCRATE_MASTER_KEY_FILE"), c.db); err != nil {
 			return nil, "", err
 		}
 	}

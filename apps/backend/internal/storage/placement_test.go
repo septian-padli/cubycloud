@@ -143,7 +143,7 @@ func TestInstanceIDAndBlobKey(t *testing.T) {
 		t.Fatalf("instance IDs = %q, %q; want same 32-character hex ID", first, second)
 	}
 	key := BuildBlobKey(first, "node", "blob")
-	want := "cubycloud/" + first + "/node/blobs/blob"
+	want := "cubycrate/" + first + "/node/blobs/blob"
 	if key != want {
 		t.Fatalf("blob key = %q, want %q", key, want)
 	}
@@ -151,10 +151,10 @@ func TestInstanceIDAndBlobKey(t *testing.T) {
 	if !ok || gotInstance != first || gotNode != "node" || gotBlob != "blob" {
 		t.Fatalf("ParseBlobKey(%q) = %q, %q, %q, %v", key, gotInstance, gotNode, gotBlob, ok)
 	}
-	if _, _, _, ok := ParseBlobKey("cubycloud/other/node/blobs/blob/extra"); ok {
+	if _, _, _, ok := ParseBlobKey("cubycrate/other/node/blobs/blob/extra"); ok {
 		t.Fatal("ParseBlobKey accepted a malformed key")
 	}
-	if _, _, _, ok := ParseBlobKey("cubycloud/instance/node/blobs/../outside"); ok {
+	if _, _, _, ok := ParseBlobKey("cubycrate/instance/node/blobs/../outside"); ok {
 		t.Fatal("ParseBlobKey accepted a path traversal key")
 	}
 }

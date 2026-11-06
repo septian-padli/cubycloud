@@ -42,7 +42,7 @@ func (h *Handler) CompleteSetup(c echo.Context) error {
 
 	// Set HTTP-only cookie
 	cookie := &http.Cookie{
-		Name:     "cuby_token",
+		Name:     "cubycrate_token",
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,

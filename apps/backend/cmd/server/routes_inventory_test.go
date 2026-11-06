@@ -36,7 +36,7 @@ func TestPrintRouteInventory(t *testing.T) {
 	cfg := &config.Config{
 		Port:           "8383",
 		DataDirPath:    tempDir,
-		DBPath:         filepath.Join(tempDir, "db", "cubycloud.db"),
+		DBPath:         filepath.Join(tempDir, "db", "cubycrate.db"),
 		StoragePath:    filepath.Join(tempDir, "storage"),
 		JWTSecret:      "test-secret-at-least-32-bytes-long-super-secret",
 		AllowedOrigins: []string{"*"},

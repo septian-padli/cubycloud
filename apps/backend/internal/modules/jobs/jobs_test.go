@@ -29,7 +29,7 @@ func setupTestDB(t *testing.T) (*bun.DB, string, storage.StorageDriver) {
 	dataDir, err := os.MkdirTemp("", "cuby-jobs-test-*")
 	require.NoError(t, err)
 
-	dbPath := filepath.Join(dataDir, "cubycloud.db")
+	dbPath := filepath.Join(dataDir, "cubycrate.db")
 	db, err := database.Open(context.Background(), dbPath)
 	require.NoError(t, err)
 

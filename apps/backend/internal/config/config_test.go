@@ -26,7 +26,7 @@ func TestConfigLoad_Defaults(t *testing.T) {
 	assert.False(t, cfg.IsProduction)
 	assert.False(t, cfg.CookieSecure)
 	assert.Equal(t, []string{"*"}, cfg.AllowedOrigins)
-	assert.Equal(t, filepath.Join(cfg.DataDirPath, "db", "cubycloud.db"), cfg.DBPath)
+	assert.Equal(t, filepath.Join(cfg.DataDirPath, "db", "cubycrate.db"), cfg.DBPath)
 	assert.Equal(t, filepath.Join(cfg.DataDirPath, "storage"), cfg.StoragePath)
 	assert.Equal(t, filepath.Join(cfg.DataDirPath, "temp", "tus"), cfg.TempTUSPath)
 }
@@ -40,16 +40,16 @@ func TestConfigLoad_CustomEnv(t *testing.T) {
 	assert.Equal(t, "9090", cfg.Port)
 	assert.Equal(t, tmpDir, cfg.DataDirPath)
 	assert.Equal(t, "my-custom-secret", cfg.JWTSecret)
-	assert.Equal(t, filepath.Join(tmpDir, "db", "cubycloud.db"), cfg.DBPath)
+	assert.Equal(t, filepath.Join(tmpDir, "db", "cubycrate.db"), cfg.DBPath)
 }
 func TestConfigLoad_CustomOriginsAndCookie(t *testing.T) {
-	t.Setenv("ALLOWED_ORIGINS", "https://app.cubycloud.local, https://drive.cubycloud.local")
+	t.Setenv("ALLOWED_ORIGINS", "https://app.cubycrate.local, https://drive.cubycrate.local")
 	t.Setenv("COOKIE_SECURE", "true")
 
 	cfg, err := LoadConfig()
 	assert.NoError(t, err)
 	assert.True(t, cfg.CookieSecure)
-	assert.Equal(t, []string{"https://app.cubycloud.local", "https://drive.cubycloud.local"}, cfg.AllowedOrigins)
+	assert.Equal(t, []string{"https://app.cubycrate.local", "https://drive.cubycrate.local"}, cfg.AllowedOrigins)
 }
 
 func TestConfigLoad_ProductionValidation(t *testing.T) {
@@ -84,7 +84,7 @@ func TestConfigLoad_ProductionValidation(t *testing.T) {
 		// Simulate existing DB without secret file
 		dbDir := filepath.Join(tmpDir, "db")
 		assert.NoError(t, os.MkdirAll(dbDir, 0755))
-		assert.NoError(t, os.WriteFile(filepath.Join(dbDir, "cubycloud.db"), []byte("sqlite-data"), 0644))
+		assert.NoError(t, os.WriteFile(filepath.Join(dbDir, "cubycrate.db"), []byte("sqlite-data"), 0644))
 
 		_, err := LoadConfig()
 		assert.Error(t, err)
