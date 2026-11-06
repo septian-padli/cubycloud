@@ -205,7 +205,7 @@ func buildEchoRouter(cfg *config.Config, db *bun.DB, driver storage.StorageDrive
 	setup.RegisterRoutes(e, db, driver, setupGuard, cfg.DataDirPath, cfg.JWTSecret)
 
 	// Admin routes (JWT auth + Super Admin guard, bypasses setup guard)
-	dbPath := cfg.DataDirPath + "/db/cubycloud.db"
+	dbPath := cfg.DataDirPath + "/db/cubycrate.db"
 	jwtAuth := middleware.JWTAuth(cfg.JWTSecret, db)
 	adminGuard := middleware.SuperAdminGuard(db)
 

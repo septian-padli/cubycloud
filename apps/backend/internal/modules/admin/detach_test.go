@@ -112,7 +112,7 @@ func TestDetachStorageNodeLifecycle(t *testing.T) {
 
 	// Test HTTP endpoint via Echo handler
 	e := echo.New()
-	handler := admin.NewHandler(db, driver, tempDir, filepath.Join(tempDir, "db", "cubycloud.db"), queue)
+	handler := admin.NewHandler(db, driver, tempDir, filepath.Join(tempDir, "db", "cubycrate.db"), queue)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/storage-nodes/"+node1.ID+"/detach", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)

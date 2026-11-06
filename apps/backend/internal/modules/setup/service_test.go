@@ -1111,7 +1111,7 @@ func TestHandler_CompleteSetup_HTTP(t *testing.T) {
 	cookies := rec.Result().Cookies()
 	var found bool
 	for _, cookie := range cookies {
-		if cookie.Name == "cuby_token" {
+		if cookie.Name == "cubycrate_token" {
 			found = true
 			if !cookie.HttpOnly {
 				t.Error("cookie should be HttpOnly")
@@ -1126,7 +1126,7 @@ func TestHandler_CompleteSetup_HTTP(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("cuby_token cookie not set")
+		t.Error("cubycrate_token cookie not set")
 	}
 }
 

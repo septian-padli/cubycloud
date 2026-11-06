@@ -170,7 +170,7 @@ func TestDocsAccessControl(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
 			if tc.cookieVal != "" {
 				req.AddCookie(&http.Cookie{
-					Name:  "cuby_token",
+					Name:  "cubycrate_token",
 					Value: tc.cookieVal,
 				})
 			}

@@ -203,7 +203,7 @@ func TestDeleteUser_S3BlobCleanupAndOrganizationPreservation(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, tombstone.DeletedAt, "deleted_at must be populated")
 	require.Equal(t, fmt.Sprintf("deleted_user_%s", targetID), tombstone.Username)
-	require.Equal(t, fmt.Sprintf("deleted_%s@cubycloud.local", targetID), tombstone.Email)
+	require.Equal(t, fmt.Sprintf("deleted_%s@cubycrate.local", targetID), tombstone.Email)
 
 	// 10. Verify Organization Service List:
 	// Items created by target user must display created_by as 'deleted user'

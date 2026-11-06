@@ -37,13 +37,13 @@ func TestS3NodeLifecycleAndRestartPersistence(t *testing.T) {
 	resp.Body.Close()
 
 	ctx := context.Background()
-	tempDir, err := os.MkdirTemp("", "cubycloud-s3-test-*")
+	tempDir, err := os.MkdirTemp("", "cubycrate-s3-test-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 	storagePath := filepath.Join(tempDir, "storage")
 	t.Setenv("DATA_DIR_PATH", tempDir)
 	masterKey := bytes.Repeat([]byte{0x5a}, 32)
-	t.Setenv("CUBYCLOUD_MASTER_KEY", base64.StdEncoding.EncodeToString(masterKey))
+	t.Setenv("CUBYCRATE_MASTER_KEY", base64.StdEncoding.EncodeToString(masterKey))
 	require.NoError(t, os.MkdirAll(storagePath, 0755))
 	require.NoError(t, os.MkdirAll(filepath.Join(tempDir, "db"), 0755))
 	// 1. Initial Start: Open database and storage driver
@@ -68,10 +68,10 @@ func TestS3NodeLifecycleAndRestartPersistence(t *testing.T) {
 	cloudNode, err := adminSvc.CreateCloudNode(ctx, &admin.CreateCloudNodeRequest{
 		Name:          nodeName,
 		Endpoint:      "http://127.0.0.1:19000",
-		Bucket:        "cubycloud-dev",
+		Bucket:        "cubycrate-dev",
 		Region:        "us-east-1",
-		AccessKey:     "cubycloud-app",
-		SecretKey:     "cubycloud-app-local-only-2026",
+		AccessKey:     "cubycrate-app",
+		SecretKey:     "cubycrate-app-local-only-2026",
 		CapacityCapGB: 100,
 		Enabled:       true,
 	})
@@ -82,22 +82,22 @@ func TestS3NodeLifecycleAndRestartPersistence(t *testing.T) {
 	var rawAccess, rawSecret []byte
 	err = db.QueryRowContext(ctx, `SELECT access_key_encrypted, secret_key_encrypted FROM storage_nodes WHERE id = ?`, cloudNode.ID).Scan(&rawAccess, &rawSecret)
 	require.NoError(t, err)
-	require.NotEqual(t, "cubycloud-app", string(rawAccess), "Access key must be stored encrypted")
-	require.NotEqual(t, "cubycloud-app-local-only-2026", string(rawSecret), "Secret key must be stored encrypted")
+	require.NotEqual(t, "cubycrate-app", string(rawAccess), "Access key must be stored encrypted")
+	require.NotEqual(t, "cubycrate-app-local-only-2026", string(rawSecret), "Secret key must be stored encrypted")
 
 	// Set placement strategy to MOST_FREE_SPACE so cloud node is selected
 	_, err = db.ExecContext(ctx, `INSERT OR REPLACE INTO settings (key, value) VALUES ('placement_strategy', 'MOST_FREE_SPACE')`)
 	require.NoError(t, err)
 
 	// 3. Upload File to S3
-	testContent := []byte(fmt.Sprintf("Hello CubyCloud MinIO Storage! Timestamp: %d", time.Now().UnixNano()))
+	testContent := []byte(fmt.Sprintf("Hello CubyCrate MinIO Storage! Timestamp: %d", time.Now().UnixNano()))
 	filename := "test-s3-file.txt"
 
 	intent, err := myStorageSvc.UploadIntent(ctx, userID, filename, int64(len(testContent)), nil, true)
 	require.NoError(t, err)
 	require.Equal(t, "s3", intent.Placement)
 	require.NotEmpty(t, intent.UploadID)
-	require.Contains(t, intent.URL, "127.0.0.1:19000/cubycloud-dev")
+	require.Contains(t, intent.URL, "127.0.0.1:19000/cubycrate-dev")
 
 	// Direct PUT to MinIO URL
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, intent.URL, bytes.NewReader(testContent))
@@ -141,7 +141,7 @@ func TestS3NodeLifecycleAndRestartPersistence(t *testing.T) {
 	dlResult, err := myStorageSvcRestarted.GetDownloadURL(ctx, userID, item.ID)
 	require.NoError(t, err)
 	require.NotNil(t, dlResult.URL)
-	require.Contains(t, *dlResult.URL, "127.0.0.1:19000/cubycloud-dev")
+	require.Contains(t, *dlResult.URL, "127.0.0.1:19000/cubycrate-dev")
 
 	// Download via Presigned URL and verify identical bytes
 	reqDL, err := http.NewRequestWithContext(ctx, http.MethodGet, *dlResult.URL, nil)

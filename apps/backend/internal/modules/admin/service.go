@@ -520,7 +520,7 @@ func (s *Service) CreateCloudNode(ctx context.Context, req *CreateCloudNodeReque
 		return nil, fmt.Errorf("validate cloud credentials: %w", err)
 	}
 
-	keyMaterial, err := storage.InitMasterKey(s.dataDirPath, os.Getenv("CUBYCLOUD_MASTER_KEY"), os.Getenv("CUBYCLOUD_MASTER_KEY_FILE"), s.db)
+	keyMaterial, err := storage.InitMasterKey(s.dataDirPath, os.Getenv("CUBYCRATE_MASTER_KEY"), os.Getenv("CUBYCRATE_MASTER_KEY_FILE"), s.db)
 	if err != nil {
 		return nil, fmt.Errorf("initialize credential encryption: %w", err)
 	}
@@ -912,7 +912,7 @@ func (s *Service) DeleteUser(ctx context.Context, actorID, targetID string, req 
 	}
 
 	// Tombstone the user: scramble credentials, mark deleted_at, preserve ID for organization_items foreign keys
-	tombstoneEmail := fmt.Sprintf("deleted_%s@cubycloud.local", targetID)
+	tombstoneEmail := fmt.Sprintf("deleted_%s@cubycrate.local", targetID)
 	tombstoneUsername := fmt.Sprintf("deleted_user_%s", targetID)
 	_, err = tx.ExecContext(ctx, `
 		UPDATE users

@@ -142,13 +142,13 @@ func (h *Handler) RescanStorageNodes(c echo.Context) error {
 
 // DownloadBackup streams database backup
 func (h *Handler) DownloadBackup(c echo.Context) error {
-	tmpDir, err := os.MkdirTemp(os.TempDir(), "cubycloud-backup-")
+	tmpDir, err := os.MkdirTemp(os.TempDir(), "cubycrate-backup-")
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{
 			"error": "failed to create temporary backup",
 		})
 	}
-	tmpPath := tmpDir + string(os.PathSeparator) + "cubycloud.db"
+	tmpPath := tmpDir + string(os.PathSeparator) + "cubycrate.db"
 	defer os.Remove(tmpPath)
 	defer os.Remove(tmpDir)
 
@@ -173,7 +173,7 @@ func (h *Handler) DownloadBackup(c echo.Context) error {
 		})
 	}
 
-	c.Response().Header().Set("Content-Disposition", "attachment; filename=cubycloud.db")
+	c.Response().Header().Set("Content-Disposition", "attachment; filename=cubycrate.db")
 	c.Response().Header().Set("Content-Type", "application/octet-stream")
 	c.Response().Header().Set("Content-Length", fmt.Sprintf("%d", stat.Size()))
 
