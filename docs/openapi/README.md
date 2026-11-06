@@ -62,7 +62,7 @@ requestInterceptor: function(req) {
   return req;
 }
 ```
-When accessing Swagger UI in a browser where you are logged in as Super Admin, clicking **Try it out** and **Execute** automatically sends the HTTP-only `cuby_token` cookie. No manual JWT copying or credential entry is required.
+When accessing Swagger UI in a browser where you are logged in as Super Admin, clicking **Try it out** and **Execute** automatically sends the HTTP-only `cubycrate_token` cookie. No manual JWT copying or credential entry is required.
 
 ---
 
@@ -132,11 +132,11 @@ The automated validation suite tests:
 
 ## 6. Viewing Swagger UI Locally
 
-1. Start the CubyCloud development backend:
+1. Start the CubyCrate development backend:
    ```bash
    make dev-backend
    ```
-2. Log in as a Super Admin user via the frontend or API (`POST /api/v1/auth/login`) to obtain the `cuby_token` cookie.
+2. Log in as a Super Admin user via the frontend or API (`POST /api/v1/auth/login`) to obtain the `cubycrate_token` cookie.
 3. Open your browser and navigate to:
    ```
    http://localhost:8383/api/docs

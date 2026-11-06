@@ -148,12 +148,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.validate-tag.outputs.tag_name }}
-          name: CubyCloud ${{ needs.validate-tag.outputs.tag_name }}
+          name: CubyCrate ${{ needs.validate-tag.outputs.tag_name }}
           prerelease: ${{ needs.validate-tag.outputs.is_prerelease == 'true' }}
           generate_release_notes: true
           draft: false
           body: |
-            ## CubyCloud ${{ needs.validate-tag.outputs.tag_name }}
+            ## CubyCrate ${{ needs.validate-tag.outputs.tag_name }}
             
             **Channel:** `${{ needs.validate-tag.outputs.channel }}`
             **Docker Image:** `ghcr.io/${{ github.repository }}:${{ needs.validate-tag.outputs.tag_name }}`
@@ -161,13 +161,13 @@ jobs:
             ### Quick Start with Docker Compose
             ```yaml
             services:
-              cubycloud:
+              cubycrate:
                 image: ghcr.io/${{ github.repository }}:${{ needs.validate-tag.outputs.tag_name }}
                 restart: unless-stopped
                 ports:
                   - "8383:8383"
                 volumes:
-                  - cubycloud_data:/app/data
+                  - cubycrate_data:/app/data
             volumes:
-              cubycloud_data:
+              cubycrate_data:
             ```

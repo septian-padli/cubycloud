@@ -1,6 +1,6 @@
-# CubyCloud Frontend
+# CubyCrate Frontend
 
-SvelteKit SPA for CubyCloud (`adapter-static` + SPA fallback for Go `go:embed`).
+SvelteKit SPA for CubyCrate (`adapter-static` + SPA fallback for Go `go:embed`).
 
 ## Stack
 
@@ -33,7 +33,7 @@ Config: [`components.json`](./components.json)
 
 ## Design tokens
 
-App tokens from [`DESIGN.md`](./DESIGN.md) are implemented in `src/routes/layout.css` (`bg-app`, `bg-surface`, `text-main`, etc.). shadcn-svelte theme variables are mapped to the same CubyCloud palette for future components.
+App tokens from [`DESIGN.md`](./DESIGN.md) are implemented in `src/routes/layout.css` (`bg-app`, `bg-surface`, `text-main`, etc.). shadcn-svelte theme variables are mapped to the same CubyCrate palette for future components.
 
 ## Scaffold command (reference)
 

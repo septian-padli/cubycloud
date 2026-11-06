@@ -1,23 +1,23 @@
-# Panduan Reverse Proxy Production CubyCloud (Caddy & Nginx)
+# Panduan Reverse Proxy Production CubyCrate (Caddy & Nginx)
 
-Dokumen ini menyediakan panduan konfigurasi reverse proxy HTTPS menggunakan **Caddy** atau **Nginx** di depan container CubyCloud.
+Dokumen ini menyediakan panduan konfigurasi reverse proxy HTTPS menggunakan **Caddy** atau **Nginx** di depan container CubyCrate.
 
 ---
 
-## 1. Persiapan Environment CubyCloud
+## 1. Persiapan Environment CubyCrate
 
-Saat dijalankan di balik reverse proxy HTTPS, ubah konfigurasi environment container CubyCloud di `compose.yaml`:
+Saat dijalankan di balik reverse proxy HTTPS, ubah konfigurasi environment container CubyCrate di `compose.yaml`:
 
 ```yaml
 services:
-  cubycloud:
+  cubycrate:
     image: ghcr.io/septian-padli/cubycloud:latest
     restart: unless-stopped
     # Jika reverse proxy berada dalam host atau network yang sama:
     ports:
       - "127.0.0.1:8383:8383"
     volumes:
-      - cubycloud_data:/app/data
+      - cubycrate_data:/app/data
     environment:
       - ENV=production
       - TRUST_PROXY=true
@@ -26,14 +26,14 @@ services:
 ```
 
 * **`TRUST_PROXY=true`**: Memungkinkan server membaca header `X-Forwarded-For` dan `X-Forwarded-Proto: https`.
-* **`COOKIE_SECURE=true`**: Memastikan cookie auth sesi (`cuby_token`) hanya dikirim melalui koneksi HTTPS aman.
+* **`COOKIE_SECURE=true`**: Memastikan cookie auth sesi (`cubycrate_token`) hanya dikirim melalui koneksi HTTPS aman.
 * **`ALLOWED_ORIGINS`**: Origin HTTPS publik yang diizinkan untuk request CORS.
 
 ---
 
 ## 2. Health & Readiness Probe Endpoint
 
-CubyCloud menyediakan dua probe endpoint HTTP:
+CubyCrate menyediakan dua probe endpoint HTTP:
 
 * **`GET /api/health`** (Readiness probe): Memvalidasi koneksi SQLite database dan ketersediaan semua storage node fisik yang terdaftar.
   * Respon **HTTP 200** `{"status":"ok"}` jika siap menerima beban kerja.
@@ -62,7 +62,7 @@ drive.domainanda.com {
         max_size 10GB
     }
 
-    reverse_proxy cubycloud:8383 {
+    reverse_proxy cubycrate:8383 {
         # Streaming real-time SSE tanpa buffering
         flush_interval -1
     }
@@ -85,11 +85,11 @@ drive.domainanda.com {
 
 ```yaml
 services:
-  cubycloud:
+  cubycrate:
     image: ghcr.io/septian-padli/cubycloud:latest
     restart: unless-stopped
     volumes:
-      - cubycloud_data:/app/data
+      - cubycrate_data:/app/data
     environment:
       - ENV=production
       - TRUST_PROXY=true
@@ -107,10 +107,10 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - cubycloud
+      - cubycrate
 
 volumes:
-  cubycloud_data:
+  cubycrate_data:
   caddy_data:
   caddy_config:
 ```
@@ -119,7 +119,7 @@ volumes:
 
 ## 4. Opsi B: Deployment dengan Nginx
 
-Template konfigurasi lengkap tersedia di `deploy/nginx/cubycloud.conf`.
+Template konfigurasi tersedia di `deploy/nginx/cubycrate.conf`.
 
 ### Poin Kunci Konfigurasi Nginx:
 
@@ -131,7 +131,7 @@ Template konfigurasi lengkap tersedia di `deploy/nginx/cubycloud.conf`.
 2. **Server-Sent Events (SSE):**
    ```nginx
    location = /api/v1/events {
-       proxy_pass http://cubycloud_backend;
+       proxy_pass http://cubycrate_backend;
        proxy_http_version 1.1;
        proxy_set_header Connection '';
        proxy_buffering off;
@@ -142,7 +142,7 @@ Template konfigurasi lengkap tersedia di `deploy/nginx/cubycloud.conf`.
 3. **Readiness Probe:**
    ```nginx
    location ~ ^/(api/)?health$ {
-       proxy_pass http://cubycloud_backend;
+       proxy_pass http://cubycrate_backend;
        proxy_connect_timeout 5s;
        proxy_read_timeout 5s;
    }

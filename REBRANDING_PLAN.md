@@ -1,11 +1,11 @@
 # REBRANDING_PLAN.md — CubyCloud → CubyCrate
 
 > **Version:** 1.0 · **Prepared:** 2026-11-03  
-> **Status:** Implementation-ready plan, **not authorization to merge or deploy**.  
+> **Status:** Implementation-ready plan; technical preservation clauses **superseded** for T2–T6 Clean Break technical migrations. Visual design contracts remain **strictly preserved**.  
 > **Scope:** Two independently managed OMP workstreams: `septian-padli/cubycloud` (application) and `septian-padli/cubycloud-page` (website/docs).  
 > **Brand authority:** The identical `BRAND.md` v1.1 and the same owner-supplied `public/logos/` source assets must be accessible to both workstreams.  
 > **Inputs:** `cubycrate-rebranding-audit.md`, `REBRANDING_AUDIT_PAGES.md`, each repository's current `DESIGN.md` and governing `AGENTS.md`/product contracts.  
-> **Result:** Brand-facing CubyCrate identity with **no destructive or unnecessary technical migration**.
+> **Result:** Brand-facing CubyCrate identity with owner-approved technical identifier clean break and preserved visual rules.
 
 ## 1. Decisions already settled
 
@@ -17,7 +17,7 @@
 | Existing tagline | *Your files. Your server. Your rules.* — optional/provisional |
 | Color system, fonts, tone, UI/UX, motion | **No changes**; obey the corresponding repository design system |
 | Logo | Owner-selected 18-variant logo family, supplied in both repos under **root** `public/logos/`; SVG and WebP exports; use **original files** |
-| App data and runtime identity | `cubycloud` technical identifiers remain unchanged in this wave |
+| App data and runtime identity | Technical preservation superseded by owner-approved T2–T6 Clean Break migrations (`cubycrate`, `cubycrate.db`, `cubycrate_data`, etc.); visual rules unchanged |
 | GitHub repos and GHCR | Existing repository names, URLs, image paths and release contracts remain unchanged |
 | Cloudflare Worker | Keep `cubycloud-page` and its existing Workers Builds integration |
 | Production deployment | Explicit approval required; currently held during rebrand |

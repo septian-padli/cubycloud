@@ -18,7 +18,7 @@ StorageNodeScan:
     path:
       type: string
       description: Candidate storage path.
-      example: /srv/cubycloud/storage/default
+      example: /srv/cubycrate/storage/default
     kind:
       type: string
       description: Disk kind detected for the candidate path.
@@ -84,7 +84,7 @@ SetupStorageNodeInput:
     path:
       type: string
       description: Local storage directory. An enabled directory is created if missing and must be writable.
-      example: /srv/cubycloud/storage/default
+      example: /srv/cubycrate/storage/default
     capacity_bytes:
       type: integer
       format: int64
@@ -120,7 +120,7 @@ SetupCloudConfig:
       example: https://s3.example.com
     bucket:
       type: string
-      example: cubycloud-data
+      example: cubycrate-data
     region:
       type: string
       example: us-east-1
@@ -153,7 +153,7 @@ CompleteSetupRequest:
       items:
         $ref: '#/components/schemas/SetupStorageNodeInput'
       example:
-        - path: /srv/cubycloud/storage/default
+        - path: /srv/cubycrate/storage/default
           capacity_bytes: 1099511627776
           enabled: true
     placement_strategy:
