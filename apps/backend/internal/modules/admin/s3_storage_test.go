@@ -27,15 +27,30 @@ import (
 // 4. Reading/downloading the file after restart succeeds with byte-identical content.
 // 5. Purging the file from trash deletes the physical object from S3.
 func TestS3NodeLifecycleAndRestartPersistence(t *testing.T) {
-	// Skip if local MinIO is not running
+	endpoint := os.Getenv("CUBYCRATE_TEST_S3_ENDPOINT")
+	if endpoint == "" {
+		endpoint = "http://127.0.0.1:19000"
+	}
+	bucket := os.Getenv("CUBYCRATE_TEST_S3_BUCKET")
+	if bucket == "" {
+		bucket = "cubycrate-dev"
+	}
+	accessKey := os.Getenv("CUBYCRATE_TEST_S3_ACCESS_KEY")
+	if accessKey == "" {
+		accessKey = "cubycrate-app"
+	}
+	secretKey := os.Getenv("CUBYCRATE_TEST_S3_SECRET_KEY")
+	if secretKey == "" {
+		secretKey = "cubycrate-app-local-only-2026"
+	}
+
 	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get("http://127.0.0.1:19000/minio/health/live")
+	resp, err := client.Get(endpoint + "/minio/health/live")
 	if err != nil || resp.StatusCode != http.StatusOK {
-		t.Skip("MinIO dev container not running on localhost:19000; skipping live MinIO integration test")
+		t.Skipf("MinIO dev container not running on %s; skipping live MinIO integration test", endpoint)
 		return
 	}
 	resp.Body.Close()
-
 	ctx := context.Background()
 	tempDir, err := os.MkdirTemp("", "cubycrate-s3-test-*")
 	require.NoError(t, err)
@@ -51,6 +66,10 @@ func TestS3NodeLifecycleAndRestartPersistence(t *testing.T) {
 	require.NoError(t, err)
 
 	driver := storage.NewStorageDriver(db, storagePath)
+	if err := driver.ValidateCloudCredentials(ctx, endpoint, "us-east-1", bucket, accessKey, secretKey); err != nil {
+		t.Skipf("MinIO at %s not initialized with test bucket %q: %v; skipping live MinIO integration test", endpoint, bucket, err)
+		return
+	}
 
 	// Create test user
 	userID := ulid.Make().String()
@@ -67,11 +86,11 @@ func TestS3NodeLifecycleAndRestartPersistence(t *testing.T) {
 	nodeName := fmt.Sprintf("MinIO Integration %d", time.Now().UnixNano())
 	cloudNode, err := adminSvc.CreateCloudNode(ctx, &admin.CreateCloudNodeRequest{
 		Name:          nodeName,
-		Endpoint:      "http://127.0.0.1:19000",
-		Bucket:        "cubycrate-dev",
+		Endpoint:      endpoint,
+		Bucket:        bucket,
 		Region:        "us-east-1",
-		AccessKey:     "cubycrate-app",
-		SecretKey:     "cubycrate-app-local-only-2026",
+		AccessKey:     accessKey,
+		SecretKey:     secretKey,
 		CapacityCapGB: 100,
 		Enabled:       true,
 	})
@@ -97,7 +116,7 @@ func TestS3NodeLifecycleAndRestartPersistence(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "s3", intent.Placement)
 	require.NotEmpty(t, intent.UploadID)
-	require.Contains(t, intent.URL, "127.0.0.1:19000/cubycrate-dev")
+	require.Contains(t, intent.URL, bucket)
 
 	// Direct PUT to MinIO URL
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, intent.URL, bytes.NewReader(testContent))
@@ -141,7 +160,7 @@ func TestS3NodeLifecycleAndRestartPersistence(t *testing.T) {
 	dlResult, err := myStorageSvcRestarted.GetDownloadURL(ctx, userID, item.ID)
 	require.NoError(t, err)
 	require.NotNil(t, dlResult.URL)
-	require.Contains(t, *dlResult.URL, "127.0.0.1:19000/cubycrate-dev")
+	require.Contains(t, *dlResult.URL, bucket)
 
 	// Download via Presigned URL and verify identical bytes
 	reqDL, err := http.NewRequestWithContext(ctx, http.MethodGet, *dlResult.URL, nil)
