@@ -64,7 +64,7 @@ test('ZIP without native file picker submits repeated ids to the browser downloa
 	expect(submitted).toEqual({
 		action: '/api/v1/drive/my-storage/batch/download-zip',
 		method: 'POST',
-		target: 'cubycloud-zip-download',
+		target: 'cubycrate-zip-download',
 		enctype: 'application/x-www-form-urlencoded'
 	});
 	expect(fields).toEqual([

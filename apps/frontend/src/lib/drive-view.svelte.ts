@@ -1,6 +1,6 @@
 export type DriveViewMode = 'list' | 'grid';
 
-const STORAGE_KEY = 'cubycloud-drive-view';
+const STORAGE_KEY = 'cubycrate-drive-view';
 
 function readStored(): DriveViewMode {
 	if (typeof localStorage === 'undefined') return 'list';

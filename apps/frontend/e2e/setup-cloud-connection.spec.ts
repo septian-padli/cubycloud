@@ -17,10 +17,10 @@ test.describe('Setup Cloud Storage S3 Connection Validation', () => {
 					provider: 'S3_COMPATIBLE',
 					node_name: 'test-node',
 					endpoint: 'http://127.0.0.1:19000',
-					bucket: 'cubycloud-dev',
+					bucket: 'cubycrate-dev',
 					region: 'us-east-1',
-					access_key: 'cubycloud-app',
-					secret_key: 'cubycloud-app-local-only-2026'
+					access_key: 'cubycrate-app',
+					secret_key: 'cubycrate-app-local-only-2026'
 				}
 			});
 			expect(directRes.status()).toBe(403);
@@ -67,16 +67,16 @@ test.describe('Setup Cloud Storage S3 Connection Validation', () => {
 
 		// --- Condition 1: Unreachable endpoint ---
 		await endpointInput.fill('http://127.0.0.1:19999');
-		await bucketInput.fill('cubycloud-dev');
-		await accessKeyInput.fill('cubycloud-app');
-		await secretKeyInput.fill('cubycloud-app-local-only-2026');
+		await bucketInput.fill('cubycrate-dev');
+		await accessKeyInput.fill('cubycrate-app');
+		await secretKeyInput.fill('cubycrate-app-local-only-2026');
 
 		await testButton.click();
 		await expect(page.getByText(/Koneksi gagal|Connection failed/i)).toBeVisible();
 
 		// --- Condition 2: Invalid credentials ---
 		await endpointInput.fill('http://127.0.0.1:19000');
-		await bucketInput.fill('cubycloud-dev');
+		await bucketInput.fill('cubycrate-dev');
 		await accessKeyInput.fill('invalid-user');
 		await secretKeyInput.fill('wrong-secret-key-12345');
 
@@ -86,17 +86,17 @@ test.describe('Setup Cloud Storage S3 Connection Validation', () => {
 		// --- Condition 3: Invalid bucket ---
 		await endpointInput.fill('http://127.0.0.1:19000');
 		await bucketInput.fill('non-existent-bucket-999');
-		await accessKeyInput.fill('cubycloud-app');
-		await secretKeyInput.fill('cubycloud-app-local-only-2026');
+		await accessKeyInput.fill('cubycrate-app');
+		await secretKeyInput.fill('cubycrate-app-local-only-2026');
 
 		await testButton.click();
 		await expect(page.getByText(/Koneksi gagal|Connection failed/i)).toBeVisible();
 
 		// --- Condition 4: Valid MinIO connection ---
 		await endpointInput.fill('http://127.0.0.1:19000');
-		await bucketInput.fill('cubycloud-dev');
-		await accessKeyInput.fill('cubycloud-app');
-		await secretKeyInput.fill('cubycloud-app-local-only-2026');
+		await bucketInput.fill('cubycrate-dev');
+		await accessKeyInput.fill('cubycrate-app');
+		await secretKeyInput.fill('cubycrate-app-local-only-2026');
 
 		await testButton.click();
 		await expect(page.getByText(/Koneksi berhasil|Connection successful/i)).toBeVisible();
