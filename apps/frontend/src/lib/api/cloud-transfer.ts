@@ -90,8 +90,8 @@ export function downloadBatchZip(
 	const frame = document.createElement('iframe');
 	frame.name =
 		activeZipFrames.size === 0
-			? 'cubycloud-zip-download'
-			: `cubycloud-zip-download-${++zipDownloadCounter}`;
+			? 'cubycrate-zip-download'
+			: `cubycrate-zip-download-${++zipDownloadCounter}`;
 	activeZipFrames.add(frame);
 	frame.title = locale.language === 'id' ? 'Unduhan ZIP' : 'ZIP download';
 	frame.hidden = true;

@@ -7,7 +7,7 @@ const guestPassword = 'PreviewGuestPassword2026!';
 const video = readFileSync(join(import.meta.dirname, 'fixtures/preview.webm'));
 
 function pdfFixture(): Buffer {
-	const stream = 'BT /F1 18 Tf 50 150 Td (CubyCloud preview PDF) Tj ET';
+	const stream = 'BT /F1 18 Tf 50 150 Td (CubyCrate preview PDF) Tj ET';
 	const objects = [
 		'<< /Type /Catalog /Pages 2 0 R >>',
 		'<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>',

@@ -205,7 +205,7 @@
 	}
 
 	// localStorage key
-	const STORAGE_KEY = 'cubycloud_setup_draft';
+	const STORAGE_KEY = 'cubycrate_setup_draft';
 
 	// Save form state to localStorage
 	function saveToLocalStorage() {

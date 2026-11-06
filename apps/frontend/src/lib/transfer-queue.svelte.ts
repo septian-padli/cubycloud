@@ -1,12 +1,12 @@
 import type { ExplorerVariant } from '$lib/types/drive.js';
 
-const DB_NAME = 'cubycloud-transfer-queue';
+const DB_NAME = 'cubycrate-transfer-queue';
 const DB_VERSION = 1;
 const STORE_NAME = 'transfers';
 const RETENTION_MS = 24 * 60 * 60 * 1000;
 const LEASE_MS = 30_000;
 const HEARTBEAT_MS = 5_000;
-const CHANNEL_NAME = 'cubycloud-transfer-queue';
+const CHANNEL_NAME = 'cubycrate-transfer-queue';
 
 export type TransferState =
 	| 'queued'
@@ -510,7 +510,7 @@ async function withTransferLock<T>(id: string, callback: () => Promise<T>): Prom
 		}
 	};
 	if (typeof navigator !== 'undefined' && navigator.locks?.request) {
-		return navigator.locks.request(`cubycloud-transfer:${id}`, { ifAvailable: true }, (lock) =>
+		return navigator.locks.request(`cubycrate-transfer:${id}`, { ifAvailable: true }, (lock) =>
 			lock ? run(true) : undefined
 		);
 	}

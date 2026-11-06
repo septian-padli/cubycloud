@@ -1,4 +1,4 @@
-const KEY = 'cubycloud-logged-in';
+const KEY = 'cubycrate-logged-in';
 
 export function isMockLoggedIn(): boolean {
 	try {
