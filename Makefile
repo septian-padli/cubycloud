@@ -4,7 +4,7 @@ SHELL := /bin/bash
 
 # Default target
 help:
-	@echo "CubyCloud - Development & Build Commands"
+	@echo "CubyCrate - Development & Build Commands"
 	@echo ""
 	@echo "Development:"
 	@echo "  make dev            Start both backend and frontend development servers"
@@ -15,7 +15,7 @@ help:
 	@echo "  make build          Full production build (frontend + embed sync + Go binary)"
 	@echo "  make build-frontend Build SvelteKit SPA (apps/frontend/build/)"
 	@echo "  make sync-embed     Sync frontend build output to backend embed directory"
-	@echo "  make build-backend  Build single Go binary (apps/backend/bin/cubycloud)"
+	@echo "  make build-backend  Build single Go binary (apps/backend/bin/cubycrate)"
 	@echo ""
 	@echo "Testing & Quality:"
 	@echo "  make test           Run all standard tests (backend + frontend)"
@@ -56,12 +56,12 @@ sync-embed:
 build-backend:
 	@echo "==> Building single Go binary..."
 	@mkdir -p apps/backend/bin
-	@cd apps/backend && CGO_ENABLED=0 go build -ldflags="-s -w" -o ./bin/cubycloud ./cmd/server/main.go
-	@echo "==> Binary created at apps/backend/bin/cubycloud"
+	@cd apps/backend && CGO_ENABLED=0 go build -ldflags="-s -w" -o ./bin/cubycrate ./cmd/server/main.go
+	@echo "==> Binary created at apps/backend/bin/cubycrate"
 
 # Full production build
 build: build-frontend sync-embed build-backend
-	@echo "==> Full build complete! Single executable ready at apps/backend/bin/cubycloud"
+	@echo "==> Full build complete! Single executable ready at apps/backend/bin/cubycrate"
 
 # Run all tests
 test: test-backend test-frontend
@@ -97,4 +97,4 @@ reset-setup:
 # Clean artifacts
 clean:
 	@echo "==> Cleaning build artifacts..."
-	@rm -rf apps/backend/bin/ apps/frontend/build/ /tmp/cubycloud-dev /tmp/recovery-key-new-flow
+	@rm -rf apps/backend/bin/ apps/frontend/build/ /tmp/cubycrate-dev /tmp/recovery-key-new-flow
