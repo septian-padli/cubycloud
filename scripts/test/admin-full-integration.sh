@@ -4,7 +4,7 @@ set -euo pipefail
 API="http://localhost:8080/api/v1"
 ADMIN_TOKEN=""
 
-export DATA_DIR_PATH=/tmp/cubycloud-test-admin-full
+export DATA_DIR_PATH=/tmp/cubycrate-test-admin-full
 export PORT=8080
 export JWT_SECRET=test-secret-admin-full
 
@@ -25,11 +25,11 @@ api_call() {
     
     if [ -z "$data" ]; then
         curl -s -X $method "$API$endpoint" \
-            -H "Cookie: cuby_token=$ADMIN_TOKEN"
+            -H "Cookie: cubycrate_token=$ADMIN_TOKEN"
     else
         curl -s -X $method "$API$endpoint" \
             -H "Content-Type: application/json" \
-            -H "Cookie: cuby_token=$ADMIN_TOKEN" \
+            -H "Cookie: cubycrate_token=$ADMIN_TOKEN" \
             -d "$data"
     fi
 }
@@ -46,8 +46,8 @@ echo ""
 
 echo "2️⃣  Starting backend server..."
 cd apps/backend
-go build -o /tmp/cubycloud-test-server ./cmd/server
-/tmp/cubycloud-test-server &
+go build -o /tmp/cubycrate-test-server ./cmd/server
+/tmp/cubycrate-test-server &
 SERVER_PID=$!
 cd ../..
 sleep 2
@@ -231,22 +231,22 @@ echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "💾 Test 11: GET /admin/backup"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-curl -s -o /tmp/cubycloud-backup-test.db \
-    -H "Cookie: cuby_token=$ADMIN_TOKEN" \
+curl -s -o /tmp/cubycrate-backup-test.db \
+    -H "Cookie: cubycrate_token=$ADMIN_TOKEN" \
     "$API/admin/backup"
 
-if [ ! -f /tmp/cubycloud-backup-test.db ]; then
+if [ ! -f /tmp/cubycrate-backup-test.db ]; then
     echo "❌ Backup not downloaded"
     exit 1
 fi
 
-BACKUP_SIZE=$(stat -f%z /tmp/cubycloud-backup-test.db 2>/dev/null || stat -c%s /tmp/cubycloud-backup-test.db)
+BACKUP_SIZE=$(stat -f%z /tmp/cubycrate-backup-test.db 2>/dev/null || stat -c%s /tmp/cubycrate-backup-test.db)
 if [ "$BACKUP_SIZE" -lt 1000 ]; then
     echo "❌ Backup too small"
     exit 1
 fi
 echo "✅ Backup OK ($BACKUP_SIZE bytes)"
-rm -f /tmp/cubycloud-backup-test.db
+rm -f /tmp/cubycrate-backup-test.db
 echo ""
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
