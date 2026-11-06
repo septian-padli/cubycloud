@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cubycloud/backend/internal/config"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/config"
 	"github.com/labstack/echo/v4"
 	"github.com/oklog/ulid/v2"
 )

@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cubycloud/backend/internal/database"
-	"github.com/cubycloud/backend/internal/storage"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/database"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/storage"
 	"github.com/oklog/ulid/v2"
 	"github.com/uptrace/bun"
 )

@@ -10,12 +10,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/cubycloud/backend/internal/config"
-	"github.com/cubycloud/backend/internal/database"
-	"github.com/cubycloud/backend/internal/middleware"
-	jobsmod "github.com/cubycloud/backend/internal/modules/jobs"
-	"github.com/cubycloud/backend/internal/sse"
-	"github.com/cubycloud/backend/internal/storage"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/config"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/database"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/middleware"
+	jobsmod "github.com/septian-padli/cubycrate/apps/backend/internal/modules/jobs"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/sse"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/storage"
 	"github.com/stretchr/testify/require"
 )
 

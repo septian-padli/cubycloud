@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cubycloud/backend/internal/database"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/database"
 )
 
 type orphanTestDriver struct {

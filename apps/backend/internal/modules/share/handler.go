@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/cubycloud/backend/internal/modules/mystorage"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/modules/mystorage"
 	"github.com/labstack/echo/v4"
 )
 
