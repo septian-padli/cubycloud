@@ -1,4 +1,4 @@
-# CubyCloud — Backend AI Agent Guidance (Golang & SQLite)
+# CubyCrate — Backend AI Agent Guidance (Golang & SQLite)
 
 Patuhi kontrak global di `AGENTS.md` (root) dan blueprint teknis berikut **sebelum** menulis kode Go:
 

@@ -1,12 +1,11 @@
-# CubyCloud Release & Deployment Guide
+# CubyCrate Release & Deployment Guide
 
 This guide covers versioning policy, installation, upgrade procedures, rollback safety, backup and restore routines, and repository release operations.
 
 ---
 
 ## 1. Versioning Policy
-
-CubyCloud strictly adheres to [Semantic Versioning 2.0.0](https://semver.org/):
+CubyCrate strictly adheres to [Semantic Versioning 2.0.0](https://semver.org/):
 
 `v<MAJOR>.<MINOR>.<PATCH>[-<CHANNEL>.<NUMBER>]`
 
@@ -19,7 +18,7 @@ CubyCloud strictly adheres to [Semantic Versioning 2.0.0](https://semver.org/):
 | **Release Candidate** | `v1.0.0-rc.1` | Yes | `:v1.0.0-rc.1`, `:rc` | Production candidate validation |
 | **Stable** | `v1.0.0` | No | `:v1.0.0`, `:1.0.0`, `:1.0`, `:latest` | General availability |
 
-> **Critical Safety Rule:** Only official stable releases update the `:latest` Docker tag on GitHub Container Registry (GHCR). Routine pushes to `dev` or `main` only trigger quality validation and never produce or publish images.
+> **Critical Safety Rule:** Only official stable releases update the `:latest` Docker tag on GitHub Container Registry (GHCR). Routine pushes to `dev` or `main` only trigger quality validation and never produce or publish images. Note: The existing published container path remains `ghcr.io/septian-padli/cubycloud`; future packages may target `ghcr.io/septian-padli/cubycrate` once published.
 
 ---
 
@@ -34,7 +33,7 @@ CubyCloud strictly adheres to [Semantic Versioning 2.0.0](https://semver.org/):
 
 2. Pin the specific release tag in your environment (recommended for reproducible setups):
    ```bash
-   export CUBYCLOUD_VERSION=v0.0.1-alpha.1
+   export CUBYCRATE_VERSION=v0.0.1-alpha.1
    ```
 
 3. Launch the container:
@@ -46,19 +45,20 @@ CubyCloud strictly adheres to [Semantic Versioning 2.0.0](https://semver.org/):
 
 ---
 
-## 3. Upgrading CubyCloud
+## 3. Upgrading CubyCrate
 
-Because CubyCloud stores its database, master keys, and file blobs inside `/app/data` (backed by the Docker volume `cubycloud_data`), updating the application binary is safe:
+> **Clean Break Notice:** Upgrading directly from v0.0.1-alpha.1 to post-rename releases is not supported as an automatic in-place migration due to changes in database filenames, secrets paths, and volume labels.
 
-1. **Always perform a backup first:**
+Because CubyCrate stores its database, master keys, and file blobs inside `/app/data` (backed by the Docker volume `cubycrate_data`), updating between compatible versions is straightforward:
+
+1. **Always perform a full backup first (admin DB download is NOT a full backup):**
    ```bash
-   docker compose exec cubycloud tar -czf /tmp/cubycloud-backup-$(date +%F).tar.gz /app/data
-   docker cp cubycloud:/tmp/cubycloud-backup-$(date +%F).tar.gz ./
+   docker compose exec cubycrate tar -czf /tmp/cubycrate-backup-$(date +%F).tar.gz /app/data
+   docker cp cubycrate:/tmp/cubycrate-backup-$(date +%F).tar.gz ./
    ```
-
 2. **Update the target image tag in your environment or compose.yaml:**
    ```bash
-   export CUBYCLOUD_VERSION=v0.0.2-alpha.1
+   export CUBYCRATE_VERSION=v0.0.2-alpha.1
    docker compose pull
    ```
 
@@ -88,7 +88,7 @@ If a newly deployed image encounters issues:
 
 3. Pin the previous known-good tag:
    ```bash
-   export CUBYCLOUD_VERSION=v0.0.1-alpha.1
+   export CUBYCRATE_VERSION=v0.0.1-alpha.1
    docker compose up -d
    ```
 
@@ -98,21 +98,24 @@ If a newly deployed image encounters issues:
 
 ## 5. Backup & Restore Procedures
 
-All persistent application data resides in `/app/data`:
-- `/app/data/db/cubycloud.db`: SQLite database metadata and job queue
-- `/app/data/storage/`: Encrypted/managed disk storage chunks
-- `/app/data/master.key` (or environment key): Encryption master key
+> **Important:** The admin UI database download (`GET /api/v1/admin/settings/backup`) is **NOT a full backup**; it downloads only SQLite metadata, omitting the encryption master key and physical file blobs.
 
+All persistent application data resides in `/app/data`:
+- `/app/data/db/cubycrate.db`: SQLite database metadata and job queue
+- `/app/data/storage/`: Managed disk storage chunks
+- `/app/data/secrets/master.key`: AES-256-GCM master key used to encrypt S3 cloud credentials (or provided via `CUBYCRATE_MASTER_KEY` / `CUBYCRATE_MASTER_KEY_FILE`)
+- `/app/data/secrets/jwt.key`: Session authentication signing key
 ### Backup Routine
 
 ```bash
 # 1. Archive the persistent data directory
-docker compose exec cubycloud tar -czf /app/data/backup.tar.gz -C /app data
-docker cp cubycloud:/app/data/backup.tar.gz ./cubycloud-backup.tar.gz
-docker compose exec cubycloud rm /app/data/backup.tar.gz
-```
+docker compose exec cubycrate tar -czf /app/data/backup.tar.gz -C /app data
+docker cp cubycrate:/app/data/backup.tar.gz ./cubycrate-backup.tar.gz
+docker compose exec cubycrate rm /app/data/backup.tar.gz
 
 ### Restore Routine
+
+> **Disaster Recovery Rule:** Always test restores on a **disposable isolated copy** (e.g. in a staging environment or temporary volume) before performing any production recovery.
 
 ```bash
 # 1. Stop the application
@@ -120,11 +123,11 @@ docker compose down
 
 # 2. Extract backup to the named volume using a temporary Alpine runner
 docker run --rm \
-  -v cubycloud_data:/target \
+  -v cubycrate_data:/target \
   -v "$(pwd)":/backup \
-  alpine sh -c "rm -rf /target/* && tar -xzf /backup/cubycloud-backup.tar.gz -C /target"
+  alpine sh -c "rm -rf /target/* && tar -xzf /backup/cubycrate-backup.tar.gz -C /target"
 
-# 3. Restart CubyCloud
+# 3. Restart CubyCrate
 docker compose up -d
 ```
 

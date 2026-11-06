@@ -1,4 +1,4 @@
-# CubyCloud — Repository-Wide Agent Instructions
+# CubyCrate — Repository-Wide Agent Instructions
 
 > Scope: repository root and all descendants. This file contains **mandatory cross-project engineering constraints**. Area-specific instructions may add requirements but must not relax security, product, or architecture contracts.
 

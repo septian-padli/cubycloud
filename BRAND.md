@@ -1,9 +1,10 @@
 # BRAND.md — CubyCrate Brand Identity Contract
 
 > **Version:** 1.1 · **Updated:** 2026-11-03  
-> **Status:** Brand identity locked; owner-selected logo family supplied in both repositories. Source-vector integrity, small-size rendering, and deployment mapping remain verification gates.  
+> **Status:** Brand identity locked; owner-selected logo family supplied in both repositories.  
+> **Technical Migration Supersession:** Phase-one technical preservation clauses (deferring runtime/storage/cookie/volume/identifier renames) are **superseded** for T2–T6 technical migrations under owner-approved Clean Break specifications. Brand visual rules (Flat Earthy system, palette, typography, voice, logo family) remain **strictly preserved and active**.  
 > **Applies to:** `septian-padli/cubycloud` (product application) and `septian-padli/cubycloud-page` (marketing website and documentation).  
-> **Purpose:** Shared, implementation-independent brand contract for two separately operated OMP agents. This document authorizes **no code change, merge, repository rename, domain cutover, or deployment by itself**.
+> **Purpose:** Shared, implementation-independent brand contract for two separately operated OMP agents.
 
 ## 1. Non-negotiable decisions
 
@@ -19,8 +20,8 @@
 | Website visual design | **Unchanged**; preserve existing Creative Editorial / immersive marketing and branded Starlight systems |
 | Brand colors, typography, voice, interaction style | **Unchanged**; do not introduce a new palette, typeface, tone, or redesign through rebranding |
 | Official logo family | **Owner-selected CubyCrate artwork is supplied** at `public/logos/` in both repositories; 18 visual variants (SVG/WebP exports). Do not redraw or reinterpret the source artwork. |
-| Phase-one scope | Public-facing name, approved copy/metadata/docs and associated assets only; **legacy runtime compatibility must remain intact** |
-| Technical rename | Deferred to a separately reviewed, tested migration with explicit owner approval |
+| Phase-one scope | Public-facing name, copy, metadata, docs, and assets; **Note:** Technical preservation clauses are superseded by owner-approved T2–T6 Clean Break migrations |
+| Technical rename | Active under owner-approved Clean Break T2–T6 execution; visual brand rules unchanged |
 | GitHub repos and Cloudflare Worker | Retain existing technical names during phase one |
 
 **Naming rule:** Write **CubyCrate** in natural-language titles, prose, UI strings, documentation, accessibility labels, and public metadata. Never write `Cuby Crate`, `Cubycrate`, or `CubyCloud` for *new public branding*. `cubycrate` is for suitable new machine identifiers, not ordinary prose. Styling may use CSS `text-transform` or an existing uppercase display treatment without changing the canonical brand spelling.

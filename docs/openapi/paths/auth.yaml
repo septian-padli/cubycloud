@@ -2,7 +2,7 @@
   post:
     operationId: login
     summary: Log in
-    description: Authenticates with a username or email and password. The endpoint is rate-limited to 10 requests per minute. On success it sets a 24-hour `cuby_token` HttpOnly, SameSite=Lax cookie; the cookie is Secure when the request is considered secure. The token is not included in the JSON response.
+    description: Authenticates with a username or email and password. The endpoint is rate-limited to 10 requests per minute. On success it sets a 24-hour `cubycrate_token` HttpOnly, SameSite=Lax cookie; the cookie is Secure when the request is considered secure. The token is not included in the JSON response.
     security: []
     requestBody:
       required: true
@@ -18,7 +18,7 @@
         description: Login succeeded.
         headers:
           Set-Cookie:
-            description: Sets the `cuby_token` cookie with Path=/, HttpOnly, SameSite=Lax, a 24-hour lifetime, and Secure when applicable.
+            description: Sets the `cubycrate_token` cookie with Path=/, HttpOnly, SameSite=Lax, a 24-hour lifetime, and Secure when applicable.
             schema:
               type: string
         content:
@@ -67,14 +67,14 @@
   post:
     operationId: logout
     summary: Log out
-    description: Clears the `cuby_token` cookie by setting an empty value and a negative Max-Age. Authentication is not required by this route.
+    description: Clears the `cubycrate_token` cookie by setting an empty value and a negative Max-Age. Authentication is not required by this route.
     security: []
     responses:
       '200':
         description: Logout succeeded and the cookie was cleared.
         headers:
           Set-Cookie:
-            description: Clears the `cuby_token` cookie at Path=/; it remains HttpOnly and SameSite=Lax, with Secure when applicable.
+            description: Clears the `cubycrate_token` cookie at Path=/; it remains HttpOnly and SameSite=Lax, with Secure when applicable.
             schema:
               type: string
         content:

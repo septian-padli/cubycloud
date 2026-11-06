@@ -36,7 +36,7 @@
               $ref: '#/components/schemas/ScanNodesResponse'
             example:
               nodes:
-                - path: /srv/cubycloud/storage/default
+                - path: /srv/cubycrate/storage/default
                   kind: HDD
                   capacity_bytes: 1099511627776
                   free_bytes: 536870912000
@@ -53,7 +53,7 @@
   post:
     operationId: completeSetup
     summary: Complete initial setup
-    description: Initializes the SUPER_ADMIN account and selected storage configuration. This endpoint is protected by setupGuard, not normal user authentication, and is available only before setup has completed. At least one local storage node must be enabled unless cloud storage is enabled. Enabled local paths may be created if missing and must be writable; enabled cloud credentials are validated. On success, the endpoint sets a 24-hour `cuby_token` HttpOnly, SameSite=Lax cookie, Secure when applicable.
+    description: Initializes the SUPER_ADMIN account and selected storage configuration. This endpoint is protected by setupGuard, not normal user authentication, and is available only before setup has completed. At least one local storage node must be enabled unless cloud storage is enabled. Enabled local paths may be created if missing and must be writable; enabled cloud credentials are validated. On success, the endpoint sets a 24-hour `cubycrate_token` HttpOnly, SameSite=Lax cookie, Secure when applicable.
     security: []
     requestBody:
       required: true
@@ -68,7 +68,7 @@
               password: initial-secure-password
               recovery_key: ABCDE-FGHIJ-KLMNP-QRSTU-VWXYZ-23456
             storage_nodes:
-              - path: /srv/cubycloud/storage/default
+              - path: /srv/cubycrate/storage/default
                 capacity_bytes: 1099511627776
                 enabled: true
             placement_strategy: balanced
@@ -77,7 +77,7 @@
               provider: S3_COMPATIBLE
               node_name: s3-primary
               endpoint: https://s3.example.com
-              bucket: cubycloud-data
+              bucket: cubycrate-data
               region: us-east-1
               access_key: EXAMPLEACCESSKEY
               secret_key: example-secret-key
@@ -87,7 +87,7 @@
         description: Setup completed; response includes the supplied recovery key and client redirect path.
         headers:
           Set-Cookie:
-            description: Sets the `cuby_token` cookie with Path=/, HttpOnly, SameSite=Lax, a 24-hour lifetime, and Secure when applicable.
+            description: Sets the `cubycrate_token` cookie with Path=/, HttpOnly, SameSite=Lax, a 24-hour lifetime, and Secure when applicable.
             schema:
               type: string
         content:
