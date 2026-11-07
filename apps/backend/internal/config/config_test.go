@@ -10,12 +10,10 @@ import (
 )
 
 func TestConfigLoad_Defaults(t *testing.T) {
-	t.Cleanup(func() {
-		_ = os.RemoveAll("./data")
-	})
+	dataDir := t.TempDir()
 	// Clear any env
 	t.Setenv("PORT", "")
-	t.Setenv("DATA_DIR_PATH", "")
+	t.Setenv("DATA_DIR_PATH", dataDir)
 	t.Setenv("JWT_SECRET", "")
 	t.Setenv("ENV", "")
 	t.Setenv("APP_ENV", "")
@@ -24,14 +22,14 @@ func TestConfigLoad_Defaults(t *testing.T) {
 
 	cfg := Load()
 	assert.Equal(t, "8383", cfg.Port)
-	assert.NotEmpty(t, cfg.DataDirPath)
+	assert.Equal(t, dataDir, cfg.DataDirPath)
 	assert.NotEmpty(t, cfg.JWTSecret)
 	assert.False(t, cfg.IsProduction)
 	assert.False(t, cfg.CookieSecure)
 	assert.Equal(t, []string{"*"}, cfg.AllowedOrigins)
-	assert.Equal(t, filepath.Join(cfg.DataDirPath, "db", "cubycrate.db"), cfg.DBPath)
-	assert.Equal(t, filepath.Join(cfg.DataDirPath, "storage"), cfg.StoragePath)
-	assert.Equal(t, filepath.Join(cfg.DataDirPath, "temp", "tus"), cfg.TempTUSPath)
+	assert.Equal(t, filepath.Join(dataDir, "db", "cubycrate.db"), cfg.DBPath)
+	assert.Equal(t, filepath.Join(dataDir, "storage"), cfg.StoragePath)
+	assert.Equal(t, filepath.Join(dataDir, "temp", "tus"), cfg.TempTUSPath)
 }
 func TestConfigLoad_CustomEnv(t *testing.T) {
 	tmpDir := t.TempDir()

@@ -56,30 +56,27 @@ The screenshots were captured from the running application using synthetic local
 
 ### Docker Compose (recommended)
 
-CubyCrate runs as a single self-contained container with embedded frontend and backend. The Compose file pulls the image from GHCR; it does not build from source. No manual `.env` or secret generation is needed for a standard installation. The image must be publicly available on GHCR before this download-only path works.
+CubyCrate runs as one container with the frontend embedded in the Go backend. Until T7 publishes the GHCR package, build the image locally. Compose does not build or publish an image.
 
-1. Download `compose.yaml`:
+1. Download `compose.yaml` from the current repository:
    ```bash
    curl -O https://raw.githubusercontent.com/septian-padli/cubycloud/main/compose.yaml
    ```
-2. Start the container:
+2. Build CubyCrate from source at the repository root:
+   ```bash
+   docker build -t cubycrate:local .
+   ```
+3. Start the container:
    ```bash
    docker compose up -d
    ```
-3. Open `http://<IP-server>:8383/setup` from another device on the same LAN, or [http://localhost:8383/setup](http://localhost:8383/setup) on the Docker host. Complete the setup wizard and save your recovery key.
+4. Open `http://<IP-server>:8383/setup` from another device on the same LAN, or [http://localhost:8383/setup](http://localhost:8383/setup) on the Docker host. Complete the setup wizard and save your recovery key.
 
-Compose publishes port **8383** on all host interfaces by default, so devices on the LAN can connect. To use another host port, run `CUBYCRATE_PORT=9000 docker compose up -d` and open `http://<IP-server>:9000/setup`. The container still listens on port 8383. You can also set `CUBYCRATE_PORT=9000` in a `.env` file beside `compose.yaml`; this file configures Compose, not the application. Do not forward this HTTP port directly to the internet; restrict access with your firewall.
+Compose publishes port **8383** on all host interfaces by default. Set `CUBYCRATE_PORT=9000` to publish another host port; the container still listens on `8383`. Restrict direct HTTP access with your firewall and do not expose it directly to the internet.
 
 #### Updating CubyCrate
 
-To update an existing installation to the latest published release:
-
-```bash
-docker compose pull
-docker compose up -d
-```
-
-Compose pulls the newer image from GHCR and restarts the container. All SQLite database records, encryption keys, and uploaded files persist safely inside the `cubycrate_data` volume. Note that the technical rename introduces a clean break; existing v0.0.1-alpha.1 deployments do not support automatic direct in-place upgrade.
+The CubyCrate GHCR package is not available before T7. Until then, rebuild the local image from updated source with `docker build -t cubycrate:local .`, then recreate the container with `docker compose up -d`. This preserves data in the `cubycrate_data` volume.
 
 #### Docker Volume & Storage Configuration
 

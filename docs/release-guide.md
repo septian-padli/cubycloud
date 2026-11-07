@@ -13,12 +13,12 @@ CubyCrate strictly adheres to [Semantic Versioning 2.0.0](https://semver.org/):
 
 | Channel | Format Example | Prerelease? | Docker Tags Updated | Stability Target |
 | :--- | :--- | :--- | :--- | :--- |
-| **Alpha** | `v0.0.1-alpha.1` | Yes | `:v0.0.1-alpha.1`, `:alpha` | Active development, breaking schema changes possible |
+| **Alpha** | `v0.0.1-alpha.1` | Yes | `:v0.0.1-alpha.1`, `:alpha` | Historical CubyCloud alpha; direct upgrade to CubyCrate is unsupported |
 | **Beta** | `v0.1.0-beta.1` | Yes | `:v0.1.0-beta.1`, `:beta` | Feature-complete slice, stabilization testing |
 | **Release Candidate** | `v1.0.0-rc.1` | Yes | `:v1.0.0-rc.1`, `:rc` | Production candidate validation |
-| **Stable** | `v1.0.0` | No | `:v1.0.0`, `:1.0.0`, `:1.0`, `:latest` | General availability |
+| **Stable** | `v1.0.0` | No | `:v1.0.0`, `:1.0.0`, `:1.0`, `:latest` | General availability; only stable releases update `:latest` |
 
-> **Critical Safety Rule:** Only official stable releases update the `:latest` Docker tag on GitHub Container Registry (GHCR). Routine pushes to `dev` or `main` only trigger quality validation and never produce or publish images. Note: The existing published container path remains `ghcr.io/septian-padli/cubycloud`; future packages may target `ghcr.io/septian-padli/cubycrate` once published.
+> **Critical Safety Rule:** Only official stable releases update the `:latest` Docker tag on GHCR. Routine pushes to `dev` or `main` trigger validation only. The CubyCrate GHCR path is not published before T7.
 
 ---
 
@@ -31,11 +31,10 @@ CubyCrate strictly adheres to [Semantic Versioning 2.0.0](https://semver.org/):
    curl -fsSL https://raw.githubusercontent.com/septian-padli/cubycloud/main/compose.yaml -o compose.yaml
    ```
 
-2. Pin the specific release tag in your environment (recommended for reproducible setups):
+2. Build the image locally until the CubyCrate GHCR package is published after T7:
    ```bash
-   export CUBYCRATE_VERSION=v0.0.1-alpha.1
+   docker build -t cubycrate:local .
    ```
-
 3. Launch the container:
    ```bash
    docker compose up -d
@@ -47,31 +46,29 @@ CubyCrate strictly adheres to [Semantic Versioning 2.0.0](https://semver.org/):
 
 ## 3. Upgrading CubyCrate
 
-> **Clean Break Notice:** Upgrading directly from v0.0.1-alpha.1 to post-rename releases is not supported as an automatic in-place migration due to changes in database filenames, secrets paths, and volume labels.
+> **Clean Break:** Direct in-place upgrade from the historical `v0.0.1-alpha.1` CubyCloud release is not supported. Start with an empty CubyCrate data directory or volume. CubyCrate does not read or migrate the old database, volume, blobs, secrets, cookies, or browser persistence.
 
-Because CubyCrate stores its database, master keys, and file blobs inside `/app/data` (backed by the Docker volume `cubycrate_data`), updating between compatible versions is straightforward:
+Compatible CubyCrate releases store the database, master key, and file blobs under `/app/data` (the `cubycrate_data` volume). To upgrade between compatible CubyCrate releases:
 
 1. **Always perform a full backup first (admin DB download is NOT a full backup):**
    ```bash
    docker compose exec cubycrate tar -czf /tmp/cubycrate-backup-$(date +%F).tar.gz /app/data
    docker cp cubycrate:/tmp/cubycrate-backup-$(date +%F).tar.gz ./
    ```
-2. **Update the target image tag in your environment or compose.yaml:**
+
+2. Use a compatible CubyCrate image tag after the registry package is published in T7. Until then, rebuild the updated source locally with `docker build -t cubycrate:local .`.
+
+3. Restart the container:
    ```bash
-   export CUBYCRATE_VERSION=v0.0.2-alpha.1
-   docker compose pull
+   CUBYCRATE_VERSION=local docker compose up -d
    ```
 
-3. **Restart the container with the updated image:**
-   ```bash
-   docker compose up -d
-   ```
-
-4. **Verify container health and logs:**
+4. Verify container health and logs:
    ```bash
    docker compose ps
    docker compose logs -f
    ```
+
 
 ---
 
@@ -86,9 +83,9 @@ If a newly deployed image encounters issues:
 
 2. If database schema was modified or corrupted, restore the volume from your previous backup archive (see section 5).
 
-3. Pin the previous known-good tag:
+3. Pin a previous **compatible CubyCrate** image tag available on your configured registry; the historical `v0.0.1-alpha.1` CubyCloud image is not a supported rollback target.
    ```bash
-   export CUBYCRATE_VERSION=v0.0.1-alpha.1
+   export CUBYCRATE_VERSION=<previous-compatible-cubycrate-tag>
    docker compose up -d
    ```
 

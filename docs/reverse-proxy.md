@@ -11,7 +11,8 @@ Saat dijalankan di balik reverse proxy HTTPS, ubah konfigurasi environment conta
 ```yaml
 services:
   cubycrate:
-    image: ghcr.io/septian-padli/cubycloud:latest
+    # GHCR package is not published until T7; build and tag locally first.
+    image: cubycrate:local
     restart: unless-stopped
     # Jika reverse proxy berada dalam host atau network yang sama:
     ports:
@@ -86,7 +87,7 @@ drive.domainanda.com {
 ```yaml
 services:
   cubycrate:
-    image: ghcr.io/septian-padli/cubycloud:latest
+    image: cubycrate:local
     restart: unless-stopped
     volumes:
       - cubycrate_data:/app/data
