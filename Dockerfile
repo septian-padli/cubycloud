@@ -1,5 +1,5 @@
 # Stage 1: Build Frontend SPA
-FROM --platform=$BUILDPLATFORM oven/bun:1.3.14-alpine AS frontend-builder
+FROM --platform=$BUILDPLATFORM oven/bun:1-alpine AS frontend-builder
 WORKDIR /app/frontend
 
 COPY apps/frontend/package.json apps/frontend/bun.lock ./
@@ -31,7 +31,7 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -ldflags
 FROM alpine:3.21.3
 LABEL org.opencontainers.image.title="CubyCrate"
 LABEL org.opencontainers.image.description="Lightweight, open-source, self-hosted file drive"
-LABEL org.opencontainers.image.source="https://github.com/septian-padli/cubycloud"
+LABEL org.opencontainers.image.source="https://github.com/septian-padli/cubycrate"
 LABEL org.opencontainers.image.licenses="AGPL-3.0"
 
 WORKDIR /app
