@@ -30,12 +30,12 @@
 </script>
 
 <svelte:head>
-	<title>{tx('Beranda', 'Home')} — CubyCloud</title>
+	<title>{tx('Beranda', 'Home')} — CubyCrate</title>
 	<meta
 		name="description"
 		content={tx(
-			'Beranda CubyCloud: akses cepat, aktivitas, dan ringkasan kuota.',
-			'CubyCloud home: quick access, activity, and quota summary.'
+			'Beranda CubyCrate: akses cepat, aktivitas, dan ringkasan kuota.',
+			'CubyCrate home: quick access, activity, and quota summary.'
 		)}
 	/>
 </svelte:head>

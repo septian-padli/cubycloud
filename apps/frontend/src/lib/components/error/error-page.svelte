@@ -3,6 +3,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import ThemeToggle from '$lib/components/theme-toggle.svelte';
 	import LanguagePicker from '$lib/components/language-picker.svelte';
+	import BrandLogo from '$lib/components/brand-logo.svelte';
 	import { ArrowLeft } from '@lucide/svelte';
 	import { locale } from '$lib/locale.svelte.js';
 	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
@@ -43,7 +44,7 @@
 					  message === 'System setup is incomplete. Please complete setup first.'
 					? 'System setup is incomplete. Please complete setup first.'
 					: ({
-							401: 'Sign in to your CubyCloud account to continue.',
+							401: 'Sign in to your CubyCrate account to continue.',
 							403: 'You do not have permission to view this page.',
 							404: 'The link may be invalid or the page may have moved.',
 							500: 'A temporary issue occurred. Please try again shortly.',
@@ -53,7 +54,7 @@
 </script>
 
 <svelte:head>
-	<title>{status} — {title} | CubyCloud</title>
+	<title>{status} — {title} | CubyCrate</title>
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
@@ -62,7 +63,13 @@
 		<header
 			class="flex w-full items-center justify-between border-b border-subtle px-6 py-4 md:px-10"
 		>
-			<a href="/" class="text-sm font-semibold text-main">CubyCloud</a>
+			<a
+				href="/"
+				class="inline-flex items-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+				aria-label="CubyCrate"
+			>
+				<BrandLogo variant="horizontal" imgClass="h-6 w-auto" />
+			</a>
 			<div class="flex items-center gap-3">
 				<ThemeToggle />
 				<LanguagePicker />

@@ -275,7 +275,7 @@
     summary: Stream a ZIP of selected items
     security: [{ CookieAuth: [], BearerAuth: [] }]
     requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/BatchDownloadRequest' } } } }
-    responses: { '200': { description: ZIP archive stream., headers: { Content-Disposition: { schema: { type: string }, example: 'attachment; filename="cubycloud-archive.zip"' } }, content: { application/zip: { schema: { type: string, format: binary } } } }, '400': { description: ids is required or request invalid. }, '404': { description: Item not found. } }
+    responses: { '200': { description: ZIP archive stream., headers: { Content-Disposition: { schema: { type: string }, example: 'attachment; filename="cubycrate-archive.zip"' } }, content: { application/zip: { schema: { type: string, format: binary } } } }, '400': { description: ids is required or request invalid. }, '404': { description: Item not found. } }
 
 /api/v1/drive/my-storage/batch/compress-zip:
   post:

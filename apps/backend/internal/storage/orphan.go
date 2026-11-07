@@ -152,7 +152,7 @@ func ReconcileOrphanBlobs(ctx context.Context, db *bun.DB, store StorageDriver, 
 		if node.ID == "" || node.ID == "." || node.ID == ".." || strings.ContainsAny(node.ID, `/\\`) {
 			return nil, fmt.Errorf("storage node %q is not a safe namespace component", node.ID)
 		}
-		prefix := fmt.Sprintf("cubycloud/%s/%s/blobs/", instanceID, node.ID)
+		prefix := fmt.Sprintf("cubycrate/%s/%s/blobs/", instanceID, node.ID)
 		switch strings.ToUpper(node.Type) {
 		case "LOCAL":
 			basePath := node.Path

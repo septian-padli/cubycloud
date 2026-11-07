@@ -14,11 +14,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cubycloud/backend/internal/database"
-	"github.com/cubycloud/backend/internal/middleware"
-	"github.com/cubycloud/backend/internal/modules/mystorage"
-	"github.com/cubycloud/backend/internal/modules/share"
-	"github.com/cubycloud/backend/internal/storage"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/database"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/middleware"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/modules/mystorage"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/modules/share"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/storage"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/uptrace/bun"
@@ -293,7 +293,7 @@ func TestPermissionEnforcement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	part.Write([]byte("Hello CubyCloud Shared!"))
+	part.Write([]byte("Hello CubyCrate Shared!"))
 	writer.Close()
 
 	req = httptest.NewRequest("POST", fmt.Sprintf("/api/v1/drive/shared/folders/%s/upload", teamFolder.ID), &body)

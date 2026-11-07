@@ -257,8 +257,8 @@
 			<Sheet.Title>{locale.language === 'id' ? 'Bagikan' : 'Share'}</Sheet.Title>
 			<Sheet.Description>
 				{entry?.name ?? (locale.language === 'id' ? 'Berkas' : 'File')} — {locale.language === 'id'
-					? 'bagikan ke pengguna CubyCloud atau buat tautan.'
-					: 'share with CubyCloud users or create a link.'}
+					? 'bagikan ke pengguna CubyCrate atau buat tautan.'
+					: 'share with CubyCrate users or create a link.'}
 			</Sheet.Description>
 		</Sheet.Header>
 
@@ -297,8 +297,8 @@
 								autocomplete="off"
 								class="ps-9"
 								aria-label={locale.language === 'id'
-									? 'Cari pengguna CubyCloud'
-									: 'Search CubyCloud users'}
+									? 'Cari pengguna CubyCrate'
+									: 'Search CubyCrate users'}
 							/>
 							{#if searchingUsers}
 								<div class="absolute end-3 top-1/2 -translate-y-1/2">

@@ -9,14 +9,14 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// JWTAuth middleware extracts and validates JWT from cuby_token cookie or Authorization header
+// JWTAuth middleware extracts and validates JWT from cubycrate_token cookie or Authorization header
 func JWTAuth(jwtSecret string, db ...*bun.DB) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			var tokenString string
 
-			// 1. Try to get cuby_token cookie
-			if cookie, err := c.Cookie("cuby_token"); err == nil && cookie.Value != "" {
+			// 1. Try to get cubycrate_token cookie
+			if cookie, err := c.Cookie("cubycrate_token"); err == nil && cookie.Value != "" {
 				tokenString = cookie.Value
 			}
 

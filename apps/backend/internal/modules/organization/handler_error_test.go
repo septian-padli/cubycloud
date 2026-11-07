@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/cubycloud/backend/internal/storage"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/storage"
 	"github.com/labstack/echo/v4"
 )
 

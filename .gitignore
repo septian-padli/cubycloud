@@ -42,3 +42,8 @@ prompt-hermes.md
 apps/backend/tmp/
 apps/frontend/test-results/
 graphify-out/
+portfolio-screenshots/
+.agents/
+.omp/
+screenshots-before/
+screenshots-after/

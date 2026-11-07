@@ -26,7 +26,7 @@
 
 	<Sheet.Root bind:open={mobileOpen}>
 		<Sheet.Content side="left" class="w-64 gap-0 border-subtle bg-surface p-0 sm:max-w-none">
-			<Sheet.Title class="sr-only">{tx('Navigasi CubyCloud', 'CubyCloud navigation')}</Sheet.Title>
+			<Sheet.Title class="sr-only">{tx('Navigasi CubyCrate', 'CubyCrate navigation')}</Sheet.Title>
 			<Sheet.Description class="sr-only"
 				>{tx('Menu drive dan kuota penyimpanan', 'Drive menu and storage quota')}</Sheet.Description
 			>

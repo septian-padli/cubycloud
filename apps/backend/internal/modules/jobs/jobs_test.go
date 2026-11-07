@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cubycloud/backend/internal/database"
-	"github.com/cubycloud/backend/internal/sse"
-	"github.com/cubycloud/backend/internal/storage"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/database"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/sse"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/storage"
 	"github.com/labstack/echo/v4"
 	"github.com/oklog/ulid/v2"
 	"github.com/stretchr/testify/assert"
@@ -29,7 +29,7 @@ func setupTestDB(t *testing.T) (*bun.DB, string, storage.StorageDriver) {
 	dataDir, err := os.MkdirTemp("", "cuby-jobs-test-*")
 	require.NoError(t, err)
 
-	dbPath := filepath.Join(dataDir, "cubycloud.db")
+	dbPath := filepath.Join(dataDir, "cubycrate.db")
 	db, err := database.Open(context.Background(), dbPath)
 	require.NoError(t, err)
 

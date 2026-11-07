@@ -4,7 +4,7 @@
 
 The current application includes bcrypt password hashing, HTTP-only `SameSite=Lax` session cookies, rate limiting for login and public-share unlock requests, and encryption for stored S3-compatible credentials. The login and share-unlock rate limiter is in memory and resets when the server restarts.
 
-These controls do not replace host security, HTTPS, backups, or access control for the storage volume. CubyCloud does not claim end-to-end encryption for uploaded file contents.
+These controls do not replace host security, HTTPS, backups, or access control for the storage volume. CubyCrate does not claim end-to-end encryption for uploaded file contents.
 
 ## Reporting a vulnerability
 

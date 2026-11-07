@@ -57,10 +57,10 @@ StorageNode:
     id: {type: string, example: node-01}
     type: {type: string, example: local}
     name: {type: string, example: Primary disk}
-    path: {type: string, example: /srv/cubycloud}
+    path: {type: string, example: /srv/cubycrate}
     kind: {type: string, description: Storage medium kind (for example SSD, HDD, or S3)., example: SSD}
     endpoint: {type: string, example: https://s3.example.com}
-    bucket: {type: string, example: cubycloud-data}
+    bucket: {type: string, example: cubycrate-data}
     region: {type: string, example: us-east-1}
     total_gb: {type: integer, format: int64, example: 1000}
     free_gb: {type: integer, format: int64, example: 720}
@@ -82,7 +82,7 @@ CreateLocalStorageNodeRequest:
   required: [name, path, capacity_cap_gb, enabled]
   properties:
     name: {type: string, example: Primary disk}
-    path: {type: string, example: /srv/cubycloud}
+    path: {type: string, example: /srv/cubycrate}
     capacity_cap_gb: {type: integer, format: int64, example: 1000}
     enabled: {type: boolean, example: true}
 CreateCloudStorageNodeRequest:
@@ -91,7 +91,7 @@ CreateCloudStorageNodeRequest:
   properties:
     name: {type: string, example: Offsite backup}
     endpoint: {type: string, example: https://s3.example.com}
-    bucket: {type: string, example: cubycloud-data}
+    bucket: {type: string, example: cubycrate-data}
     region: {type: string, example: us-east-1}
     access_key: {type: string, example: AKIAIOSFODNN7EXAMPLE}
     secret_key: {type: string, format: password, example: example-secret-key}

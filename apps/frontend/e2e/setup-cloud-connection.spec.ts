@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test';
 
+const minioEndpoint = `http://127.0.0.1:${process.env.CUBYCRATE_MINIO_PORT ?? '19000'}`;
+const minioBucket = 'cubycrate-dev';
+const minioAccessKey = 'cubycrate-app';
+const minioSecretKey = 'cubycrate-app-local-only-2026';
+
 test.describe('Setup Cloud Storage S3 Connection Validation', () => {
 	test('tests S3 connection with 4 distinct conditions: valid, unreachable, invalid credentials, invalid bucket', async ({
 		page
@@ -16,11 +21,11 @@ test.describe('Setup Cloud Storage S3 Connection Validation', () => {
 					enabled: true,
 					provider: 'S3_COMPATIBLE',
 					node_name: 'test-node',
-					endpoint: 'http://127.0.0.1:19000',
-					bucket: 'cubycloud-dev',
+					endpoint: minioEndpoint,
+					bucket: minioBucket,
 					region: 'us-east-1',
-					access_key: 'cubycloud-app',
-					secret_key: 'cubycloud-app-local-only-2026'
+					access_key: minioAccessKey,
+					secret_key: minioSecretKey
 				}
 			});
 			expect(directRes.status()).toBe(403);
@@ -67,16 +72,16 @@ test.describe('Setup Cloud Storage S3 Connection Validation', () => {
 
 		// --- Condition 1: Unreachable endpoint ---
 		await endpointInput.fill('http://127.0.0.1:19999');
-		await bucketInput.fill('cubycloud-dev');
-		await accessKeyInput.fill('cubycloud-app');
-		await secretKeyInput.fill('cubycloud-app-local-only-2026');
+		await bucketInput.fill(minioBucket);
+		await accessKeyInput.fill(minioAccessKey);
+		await secretKeyInput.fill(minioSecretKey);
 
 		await testButton.click();
 		await expect(page.getByText(/Koneksi gagal|Connection failed/i)).toBeVisible();
 
 		// --- Condition 2: Invalid credentials ---
-		await endpointInput.fill('http://127.0.0.1:19000');
-		await bucketInput.fill('cubycloud-dev');
+		await endpointInput.fill(minioEndpoint);
+		await bucketInput.fill(minioBucket);
 		await accessKeyInput.fill('invalid-user');
 		await secretKeyInput.fill('wrong-secret-key-12345');
 
@@ -84,19 +89,19 @@ test.describe('Setup Cloud Storage S3 Connection Validation', () => {
 		await expect(page.getByText(/Koneksi gagal|Connection failed/i)).toBeVisible();
 
 		// --- Condition 3: Invalid bucket ---
-		await endpointInput.fill('http://127.0.0.1:19000');
+		await endpointInput.fill(minioEndpoint);
 		await bucketInput.fill('non-existent-bucket-999');
-		await accessKeyInput.fill('cubycloud-app');
-		await secretKeyInput.fill('cubycloud-app-local-only-2026');
+		await accessKeyInput.fill(minioAccessKey);
+		await secretKeyInput.fill(minioSecretKey);
 
 		await testButton.click();
 		await expect(page.getByText(/Koneksi gagal|Connection failed/i)).toBeVisible();
 
 		// --- Condition 4: Valid MinIO connection ---
-		await endpointInput.fill('http://127.0.0.1:19000');
-		await bucketInput.fill('cubycloud-dev');
-		await accessKeyInput.fill('cubycloud-app');
-		await secretKeyInput.fill('cubycloud-app-local-only-2026');
+		await endpointInput.fill(minioEndpoint);
+		await bucketInput.fill(minioBucket);
+		await accessKeyInput.fill(minioAccessKey);
+		await secretKeyInput.fill(minioSecretKey);
 
 		await testButton.click();
 		await expect(page.getByText(/Koneksi berhasil|Connection successful/i)).toBeVisible();

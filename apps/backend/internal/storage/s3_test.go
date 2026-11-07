@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"github.com/cubycloud/backend/internal/database"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/database"
 )
 
 func TestValidateCloudCredentialsInvalid(t *testing.T) {
@@ -43,7 +43,7 @@ func TestWriteObjectUnknownSizeUsesS3CompatibleStreamingRequest(t *testing.T) {
 	defer db.Close()
 
 	keyB64 := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{3}, masterKeyLen))
-	t.Setenv("CUBYCLOUD_MASTER_KEY", keyB64)
+	t.Setenv("CUBYCRATE_MASTER_KEY", keyB64)
 	key, err := InitMasterKey(dataDir, keyB64, "", nil)
 	if err != nil {
 		t.Fatal(err)

@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cubycloud/backend/internal/database"
-	"github.com/cubycloud/backend/internal/modules/admin"
-	"github.com/cubycloud/backend/internal/modules/mystorage"
-	"github.com/cubycloud/backend/internal/storage"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/database"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/modules/admin"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/modules/mystorage"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/storage"
 	"github.com/oklog/ulid/v2"
 	"github.com/stretchr/testify/require"
 )
@@ -27,23 +27,38 @@ import (
 // 4. Reading/downloading the file after restart succeeds with byte-identical content.
 // 5. Purging the file from trash deletes the physical object from S3.
 func TestS3NodeLifecycleAndRestartPersistence(t *testing.T) {
-	// Skip if local MinIO is not running
+	endpoint := os.Getenv("CUBYCRATE_TEST_S3_ENDPOINT")
+	if endpoint == "" {
+		endpoint = "http://127.0.0.1:19000"
+	}
+	bucket := os.Getenv("CUBYCRATE_TEST_S3_BUCKET")
+	if bucket == "" {
+		bucket = "cubycrate-dev"
+	}
+	accessKey := os.Getenv("CUBYCRATE_TEST_S3_ACCESS_KEY")
+	if accessKey == "" {
+		accessKey = "cubycrate-app"
+	}
+	secretKey := os.Getenv("CUBYCRATE_TEST_S3_SECRET_KEY")
+	if secretKey == "" {
+		secretKey = "cubycrate-app-local-only-2026"
+	}
+
 	client := &http.Client{Timeout: 2 * time.Second}
-	resp, err := client.Get("http://127.0.0.1:19000/minio/health/live")
+	resp, err := client.Get(endpoint + "/minio/health/live")
 	if err != nil || resp.StatusCode != http.StatusOK {
-		t.Skip("MinIO dev container not running on localhost:19000; skipping live MinIO integration test")
+		t.Skipf("MinIO dev container not running on %s; skipping live MinIO integration test", endpoint)
 		return
 	}
 	resp.Body.Close()
-
 	ctx := context.Background()
-	tempDir, err := os.MkdirTemp("", "cubycloud-s3-test-*")
+	tempDir, err := os.MkdirTemp("", "cubycrate-s3-test-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 	storagePath := filepath.Join(tempDir, "storage")
 	t.Setenv("DATA_DIR_PATH", tempDir)
 	masterKey := bytes.Repeat([]byte{0x5a}, 32)
-	t.Setenv("CUBYCLOUD_MASTER_KEY", base64.StdEncoding.EncodeToString(masterKey))
+	t.Setenv("CUBYCRATE_MASTER_KEY", base64.StdEncoding.EncodeToString(masterKey))
 	require.NoError(t, os.MkdirAll(storagePath, 0755))
 	require.NoError(t, os.MkdirAll(filepath.Join(tempDir, "db"), 0755))
 	// 1. Initial Start: Open database and storage driver
@@ -51,6 +66,10 @@ func TestS3NodeLifecycleAndRestartPersistence(t *testing.T) {
 	require.NoError(t, err)
 
 	driver := storage.NewStorageDriver(db, storagePath)
+	if err := driver.ValidateCloudCredentials(ctx, endpoint, "us-east-1", bucket, accessKey, secretKey); err != nil {
+		t.Skipf("MinIO at %s not initialized with test bucket %q: %v; skipping live MinIO integration test", endpoint, bucket, err)
+		return
+	}
 
 	// Create test user
 	userID := ulid.Make().String()
@@ -67,11 +86,11 @@ func TestS3NodeLifecycleAndRestartPersistence(t *testing.T) {
 	nodeName := fmt.Sprintf("MinIO Integration %d", time.Now().UnixNano())
 	cloudNode, err := adminSvc.CreateCloudNode(ctx, &admin.CreateCloudNodeRequest{
 		Name:          nodeName,
-		Endpoint:      "http://127.0.0.1:19000",
-		Bucket:        "cubycloud-dev",
+		Endpoint:      endpoint,
+		Bucket:        bucket,
 		Region:        "us-east-1",
-		AccessKey:     "cubycloud-app",
-		SecretKey:     "cubycloud-app-local-only-2026",
+		AccessKey:     accessKey,
+		SecretKey:     secretKey,
 		CapacityCapGB: 100,
 		Enabled:       true,
 	})
@@ -82,22 +101,22 @@ func TestS3NodeLifecycleAndRestartPersistence(t *testing.T) {
 	var rawAccess, rawSecret []byte
 	err = db.QueryRowContext(ctx, `SELECT access_key_encrypted, secret_key_encrypted FROM storage_nodes WHERE id = ?`, cloudNode.ID).Scan(&rawAccess, &rawSecret)
 	require.NoError(t, err)
-	require.NotEqual(t, "cubycloud-app", string(rawAccess), "Access key must be stored encrypted")
-	require.NotEqual(t, "cubycloud-app-local-only-2026", string(rawSecret), "Secret key must be stored encrypted")
+	require.NotEqual(t, "cubycrate-app", string(rawAccess), "Access key must be stored encrypted")
+	require.NotEqual(t, "cubycrate-app-local-only-2026", string(rawSecret), "Secret key must be stored encrypted")
 
 	// Set placement strategy to MOST_FREE_SPACE so cloud node is selected
 	_, err = db.ExecContext(ctx, `INSERT OR REPLACE INTO settings (key, value) VALUES ('placement_strategy', 'MOST_FREE_SPACE')`)
 	require.NoError(t, err)
 
 	// 3. Upload File to S3
-	testContent := []byte(fmt.Sprintf("Hello CubyCloud MinIO Storage! Timestamp: %d", time.Now().UnixNano()))
+	testContent := []byte(fmt.Sprintf("Hello CubyCrate MinIO Storage! Timestamp: %d", time.Now().UnixNano()))
 	filename := "test-s3-file.txt"
 
 	intent, err := myStorageSvc.UploadIntent(ctx, userID, filename, int64(len(testContent)), nil, true)
 	require.NoError(t, err)
 	require.Equal(t, "s3", intent.Placement)
 	require.NotEmpty(t, intent.UploadID)
-	require.Contains(t, intent.URL, "127.0.0.1:19000/cubycloud-dev")
+	require.Contains(t, intent.URL, bucket)
 
 	// Direct PUT to MinIO URL
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, intent.URL, bytes.NewReader(testContent))
@@ -141,7 +160,7 @@ func TestS3NodeLifecycleAndRestartPersistence(t *testing.T) {
 	dlResult, err := myStorageSvcRestarted.GetDownloadURL(ctx, userID, item.ID)
 	require.NoError(t, err)
 	require.NotNil(t, dlResult.URL)
-	require.Contains(t, *dlResult.URL, "127.0.0.1:19000/cubycloud-dev")
+	require.Contains(t, *dlResult.URL, bucket)
 
 	// Download via Presigned URL and verify identical bytes
 	reqDL, err := http.NewRequestWithContext(ctx, http.MethodGet, *dlResult.URL, nil)

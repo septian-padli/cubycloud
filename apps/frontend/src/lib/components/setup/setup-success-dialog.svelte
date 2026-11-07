@@ -47,7 +47,7 @@
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
 		a.href = url;
-		a.download = 'cubycloud-recovery-key.txt';
+		a.download = 'cubycrate-recovery-key.txt';
 		a.click();
 		URL.revokeObjectURL(url);
 		toast.success(tx('Kunci pemulihan diunduh', 'Recovery key downloaded'));
@@ -72,8 +72,8 @@
 			>
 			<Dialog.Description class="text-sm text-muted">
 				{tx(
-					'CubyCloud siap digunakan. Ringkasan konfigurasi awal:',
-					'CubyCloud is ready to use. Initial configuration summary:'
+					'CubyCrate siap digunakan. Ringkasan konfigurasi awal:',
+					'CubyCrate is ready to use. Initial configuration summary:'
 				)}
 			</Dialog.Description>
 		</Dialog.Header>

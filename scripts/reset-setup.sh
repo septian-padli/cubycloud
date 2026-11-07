@@ -6,7 +6,7 @@ echo "🔄 RESET SETUP (Development Only)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-DB_PATH="apps/backend/data/db/cubycloud.db"
+DB_PATH="apps/backend/data/db/cubycrate.db"
 
 # 1. Kill processes
 echo "1. Stopping dev servers..."
@@ -20,7 +20,7 @@ sleep 1
 
 # 2. Clean dev & test databases and storage files
 echo "2. Cleaning dev databases and storage files..."
-rm -rf /tmp/cubycloud-dev /tmp/recovery-key-test /tmp/recovery-key-new-flow /tmp/cuby-quick-test
+rm -rf /tmp/cubycrate-dev /tmp/recovery-key-test /tmp/recovery-key-new-flow /tmp/cuby-quick-test
 if [ -f "$DB_PATH" ]; then
   rm -f "$DB_PATH" "$DB_PATH-shm" "$DB_PATH-wal"
   echo "   ✓ Local database cleared: $DB_PATH"

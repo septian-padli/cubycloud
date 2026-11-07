@@ -1,10 +1,10 @@
 {
-  "name": "cubycloud-backend",
+  "name": "cubycrate-backend",
   "version": "1.0.0",
-  "description": "CubyCloud Backend (Go)",
+  "description": "CubyCrate Backend (Go)",
   "scripts": {
     "dev": "go run ./cmd/server/main.go",
-    "build": "go build -o ./bin/cubycloud ./cmd/server/main.go",
+    "build": "go build -o ./bin/cubycrate ./cmd/server/main.go",
     "test": "go test ./... -v",
     "test:coverage": "go test ./... -coverprofile=coverage.out && go tool cover -html=coverage.out",
     "lint": "golangci-lint run",

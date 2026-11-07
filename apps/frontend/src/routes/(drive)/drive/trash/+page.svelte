@@ -6,12 +6,12 @@
 </script>
 
 <svelte:head>
-	<title>{tx('Sampah', 'Trash')} — CubyCloud</title>
+	<title>{tx('Sampah', 'Trash')} — CubyCrate</title>
 	<meta
 		name="description"
 		content={tx(
-			'Sampah CubyCloud: pulihkan atau hapus permanen.',
-			'CubyCloud trash: restore items or permanently delete them.'
+			'Sampah CubyCrate: pulihkan atau hapus permanen.',
+			'CubyCrate trash: restore items or permanently delete them.'
 		)}
 	/>
 </svelte:head>

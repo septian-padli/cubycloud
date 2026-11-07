@@ -1,4 +1,4 @@
-# CubyCloud — Frontend Agent Guidance
+# CubyCrate — Frontend Agent Guidance
 
 > Scope: `apps/frontend/`. Follow the repository-root `AGENTS.md` as well. This document owns **frontend implementation conventions**, not product requirements, route contracts, or design tokens.
 

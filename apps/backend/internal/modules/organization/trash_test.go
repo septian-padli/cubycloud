@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cubycloud/backend/internal/database"
-	"github.com/cubycloud/backend/internal/modules/mystorage"
-	"github.com/cubycloud/backend/internal/modules/organization"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/database"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/modules/mystorage"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/modules/organization"
 	"github.com/uptrace/bun"
 )
 

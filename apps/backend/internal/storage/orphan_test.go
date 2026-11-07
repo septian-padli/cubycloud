@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cubycloud/backend/internal/database"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/database"
 )
 
 type orphanTestDriver struct {
@@ -99,7 +99,7 @@ func TestReconcileOrphanBlobsDryRunAndConfinedNamespace(t *testing.T) {
 	if len(driver.deletedLocal) != 0 || len(driver.deletedS3) != 0 {
 		t.Fatalf("default mode deleted local=%v s3=%v", driver.deletedLocal, driver.deletedS3)
 	}
-	if want := "cubycloud/" + instanceID + "/cloud/blobs/"; driver.listPrefix != want {
+	if want := "cubycrate/" + instanceID + "/cloud/blobs/"; driver.listPrefix != want {
 		t.Fatalf("S3 prefix = %q, want %q", driver.listPrefix, want)
 	}
 	if _, err := os.Stat(outside); err != nil {

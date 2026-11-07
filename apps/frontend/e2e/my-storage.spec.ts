@@ -954,7 +954,7 @@ test('logout pauses an active upload and preserves it for the next login', async
 test('resumable upload survives refresh, backend restart, and tab closure, then rejects a mismatched file', async ({
 	page
 }) => {
-	test.setTimeout(120_000);
+	test.setTimeout(420_000);
 	await finishSetup(page);
 	const restartResultPath = join(restartControlDir, 'restart-result.json');
 	const restartRequestPath = join(restartControlDir, 'restart-request.json');

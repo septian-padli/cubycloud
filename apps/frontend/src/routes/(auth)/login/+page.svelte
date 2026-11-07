@@ -4,12 +4,12 @@
 </script>
 
 <svelte:head>
-	<title>{locale.language === 'id' ? 'Masuk' : 'Sign in'} — CubyCloud</title>
+	<title>{locale.language === 'id' ? 'Masuk' : 'Sign in'} — CubyCrate</title>
 	<meta
 		name="description"
 		content={locale.language === 'id'
-			? 'Masuk ke CubyCloud dengan akun Anda.'
-			: 'Sign in to CubyCloud with your account.'}
+			? 'Masuk ke CubyCrate dengan akun Anda.'
+			: 'Sign in to CubyCrate with your account.'}
 	/>
 </svelte:head>
 

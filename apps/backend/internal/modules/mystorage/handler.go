@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/cubycloud/backend/internal/database"
-	"github.com/cubycloud/backend/internal/modules/jobs"
-	"github.com/cubycloud/backend/internal/storage"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/database"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/modules/jobs"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/storage"
 	"github.com/labstack/echo/v4"
 	"github.com/uptrace/bun"
 )
@@ -475,7 +475,7 @@ func (h *Handler) batchDownloadZip(c echo.Context) error {
 	}
 	defer r.Close()
 	c.Response().Header().Set(echo.HeaderContentType, "application/zip")
-	c.Response().Header().Set(echo.HeaderContentDisposition, `attachment; filename="cubycloud-archive.zip"`)
+	c.Response().Header().Set(echo.HeaderContentDisposition, `attachment; filename="cubycrate-archive.zip"`)
 	return c.Stream(http.StatusOK, "application/zip", r)
 }
 

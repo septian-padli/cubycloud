@@ -96,7 +96,7 @@ test('language selection defaults from browser language and persists per account
 
 	const savedPreferences = await page.evaluate(() =>
 		Object.entries(localStorage)
-			.filter(([key]) => key.startsWith('cubycloud-language:'))
+			.filter(([key]) => key.startsWith('cubycrate-language:'))
 			.map(([, value]) => value)
 			.sort()
 	);

@@ -9,7 +9,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}Starting CubyCloud Development Environment${NC}"
+echo -e "${GREEN}Starting CubyCrate Development Environment${NC}"
 
 if ! command -v air &> /dev/null; then
     echo -e "${RED}Air not found. Install Air to run the development backend.${NC}"
@@ -26,13 +26,13 @@ if [ ! -f apps/backend/.env ]; then
     echo -e "${YELLOW}Creating backend .env${NC}"
     cat > apps/backend/.env <<EOF
 PORT=8383
-DATA_DIR_PATH=/tmp/cubycloud-dev
+DATA_DIR_PATH=/tmp/cubycrate-dev
 JWT_SECRET=dev-secret-change-in-production
 EOF
 fi
 
 # Create data directories
-export DATA_DIR_PATH=/tmp/cubycloud-dev
+export DATA_DIR_PATH=/tmp/cubycrate-dev
 mkdir -p $DATA_DIR_PATH/db
 mkdir -p $DATA_DIR_PATH/storage/default
 mkdir -p $DATA_DIR_PATH/temp/tus

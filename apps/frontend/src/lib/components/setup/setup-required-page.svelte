@@ -2,6 +2,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import ThemeToggle from '$lib/components/theme-toggle.svelte';
 	import LanguagePicker from '$lib/components/language-picker.svelte';
+	import BrandLogo from '$lib/components/brand-logo.svelte';
 	import { Settings } from '@lucide/svelte';
 	import { locale } from '$lib/locale.svelte.js';
 	const tx = (id: string, en: string) => (locale.language === 'id' ? id : en);
@@ -9,7 +10,7 @@
 </script>
 
 <svelte:head>
-	<title>{tx('Setup Diperlukan', 'Setup Required')} | CubyCloud</title>
+	<title>{tx('Setup Diperlukan', 'Setup Required')} | CubyCrate</title>
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
@@ -18,7 +19,13 @@
 		<header
 			class="flex w-full items-center justify-between border-b border-subtle px-6 py-4 md:px-10"
 		>
-			<a href="/" class="text-sm font-semibold text-main">CubyCloud</a>
+			<a
+				href="/"
+				class="inline-flex items-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+				aria-label="CubyCrate"
+			>
+				<BrandLogo variant="horizontal" imgClass="h-6 w-auto" />
+			</a>
 			<div class="flex items-center gap-3">
 				<ThemeToggle />
 				<LanguagePicker />
@@ -40,8 +47,8 @@
 				</h1>
 				<p class="text-base leading-relaxed text-muted md:text-lg">
 					{tx(
-						'CubyCloud belum dikonfigurasi. Silakan selesaikan setup awal untuk mulai menggunakan sistem penyimpanan cloud Anda.',
-						'CubyCloud is not configured yet. Complete the initial setup to start using your cloud storage system.'
+						'CubyCrate belum dikonfigurasi. Silakan selesaikan setup awal untuk mulai menggunakan sistem penyimpanan cloud Anda.',
+						'CubyCrate is not configured yet. Complete the initial setup to start using your cloud storage system.'
 					)}
 				</p>
 			</div>
@@ -68,8 +75,8 @@
 			</h1>
 			<p class="text-base leading-relaxed text-muted md:text-lg">
 				{tx(
-					'CubyCloud belum dikonfigurasi. Silakan selesaikan setup awal untuk mulai menggunakan sistem penyimpanan cloud Anda.',
-					'CubyCloud is not configured yet. Complete the initial setup to start using your cloud storage system.'
+					'CubyCrate belum dikonfigurasi. Silakan selesaikan setup awal untuk mulai menggunakan sistem penyimpanan cloud Anda.',
+					'CubyCrate is not configured yet. Complete the initial setup to start using your cloud storage system.'
 				)}
 			</p>
 		</div>

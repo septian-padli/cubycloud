@@ -10,7 +10,7 @@ if lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
   exit 1
 fi
 
-TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/cubycloud-recovery-flow.XXXXXX")
+TEST_DIR=$(mktemp -d "${TMPDIR:-/tmp}/cubycrate-recovery-flow.XXXXXX")
 BACKEND_PID=
 cleanup() {
   if [[ -n "$BACKEND_PID" ]]; then
@@ -75,7 +75,7 @@ if [[ "$BACKEND_KEY" != "$CLIENT_KEY" ]]; then
 fi
 
 echo "2. Verifying the stored SHA-256 hash..."
-STORED_HASH=$(sqlite3 "$DATA_DIR/db/cubycloud.db" \
+STORED_HASH=$(sqlite3 "$DATA_DIR/db/cubycrate.db" \
   "SELECT recovery_key_hash FROM users WHERE username='admin';")
 EXPECTED_HASH=$(printf '%s' "${CLIENT_KEY//-/}" | shasum -a 256 | cut -d ' ' -f 1)
 if [[ "$STORED_HASH" != "$EXPECTED_HASH" ]]; then

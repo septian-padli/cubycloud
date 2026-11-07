@@ -7,7 +7,7 @@ let accountId: string | null = null;
 let pendingLanguage: Language | null = null;
 let initialized = false;
 let accountRevision = 0;
-const keyFor = (id: string) => `cubycloud-language:${id}`;
+const keyFor = (id: string) => `cubycrate-language:${id}`;
 const DATE_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
 	day: 'numeric',
 	month: 'short',

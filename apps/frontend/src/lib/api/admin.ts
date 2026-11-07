@@ -167,7 +167,7 @@ class AdminAPI {
 			const url = window.URL.createObjectURL(blob);
 			const a = document.createElement('a');
 			a.href = url;
-			a.download = `cubycloud-backup-${Date.now()}.db`;
+			a.download = `cubycrate-backup-${Date.now()}.db`;
 			document.body.appendChild(a);
 			a.click();
 			document.body.removeChild(a);

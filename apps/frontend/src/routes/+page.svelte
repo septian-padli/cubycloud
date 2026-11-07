@@ -4,6 +4,7 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import ThemeToggle from '$lib/components/theme-toggle.svelte';
 	import LanguagePicker from '$lib/components/language-picker.svelte';
+	import BrandLogo from '$lib/components/brand-logo.svelte';
 	import { ArrowRight, Cloud, HardDrive, Shield } from '@lucide/svelte';
 	import { getSetupStatus } from '$lib/api/setup';
 	import { locale } from '$lib/locale.svelte.js';
@@ -22,7 +23,7 @@
 </script>
 
 <svelte:head>
-	<title>CubyCloud — {tx('Segera Hadir', 'Coming Soon')}</title>
+	<title>CubyCrate — {tx('Segera Hadir', 'Coming Soon')}</title>
 	<meta
 		name="description"
 		content={tx(
@@ -36,7 +37,13 @@
 	<header
 		class="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-3 border-b border-subtle px-6 py-4 md:px-10"
 	>
-		<p class="text-sm font-semibold">CubyCloud</p>
+		<a
+			href="/"
+			class="inline-flex items-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+			aria-label="CubyCrate"
+		>
+			<BrandLogo variant="horizontal" imgClass="h-6 w-auto" />
+		</a>
 		<div class="flex items-center gap-3">
 			<ThemeToggle />
 			<LanguagePicker />
@@ -66,8 +73,8 @@
 					</h1>
 					<p class="mt-4 text-sm leading-normal text-muted md:text-base">
 						{tx(
-							'CubyCloud adalah penyimpanan cloud modular untuk homelab dan tim kecil — node lokal dan cloud terpadu, setup tanpa CLI, dan ringan untuk perangkat lama. Rilis pertama ditargetkan ',
-							'CubyCloud is modular cloud storage for homelabbers and small teams — unified local and cloud nodes, zero-CLI setup, and ultra-light on legacy hardware. First release targets '
+							'CubyCrate adalah penyimpanan cloud modular untuk homelab dan tim kecil — node lokal dan cloud terpadu, setup tanpa CLI, dan ringan untuk perangkat lama. Rilis pertama ditargetkan ',
+							'CubyCrate is modular cloud storage for homelabbers and small teams — unified local and cloud nodes, zero-CLI setup, and ultra-light on legacy hardware. First release targets '
 						)}
 						<strong class="font-medium text-main">{tx('Oktober 2026', 'October 2026')}</strong>.
 					</p>
@@ -137,7 +144,7 @@
 				{tx('Berkas Anda. Server Anda. Aturan Anda.', 'Your files. Your server. Your rules.')}
 			</p>
 			<p class="text-xs text-app/70">
-				Copyright (C) 2026 CubyCloud contributors. You may convey this work under AGPL-3.0-or-later.
+				Copyright (C) 2026 CubyCrate contributors. You may convey this work under AGPL-3.0-or-later.
 				No warranty.
 				<a
 					class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"

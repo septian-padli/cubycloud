@@ -11,6 +11,7 @@
 	import type { DriveUser, QuotaState } from '$lib/types/drive.js';
 	import { locale } from '$lib/locale.svelte.js';
 	import { cn } from '$lib/utils.js';
+	import BrandLogo from '$lib/components/brand-logo.svelte';
 
 	let {
 		user,
@@ -46,7 +47,13 @@
 	)}
 >
 	<div class="flex shrink-0 items-center gap-2 border-b border-subtle px-4 py-4">
-		<p class="text-sm font-semibold">CubyCloud</p>
+		<a
+			href="/drive/home"
+			class="inline-flex items-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+			aria-label="CubyCrate"
+		>
+			<BrandLogo variant="horizontal" imgClass="h-6 w-auto" />
+		</a>
 	</div>
 
 	<div class="min-h-0 flex-1 overflow-y-auto">
@@ -86,7 +93,7 @@
 					class="w-[calc(16rem-1.5rem)] p-1.5"
 				>
 					<div class="border-t border-subtle px-3 py-2 text-xs text-muted">
-						<p>Copyright (C) 2026 CubyCloud contributors.</p>
+						<p>Copyright (C) 2026 CubyCrate contributors.</p>
 						<p>You may convey this work under AGPL-3.0-or-later. No warranty.</p>
 						<a
 							class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"

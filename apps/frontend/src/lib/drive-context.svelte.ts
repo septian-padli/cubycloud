@@ -2,8 +2,8 @@ import { getContext, setContext } from 'svelte';
 import type { DriveRole, DriveUser, QuotaState } from '$lib/types/drive.js';
 import { authAPI } from '$lib/api/auth.js';
 
-const KEY = Symbol('cubycloud-drive-chrome');
-const QUOTA_CHANNEL_NAME = 'cubycloud-quota-sync';
+const KEY = Symbol('cubycrate-drive-chrome');
+const QUOTA_CHANNEL_NAME = 'cubycrate-quota-sync';
 
 export type SharedUploadPermission = 'viewer' | 'editor' | null;
 

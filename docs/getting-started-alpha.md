@@ -1,6 +1,6 @@
-# Getting Started — CubyCloud Alpha
+# Getting Started — Historical CubyCloud Alpha
 
-> ⚠️ **Ini adalah rilis alpha (`v0.0.1-alpha.1`).** Jangan gunakan untuk data produksi atau data yang tidak bisa kehilangan. Fitur dan API masih dapat berubah tanpa pemberitahuan.
+> ⚠️ **Catatan Clean Break:** Ini adalah dokumentasi historis untuk rilis alpha `v0.0.1-alpha.1`. Upgrade langsung dari rilis ini ke CubyCrate tidak didukung. Untuk instalasi baru CubyCrate, gunakan panduan pada [README](../README.md).
 
 ---
 

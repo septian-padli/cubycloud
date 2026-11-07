@@ -33,7 +33,7 @@ const swaggerHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>CubyCloud API Documentation</title>
+  <title>CubyCrate API Documentation</title>
   <link rel="stylesheet" type="text/css" href="/api/docs/assets/swagger-ui.css" />
   <link rel="icon" type="image/png" href="/api/docs/assets/favicon-32x32.png" sizes="32x32" />
   <link rel="icon" type="image/png" href="/api/docs/assets/favicon-16x16.png" sizes="16x16" />

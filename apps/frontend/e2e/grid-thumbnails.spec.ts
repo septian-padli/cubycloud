@@ -6,7 +6,7 @@ const admin = { username: 'storage-e2e-admin', password: 'StorageE2E-password-20
 const video = readFileSync(join(import.meta.dirname, 'fixtures/preview.webm'));
 
 function pdfFixture(): Buffer {
-	const stream = 'BT /F1 18 Tf 50 150 Td (CubyCloud Grid Thumbnail PDF) Tj ET';
+	const stream = 'BT /F1 18 Tf 50 150 Td (CubyCrate Grid Thumbnail PDF) Tj ET';
 	const objects = [
 		'<< /Type /Catalog /Pages 2 0 R >>',
 		'<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
@@ -136,7 +136,7 @@ test('Grid mode renders client-side thumbnail preview for image, video, and PDF,
 	await videoCard.dblclick();
 	const dialog = page.getByRole('dialog');
 	await expect(dialog).toBeVisible();
-	await expect(dialog.getByText('thumb-video.webm')).toBeVisible();
+	await expect(dialog.getByTestId('video-preview').getByText('thumb-video.webm')).toBeVisible();
 	await expect(dialog.getByTestId('video-preview')).toBeVisible();
 	await dialog.getByRole('button', { name: 'Tutup' }).first().click();
 	await expect(dialog).not.toBeVisible();

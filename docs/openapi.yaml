@@ -481,7 +481,7 @@ components:
                     example:
                         - capacity_bytes: 1099511627776
                           enabled: true
-                          path: /srv/cubycloud/storage/default
+                          path: /srv/cubycrate/storage/default
                     items:
                         $ref: '#/components/schemas/SetupStorageNodeInput'
                     type: array
@@ -542,7 +542,7 @@ components:
                     example: AKIAIOSFODNN7EXAMPLE
                     type: string
                 bucket:
-                    example: cubycloud-data
+                    example: cubycrate-data
                     type: string
                 capacity_cap_gb:
                     example: 2000
@@ -587,7 +587,7 @@ components:
                     example: Primary disk
                     type: string
                 path:
-                    example: /srv/cubycloud
+                    example: /srv/cubycrate
                     type: string
             required:
                 - name
@@ -1872,7 +1872,7 @@ components:
                     example: EXAMPLEACCESSKEY
                     type: string
                 bucket:
-                    example: cubycloud-data
+                    example: cubycrate-data
                     type: string
                 capacity_cap_gb:
                     description: Optional capacity limit in GiB for this cloud storage node (0 or omitted for unlimited).
@@ -1986,7 +1986,7 @@ components:
                     type: boolean
                 path:
                     description: Local storage directory. An enabled directory is created if missing and must be writable.
-                    example: /srv/cubycloud/storage/default
+                    example: /srv/cubycrate/storage/default
                     type: string
             required:
                 - path
@@ -2272,7 +2272,7 @@ components:
         StorageNode:
             properties:
                 bucket:
-                    example: cubycloud-data
+                    example: cubycrate-data
                     type: string
                 capacity_cap_gb:
                     example: 1000
@@ -2307,7 +2307,7 @@ components:
                     example: Primary disk
                     type: string
                 path:
-                    example: /srv/cubycloud
+                    example: /srv/cubycrate
                     type: string
                 region:
                     example: us-east-1
@@ -2357,7 +2357,7 @@ components:
                     type: string
                 path:
                     description: Candidate storage path.
-                    example: /srv/cubycloud/storage/default
+                    example: /srv/cubycrate/storage/default
                     type: string
             required:
                 - path
@@ -2681,17 +2681,17 @@ components:
             type: http
         CookieAuth:
             description: |
-                HTTP-only signed JWT session cookie (`cuby_token`).
+                HTTP-only signed JWT session cookie (`cubycrate_token`).
                 Automatically sent by browser requests in Swagger UI "Try it out".
             in: cookie
-            name: cuby_token
+            name: cubycrate_token
             type: apiKey
 info:
     description: |
-        Comprehensive HTTP API documentation for **CubyCloud**, a self-hosted single-container cloud storage platform.
+        Comprehensive HTTP API documentation for **CubyCrate**, a self-hosted single-container cloud storage platform.
 
         ### Authentication & Sessions
-        CubyCloud uses HTTP-only cookie session authentication (`cuby_token`).
+        CubyCrate uses HTTP-only cookie session authentication (`cubycrate_token`).
         Interactive API exploration via **Try it out** automatically sends this cookie from your active browser session.
         A fallback `Authorization: Bearer <token>` header is also supported.
 
@@ -2699,7 +2699,7 @@ info:
         - **Public**: Endpoints accessible without authentication (e.g. `/health`, setup status, public links).
         - **Authenticated**: Endpoints requiring an active user session (`USER` or `SUPER_ADMIN` role).
         - **Super Admin Only**: Endpoints restricted strictly to users with the `SUPER_ADMIN` role (e.g. `/api/v1/admin/*`, `/api/docs/*`).
-    title: CubyCloud API
+    title: CubyCrate API
     version: 1.0.0
 openapi: 3.1.0
 paths:
@@ -2868,7 +2868,7 @@ paths:
                     headers:
                         Content-Disposition:
                             description: Attachment filename.
-                            example: attachment; filename=cubycloud.db
+                            example: attachment; filename=cubycrate.db
                             schema:
                                 type: string
                         Content-Length:
@@ -3032,7 +3032,7 @@ paths:
                             capacity_cap_gb: 1000
                             enabled: true
                             name: Primary disk
-                            path: /srv/cubycloud
+                            path: /srv/cubycrate
                         schema:
                             $ref: '#/components/schemas/CreateLocalStorageNodeRequest'
                 required: true
@@ -3300,7 +3300,7 @@ paths:
                     application/json:
                         example:
                             access_key: AKIAIOSFODNN7EXAMPLE
-                            bucket: cubycloud-data
+                            bucket: cubycrate-data
                             capacity_cap_gb: 2000
                             enabled: true
                             endpoint: https://s3.example.com
@@ -3849,7 +3849,7 @@ paths:
             summary: Change the authenticated user's password
     /api/v1/auth/login:
         post:
-            description: Authenticates with a username or email and password. The endpoint is rate-limited to 10 requests per minute. On success it sets a 24-hour `cuby_token` HttpOnly, SameSite=Lax cookie; the cookie is Secure when the request is considered secure. The token is not included in the JSON response.
+            description: Authenticates with a username or email and password. The endpoint is rate-limited to 10 requests per minute. On success it sets a 24-hour `cubycrate_token` HttpOnly, SameSite=Lax cookie; the cookie is Secure when the request is considered secure. The token is not included in the JSON response.
             operationId: login
             requestBody:
                 content:
@@ -3879,7 +3879,7 @@ paths:
                     description: Login succeeded.
                     headers:
                         Set-Cookie:
-                            description: Sets the `cuby_token` cookie with Path=/, HttpOnly, SameSite=Lax, a 24-hour lifetime, and Secure when applicable.
+                            description: Sets the `cubycrate_token` cookie with Path=/, HttpOnly, SameSite=Lax, a 24-hour lifetime, and Secure when applicable.
                             schema:
                                 type: string
                 "400":
@@ -3914,7 +3914,7 @@ paths:
             summary: Log in
     /api/v1/auth/logout:
         post:
-            description: Clears the `cuby_token` cookie by setting an empty value and a negative Max-Age. Authentication is not required by this route.
+            description: Clears the `cubycrate_token` cookie by setting an empty value and a negative Max-Age. Authentication is not required by this route.
             operationId: logout
             responses:
                 "200":
@@ -3927,7 +3927,7 @@ paths:
                     description: Logout succeeded and the cookie was cleared.
                     headers:
                         Set-Cookie:
-                            description: Clears the `cuby_token` cookie at Path=/; it remains HttpOnly and SameSite=Lax, with Secure when applicable.
+                            description: Clears the `cubycrate_token` cookie at Path=/; it remains HttpOnly and SameSite=Lax, with Secure when applicable.
                             schema:
                                 type: string
             security: []
@@ -4983,7 +4983,7 @@ paths:
                     description: ZIP archive stream.
                     headers:
                         Content-Disposition:
-                            example: attachment; filename="cubycloud-archive.zip"
+                            example: attachment; filename="cubycrate-archive.zip"
                             schema:
                                 type: string
                 "400":
@@ -6190,7 +6190,7 @@ paths:
                     headers:
                         Content-Disposition:
                             schema:
-                                example: attachment; filename="cubycloud-archive.zip"
+                                example: attachment; filename="cubycrate-archive.zip"
                                 type: string
                 "400":
                     content:
@@ -8669,7 +8669,7 @@ paths:
             summary: Upload to a public shared folder
     /api/v1/setup/complete:
         post:
-            description: Initializes the SUPER_ADMIN account and selected storage configuration. This endpoint is protected by setupGuard, not normal user authentication, and is available only before setup has completed. At least one local storage node must be enabled unless cloud storage is enabled. Enabled local paths may be created if missing and must be writable; enabled cloud credentials are validated. On success, the endpoint sets a 24-hour `cuby_token` HttpOnly, SameSite=Lax cookie, Secure when applicable.
+            description: Initializes the SUPER_ADMIN account and selected storage configuration. This endpoint is protected by setupGuard, not normal user authentication, and is available only before setup has completed. At least one local storage node must be enabled unless cloud storage is enabled. Enabled local paths may be created if missing and must be writable; enabled cloud credentials are validated. On success, the endpoint sets a 24-hour `cubycrate_token` HttpOnly, SameSite=Lax cookie, Secure when applicable.
             operationId: completeSetup
             requestBody:
                 content:
@@ -8682,7 +8682,7 @@ paths:
                                 username: admin
                             cloud:
                                 access_key: EXAMPLEACCESSKEY
-                                bucket: cubycloud-data
+                                bucket: cubycrate-data
                                 capacity_cap_gb: 0
                                 enabled: false
                                 endpoint: https://s3.example.com
@@ -8694,7 +8694,7 @@ paths:
                             storage_nodes:
                                 - capacity_bytes: 1099511627776
                                   enabled: true
-                                  path: /srv/cubycloud/storage/default
+                                  path: /srv/cubycrate/storage/default
                         schema:
                             $ref: '#/components/schemas/CompleteSetupRequest'
                 required: true
@@ -8710,7 +8710,7 @@ paths:
                     description: Setup completed; response includes the supplied recovery key and client redirect path.
                     headers:
                         Set-Cookie:
-                            description: Sets the `cuby_token` cookie with Path=/, HttpOnly, SameSite=Lax, a 24-hour lifetime, and Secure when applicable.
+                            description: Sets the `cubycrate_token` cookie with Path=/, HttpOnly, SameSite=Lax, a 24-hour lifetime, and Secure when applicable.
                             schema:
                                 type: string
                 "400":
@@ -8753,7 +8753,7 @@ paths:
                                     - capacity_bytes: 1099511627776
                                       free_bytes: 536870912000
                                       kind: HDD
-                                      path: /srv/cubycloud/storage/default
+                                      path: /srv/cubycrate/storage/default
                             schema:
                                 $ref: '#/components/schemas/ScanNodesResponse'
                     description: Scanned storage candidates; nodes may be empty.
@@ -8901,7 +8901,7 @@ security:
     - CookieAuth: []
     - BearerAuth: []
 servers:
-    - description: Current CubyCloud instance (relative root)
+    - description: Current CubyCrate instance (relative root)
       url: /
 tags:
     - description: Initial system configuration and storage initialization
