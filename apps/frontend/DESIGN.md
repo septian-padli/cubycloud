@@ -1,4 +1,4 @@
-# DESIGN.md — CubyCloud Frontend Design System
+# DESIGN.md — CubyCrate Frontend Design System
 
 > Source of truth for **visual tokens, component appearance, interaction styling, and accessibility**. Product behavior belongs to `docs/prd.md`; routes, page actions, and access contracts belong to [`SITEMAP.md`](./SITEMAP.md). Read the sections relevant to the UI being changed instead of rereading the full document.
 
@@ -48,7 +48,7 @@ Font mapping: `--font-sans: 'Montserrat', sans-serif`. Use `@import 'tailwindcss
 ## 4. Explorer list, grid, and badges
 
 - **List:** default. File row uses `flex`, `items-center`, `justify-between`, `border-b border-subtle px-4 py-3`, with `transition-colors` and neutral `hover:bg-black/5 dark:hover:bg-white/5`. Name `text-sm font-medium text-main`; metadata `text-xs text-muted`; icon container `rounded-lg bg-primary/10 p-2 text-primary`.
-- **Grid:** existing `$lib/drive-view.svelte.ts` (`localStorage`: `cubycloud-drive-view`) and `DriveViewToggle` with `FileGridCard`. Icon/media area `aspect-video`, default `bg-surface`, hover/selected `bg-surface/80`, not `bg-primary/5`.
+- **Grid:** existing `$lib/drive-view.svelte.ts` (`localStorage`: `cubycrate-drive-view`) and `DriveViewToggle` with `FileGridCard`. Icon/media area `aspect-video`, default `bg-surface`, hover/selected `bg-surface/80`, not `bg-primary/5`.
 - List/Grid row actions: match **DropdownMenu** (⋮) and right-click **ContextMenu** items; do not introduce inconsistent action sets.
 - **Storage node badges:** render physical `[R2]`, `[S3]`, `[SSD-n]`, `[HDD-n]` **only for Super Admin**. Cloud badge `bg-secondary-accent text-white dark:text-app`; local badge `bg-secondary text-main dark:text-app`. Physical node identifiers must not be disclosed to regular users.
 - **Organization badge:** visible to all on Organization; `bg-primary/15 text-primary font-medium`.

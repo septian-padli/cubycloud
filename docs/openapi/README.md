@@ -1,6 +1,6 @@
-# CubyCloud OpenAPI 3.1 & Swagger UI Maintenance Guide
+# CubyCrate OpenAPI 3.1 & Swagger UI Maintenance Guide
 
-CubyCloud maintains an **OpenAPI 3.1.0** specification for all backend HTTP endpoints. The specification is authored as modular YAML source fragments and deterministically bundled into a single self-contained artifact that powers the interactive Swagger UI.
+CubyCrate maintains an **OpenAPI 3.1.0** specification for all backend HTTP endpoints. The specification is authored as modular YAML source fragments and deterministically bundled into a single self-contained artifact that powers the interactive Swagger UI.
 
 ---
 

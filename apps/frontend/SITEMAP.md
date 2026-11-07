@@ -1,6 +1,6 @@
-# SITEMAP.md — CubyCloud Frontend Routes & Page Contracts
+# SITEMAP.md — CubyCrate Frontend Routes & Page Contracts
 
-> **Project:** CubyCloud v1.0.0 · **Audience:** Frontend, UI/UX, QA  
+> **Project:** CubyCrate · **Audience:** Frontend, UI/UX, QA
 > Product rules: [`docs/prd.md`](../../docs/prd.md) · Visuals: [`DESIGN.md`](./DESIGN.md) · Frontend conventions: [`AGENTS.md`](./AGENTS.md)
 
 ## How agents should use this document
@@ -53,7 +53,7 @@ src/routes/
 - **Access:** unauthenticated only while `is_setup_completed === false`; after successful setup continue to `/drive/home`.
 - **Flow:** (1) Super Admin username/email/password (minimum 8 characters); (2) local disk scanner for `/app/data/storage/*`, optional Linux device, node capacity cap; (3) strategy `FILL_FIRST` / `ROUND_ROBIN` / `MOST_FREE_SPACE`; (4) optional Cloudflare R2, AWS S3, or S3-compatible endpoint/credentials; (5) generate/export Emergency Recovery Key.
 - **Modal:** Recovery Key displayed as **30 uppercase alphanumeric characters in six groups of five** (`XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`), Copy/Download and mandatory acknowledgment. Show Device Scan Error Modal on scan/mount failure.
-- **CTA:** `Selesaikan Setup & Masuk ke CubyCloud`.
+- **CTA:** `Selesaikan Setup & Masuk ke CubyCrate`.
 
 ### `/login` — sign in
 

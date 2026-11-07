@@ -45,7 +45,7 @@ Never use selective reading to skip a relevant permission, quota, data-integrity
 
 ## 3. Product and platform invariants
 
-- CubyCloud is a lightweight, self-hosted cloud-storage application: **Go backend + embedded SvelteKit SPA + SQLite WAL**, local and S3-compatible storage, zero-CLI web onboarding.
+- CubyCrate is a lightweight, self-hosted cloud-storage application: **Go backend + embedded SvelteKit SPA + SQLite WAL**, local and S3-compatible storage, zero-CLI web onboarding.
 - Production distribution remains **one executable / one container** with embedded static frontend; do not require an additional frontend application server.
 - No mandatory Redis, RabbitMQ, Kafka, MinIO, PostgreSQL, external AI services, or other new runtime infrastructure without an explicitly accepted architecture change.
 - Respect the resource target: **Intel Celeron 2-core, 2 GB RAM; idle < 200 MB; active transfer peak < 600 MB; image < 150 MB target**. These are targets requiring measurement, not guarantees or reasons to weaken correctness.

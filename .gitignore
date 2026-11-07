@@ -11,6 +11,8 @@ apps/backend/setup.test
 apps/backend/cover.out
 apps/backend/coverage.out
 apps/backend/data/
+apps/backend/**/data/
+data/
 apps/backend/web/dist/*
 !apps/backend/web/dist/.gitkeep
 !apps/backend/web/dist/index.html

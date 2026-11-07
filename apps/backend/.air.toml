@@ -1,4 +1,4 @@
-# Air configuration for CubyCloud Go backend
+# Air configuration for CubyCrate Go backend
 root = "."
 tmp_dir = "tmp"
 

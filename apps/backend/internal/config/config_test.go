@@ -10,6 +10,9 @@ import (
 )
 
 func TestConfigLoad_Defaults(t *testing.T) {
+	t.Cleanup(func() {
+		_ = os.RemoveAll("./data")
+	})
 	// Clear any env
 	t.Setenv("PORT", "")
 	t.Setenv("DATA_DIR_PATH", "")
@@ -43,9 +46,9 @@ func TestConfigLoad_CustomEnv(t *testing.T) {
 	assert.Equal(t, filepath.Join(tmpDir, "db", "cubycrate.db"), cfg.DBPath)
 }
 func TestConfigLoad_CustomOriginsAndCookie(t *testing.T) {
+	t.Setenv("DATA_DIR_PATH", t.TempDir())
 	t.Setenv("ALLOWED_ORIGINS", "https://app.cubycrate.local, https://drive.cubycrate.local")
 	t.Setenv("COOKIE_SECURE", "true")
-
 	cfg, err := LoadConfig()
 	assert.NoError(t, err)
 	assert.True(t, cfg.CookieSecure)
