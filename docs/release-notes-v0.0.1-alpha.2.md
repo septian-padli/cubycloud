@@ -2,9 +2,9 @@
 
 **Release Target:** `v0.0.1-alpha.2`  
 **Channel:** `alpha`  
-**Status:** Pre-release Draft (Prepared in T7, published in T8)  
-**Target Container Image:** `ghcr.io/septian-padli/cubycrate:v0.0.1-alpha.2`  
-*(Notice: The container image will become available on GHCR once the owner triggers the T8 release workflow.)*
+**Status:** Pre-release draft; publication awaits successful T8 workflow.
+**Target Container Image:** `ghcr.io/septian-padli/cubycrate:v0.0.1-alpha.2`
+*(The image is not yet available on GHCR. Pull instructions apply only after T8 completes successfully.)*
 
 ---
 

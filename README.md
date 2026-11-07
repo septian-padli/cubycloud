@@ -58,34 +58,38 @@ The screenshots were captured from the running application using synthetic local
 
 CubyCrate runs as one container with the frontend embedded in the Go backend.
 
-> **Note on image availability:** The official container image `ghcr.io/septian-padli/cubycrate:v0.0.1-alpha.2` is staged for the upcoming release and **is not yet published to GHCR**. Until the release workflow publishes the package, build the image locally.
+> **Image availability:** The official container image `ghcr.io/septian-padli/cubycrate:v0.0.1-alpha.2` is staged for the upcoming release and **is not yet published to GHCR** (blocked on T8 release gate).
+>
+> - **Once published to GHCR (Quick Start):** Users only need Docker + Docker Compose and a downloaded `compose.yaml`. No repository clone or local build is required:
+>   ```bash
+>   curl -fsSLO https://raw.githubusercontent.com/septian-padli/cubycrate/main/compose.yaml
+>   export CUBYCRATE_IMAGE=ghcr.io/septian-padli/cubycrate
+>   export CUBYCRATE_VERSION=v0.0.1-alpha.2
+>   docker pull ghcr.io/septian-padli/cubycrate:v0.0.1-alpha.2
+>   docker compose pull
+>   docker compose up -d
+>   curl -f http://127.0.0.1:8383/health
+>   ```
+>   The health probe returns `{"status":"ok"}` with HTTP 200. Open `http://<server-ip>:8383/setup` to configure the first administrator.
+> - **Until GHCR publish / Local Development:** Clone the full source repository because Docker builds need the complete build context:
+>   ```bash
+>   git clone https://github.com/septian-padli/cubycrate.git
+>   cd cubycrate
+>   docker build -t cubycrate:local .
+>   docker compose up -d
+>   ```
+Compose keeps the container port at `8383` and publishes host port `8383` by default. Set `CUBYCRATE_PORT=9000` to override the host port; set `CUBYCRATE_VOLUME_NAME` before Compose commands to change the named volume from `cubycrate_data`. Restrict direct HTTP access with a firewall.
 
-1. Download `compose.yaml` from the repository:
-   ```bash
-   curl -O https://raw.githubusercontent.com/septian-padli/cubycrate/main/compose.yaml
-   ```
-2. Build CubyCrate from source at the repository root:
-   ```bash
-   docker build -t cubycrate:local .
-   ```
-3. Start the container:
-   ```bash
-   docker compose up -d
-   ```
-4. Open `http://<IP-server>:8383/setup` from another device on the same LAN, or [http://localhost:8383/setup](http://localhost:8383/setup) on the Docker host. Complete the setup wizard and save your recovery key.
-
-Compose publishes port **8383** on all host interfaces by default. Set `CUBYCRATE_PORT=9000` to publish another host port; the container still listens on `8383`. Restrict direct HTTP access with your firewall and do not expose it directly to the internet.
 
 #### Updating CubyCrate
 
-The official `ghcr.io/septian-padli/cubycrate:v0.0.1-alpha.2` image will be published via GitHub Release in T8. Until then, rebuild the local image from updated source with `docker build -t cubycrate:local .`, then recreate the container with `docker compose up -d`. This preserves data in the `cubycrate_data` volume.
+The official `ghcr.io/septian-padli/cubycrate:v0.0.1-alpha.2` image will be published via GitHub Release in T8; it is not available before that workflow succeeds. Once published, `docker compose pull` then `docker compose up -d` updates the instance. For development, run `git pull` from the cloned repository root and rebuild with `docker build -t cubycrate:local .` before `docker compose up -d`.
 
 #### Docker Volume & Storage Configuration
 
-- **Named volume (default):** `cubycrate_data:/app/data` stores the SQLite database (`db/cubycrate.db`), auto-generated secrets (`secrets/jwt.key`, `secrets/master.key`), and local file storage (`storage/default`).
-- **Host bind mount:** To store data directly in a host directory, replace `cubycrate_data:/app/data` with `./data:/app/data` in `compose.yaml`. Ensure the host directory is writable.
-- **Secondary storage disks:** To add another local disk, mount it inside the storage directory, e.g. `- /mnt/storage-hdd:/app/data/storage/hdd`. The setup wizard and admin storage scanner will automatically detect it.
-
+- **Named volume (default):** `cubycrate_data:/app/data` stores SQLite (`db/cubycrate.db`, WAL), generated secrets (`secrets/jwt.key`, `secrets/master.key`), and local file storage (`storage/default`).
+- **Host bind mount:** You may replace the named volume with a host directory mount. Ensure the host directory is writable and included in backups.
+- **Secondary storage disks:** A host path mounted under `/app/data/storage/<node>` is external to the named volume and needs a separate backup.
 #### Reverse Proxy & HTTPS
 
 The Compose file does not include a reverse proxy. To use an existing HTTPS reverse proxy, point its upstream to the Docker host's IP address and published port (8383 by default, or your `CUBYCRATE_PORT`). Configure the public domain and TLS certificate in the proxy. Restrict access to the direct HTTP port to the proxy and trusted LAN clients with a firewall. A proxy on the same Docker network may instead reach `cubycrate:8383`; joining that network requires configuration outside this Compose file.
@@ -93,16 +97,13 @@ The Compose file does not include a reverse proxy. To use an existing HTTPS reve
 For HTTPS-only login, enable `COOKIE_SECURE=true` in the Compose environment. This prevents login over direct HTTP on the LAN. With the current application code, allowing authenticated HTTP LAN and HTTPS proxy access at the same time cannot provide `Secure` cookies on HTTPS without trusting a client-supplied `X-Forwarded-Proto` header on the published LAN port. Do not enable `TRUST_PROXY=true` on that exposed port as a workaround. The embedded frontend uses same-origin API requests, so `ALLOWED_ORIGINS` is not needed for a normal same-domain proxy setup. Use `GET /api/health` for readiness checks; see the [Reverse Proxy Guide](docs/reverse-proxy.md) for proxy examples.
 #### Backup and Restore
 
-All state is contained within `/app/data`. Note: The admin UI database download is only a copy of the SQLite database; it is NOT a full backup because it excludes encryption keys and storage blobs. To create a full backup, copy or snapshot the entire `/app/data` volume or directory while the service is stopped or using SQLite WAL-safe backup:
-- `db/cubycrate.db`: database tables and metadata
-- `secrets/jwt.key`: session authentication key
-- `secrets/master.key`: master encryption key (`/app/data/secrets/master.key`) for encrypted cloud storage credentials
-- `storage/`: all locally stored files
+The persistent application tree under `/app/data` contains the SQLite database (`db/cubycrate.db`, WAL mode, with `-wal`/`-shm` sidecars while active), local blobs (`storage/`), and generated secrets (`secrets/jwt.key`, `secrets/master.key`). The named volume defaults to `${CUBYCRATE_VOLUME_NAME:-cubycrate_data}`.
 
-To restore, place these files back into `/app/data` before starting the container. When restoring for verification or troubleshooting, always test on a disposable isolated copy rather than live production.
+> **Database-only is not full backup:** `GET /api/v1/admin/backup` returns a consistent SQLite database snapshot only. It does not include local file blobs or secrets. External local mounts, S3/MinIO objects, and externally supplied master/JWT secrets need separate backup procedures.
 
-Detailed backup, upgrade, and rollback instructions are documented in the [Release & Deployment Guide](docs/release-guide.md).
+Use the [backup and disaster recovery runbook](docs/backup-restore.md) for cold full-volume backup and isolated restore. Never archive only the live SQLite database file, restore directly over an existing volume, or run `docker compose down -v` for backup/restore.
 
+Detailed backup, disaster recovery, upgrade, and rollback instructions are in [docs/backup-restore.md](docs/backup-restore.md) and [docs/release-guide.md](docs/release-guide.md).
 ### Run from source
 
 Requirements: **Go 1.25 or newer**, **Bun 1.x**, and OpenSSL to generate a random development secret. Run the backend and frontend in separate terminals from a local checkout.

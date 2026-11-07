@@ -60,12 +60,9 @@ This checklist is to be executed by the repository owner immediately following t
   - Verify logged-in session survives restart or login works without re-triggering `/setup`.
   - Confirm uploaded files remain accessible.
 - [ ] **Backup & Restore Smoke Test:**
-  ```bash
-  docker compose exec cubycrate tar -czf /tmp/test-backup.tar.gz /app/data
-  docker cp cubycrate:/tmp/test-backup.tar.gz ./test-backup.tar.gz
-  tar -tzf ./test-backup.tar.gz | grep "db/cubycrate.db"
-  tar -tzf ./test-backup.tar.gz | grep "secrets/master.key"
-  ```
+  - Follow the cold full-volume procedure in [`docs/backup-restore.md`](backup-restore.md).
+  - Perform the test only in disposable volumes; do not archive a live database or overwrite an existing volume.
+  - Verify archive integrity and restore into a new isolated volume.
 
 ---
 
