@@ -1,6 +1,6 @@
 # Development Guide
 
-This guide covers running CubyCloud from source. The repository's Docker image currently has a Go toolchain mismatch; see the container build note in the [README](../README.md#container-build-status).
+This guide covers running CubyCrate from source. The repository's Docker image currently has a Go toolchain mismatch; see the container build note in the [README](../README.md#container-build-status).
 
 ## Requirements
 
@@ -20,7 +20,7 @@ cd ../..
 make dev
 ```
 
-The script starts the backend on `http://localhost:8383` and the Vite frontend on `http://localhost:5188`. It uses `/tmp/cubycloud-dev` for development data and creates `apps/backend/.env` if that file does not exist. Treat that directory and its development settings as disposable; do not use them for production data or secrets.
+The script starts the backend on `http://localhost:8383` and the Vite frontend on `http://localhost:5188`. It uses `/tmp/cubycrate-dev` for development data and creates `apps/backend/.env` if that file does not exist. Treat that directory and its development settings as disposable; do not use them for production data or secrets.
 
 Open `http://localhost:5188/setup` for first-time setup. The setup wizard creates the initial Super Admin account, configures storage, and issues a recovery key. Save the recovery key securely.
 
@@ -33,7 +33,7 @@ The following commands run the backend and frontend in separate terminals withou
 ```bash
 cd apps/backend
 PORT=8383 \
-DATA_DIR_PATH="$HOME/cubycloud-dev-data" \
+DATA_DIR_PATH="$HOME/cubycrate-dev-data" \
 JWT_SECRET="$(openssl rand -hex 32)" \
 go run ./cmd/server/main.go
 ```
@@ -59,7 +59,7 @@ docker compose -f compose.minio.yaml up -d
 
 - S3 API: `http://localhost:19000`
 - MinIO Console: `http://localhost:19001`
-- Development bucket: `cubycloud-dev`
+- Development bucket: `cubycrate-dev`
 
 The Compose file contains local-only development credentials and provisions a bucket-scoped application account. Do not reuse those values outside a local test environment. Stopping the stack with `docker compose -f compose.minio.yaml down` preserves its named data volume; avoid `down -v` unless intentionally deleting that local data.
 

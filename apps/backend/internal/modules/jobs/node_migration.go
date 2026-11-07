@@ -11,8 +11,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/cubycloud/backend/internal/database"
-	"github.com/cubycloud/backend/internal/storage"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/database"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/storage"
 	"github.com/uptrace/bun"
 )
 
@@ -191,7 +191,7 @@ func (h *NodeMigrationHandler) copyVerifyAndRehome(
 
 	// 2. Stream to a temporary file while computing source SHA-256.
 	// Provides a seekable stream (*os.File) compatible with S3/cloud drivers and bounded memory.
-	tmpFile, err := os.CreateTemp("", "cubycloud-mig-*")
+	tmpFile, err := os.CreateTemp("", "cubycrate-mig-*")
 	if err != nil {
 		return fmt.Errorf("create migration spool file: %w", err)
 	}

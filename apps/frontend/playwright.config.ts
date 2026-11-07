@@ -5,6 +5,8 @@ import {
 	restartControlDir as defaultRestartControlDir
 } from './e2e/restart-control.js';
 
+const minioPort = Number(process.env.CUBYCRATE_MINIO_PORT ?? 19000);
+process.env.CUBYCRATE_MINIO_PORT = String(minioPort);
 const backendPort = Number(process.env.MY_STORAGE_E2E_BACKEND_PORT ?? 18383);
 const frontendPort = Number(process.env.MY_STORAGE_E2E_FRONTEND_PORT ?? 15188);
 const dataDir = e2eDataDir;
@@ -41,6 +43,7 @@ export default defineConfig({
 				JWT_SECRET: 'my-storage-e2e-secret',
 				MY_STORAGE_E2E_DATA_DIR: dataDir,
 				MY_STORAGE_E2E_RESTART_DIR: restartControlDir,
+				CUBYCRATE_MINIO_PORT: String(minioPort),
 				DISABLE_RATE_LIMIT: 'true'
 			},
 			url: `${backendURL}/api/v1/setup/status`,

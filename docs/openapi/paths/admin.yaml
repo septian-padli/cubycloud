@@ -68,7 +68,7 @@
       content:
         application/json:
           schema: {$ref: '#/components/schemas/CreateLocalStorageNodeRequest'}
-          example: {name: Primary disk, path: /srv/cubycloud, capacity_cap_gb: 1000, enabled: true}
+          example: {name: Primary disk, path: /srv/cubycrate, capacity_cap_gb: 1000, enabled: true}
     responses:
       '201': {description: Storage node created, content: {application/json: {schema: {$ref: '#/components/schemas/StorageNode'}}}}
       '400': {description: Invalid request or node configuration, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
@@ -89,7 +89,7 @@
       content:
         application/json:
           schema: {$ref: '#/components/schemas/CreateCloudStorageNodeRequest'}
-          example: {name: Offsite backup, endpoint: 'https://s3.example.com', bucket: cubycloud-data, region: us-east-1, access_key: AKIAIOSFODNN7EXAMPLE, secret_key: example-secret-key, capacity_cap_gb: 2000, enabled: true}
+          example: {name: Offsite backup, endpoint: 'https://s3.example.com', bucket: cubycrate-data, region: us-east-1, access_key: AKIAIOSFODNN7EXAMPLE, secret_key: example-secret-key, capacity_cap_gb: 2000, enabled: true}
     responses:
       '201': {description: Cloud storage node created, content: {application/json: {schema: {$ref: '#/components/schemas/StorageNode'}}}}
       '400': {description: Invalid request or node name, content: {application/json: {schema: {$ref: '#/components/schemas/ErrorResponse'}}}}
@@ -314,7 +314,7 @@
           Content-Disposition:
             schema: {type: string}
             description: Attachment filename.
-            example: attachment; filename=cubycloud.db
+            example: attachment; filename=cubycrate.db
           Content-Length:
             schema: {type: integer}
             description: Backup file size in bytes.

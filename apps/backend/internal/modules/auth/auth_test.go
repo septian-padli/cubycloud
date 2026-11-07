@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cubycloud/backend/internal/database"
-	"github.com/cubycloud/backend/internal/middleware"
-	"github.com/cubycloud/backend/internal/modules/auth"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/database"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/middleware"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/modules/auth"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/oklog/ulid/v2"
@@ -26,7 +26,7 @@ import (
 const testJWTSecret = "test-secret-key-12345"
 
 func setupTestDB(t *testing.T) (*echo.Echo, string) {
-	tempDir, err := os.MkdirTemp("", "cubycloud-auth-test-*")
+	tempDir, err := os.MkdirTemp("", "cubycrate-auth-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -51,7 +51,7 @@ func setupTestDB(t *testing.T) (*echo.Echo, string) {
 	user := &database.User{
 		ID:              ulid.Make().String(),
 		Username:        "admin",
-		Email:           "admin@cubycloud.local",
+		Email:           "admin@cubycrate.local",
 		PasswordHash:    string(passwordHash),
 		RecoveryKeyHash: &recoveryHashStr,
 		Role:            "SUPER_ADMIN",
@@ -105,7 +105,7 @@ func TestLogin_Success(t *testing.T) {
 	cookies := rec.Result().Cookies()
 	var foundCookie bool
 	for _, c := range cookies {
-		if c.Name == "cuby_token" && c.Value != "" {
+		if c.Name == "cubycrate_token" && c.Value != "" {
 			foundCookie = true
 			if !c.HttpOnly {
 				t.Errorf("cookie should be HttpOnly")
@@ -132,7 +132,7 @@ func TestLogin_Success(t *testing.T) {
 		}
 	}
 	if !foundCookie {
-		t.Errorf("expected cuby_token cookie to be set")
+		t.Errorf("expected cubycrate_token cookie to be set")
 	}
 }
 func TestLogin_CookieSecure(t *testing.T) {
@@ -154,7 +154,7 @@ func TestLogin_CookieSecure(t *testing.T) {
 
 		var found bool
 		for _, c := range rec.Result().Cookies() {
-			if c.Name == "cuby_token" {
+			if c.Name == "cubycrate_token" {
 				found = true
 				if !c.Secure {
 					t.Errorf("expected cookie Secure=true with X-Forwarded-Proto https")
@@ -162,7 +162,7 @@ func TestLogin_CookieSecure(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Fatal("cuby_token cookie not found")
+			t.Fatal("cubycrate_token cookie not found")
 		}
 	})
 
@@ -177,7 +177,7 @@ func TestLogin_CookieSecure(t *testing.T) {
 
 		var found bool
 		for _, c := range rec.Result().Cookies() {
-			if c.Name == "cuby_token" {
+			if c.Name == "cubycrate_token" {
 				found = true
 				if !c.Secure {
 					t.Errorf("expected cookie Secure=true with COOKIE_SECURE=true")
@@ -185,7 +185,7 @@ func TestLogin_CookieSecure(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Fatal("cuby_token cookie not found")
+			t.Fatal("cubycrate_token cookie not found")
 		}
 	})
 }
@@ -225,13 +225,13 @@ func TestLogout(t *testing.T) {
 	cookies := rec.Result().Cookies()
 	var foundCookie bool
 	for _, c := range cookies {
-		if c.Name == "cuby_token" && c.MaxAge < 0 {
+		if c.Name == "cubycrate_token" && c.MaxAge < 0 {
 			foundCookie = true
 			break
 		}
 	}
 	if !foundCookie {
-		t.Errorf("expected cuby_token cookie to be expired on logout")
+		t.Errorf("expected cubycrate_token cookie to be expired on logout")
 	}
 }
 func seedSetupToken(t *testing.T, tempDir, userID, tokenType string, expiresAt time.Time, consumed bool) string {
@@ -635,13 +635,13 @@ func loginHelper(t *testing.T, e *echo.Echo, identifier, password string) (*http
 	}
 	var authCookie *http.Cookie
 	for _, c := range rec.Result().Cookies() {
-		if c.Name == "cuby_token" {
+		if c.Name == "cubycrate_token" {
 			authCookie = c
 			break
 		}
 	}
 	if authCookie == nil {
-		t.Fatalf("cuby_token cookie not found in login response")
+		t.Fatalf("cubycrate_token cookie not found in login response")
 	}
 	return authCookie, loginRes.User
 }
@@ -713,7 +713,7 @@ func TestUpdateProfile_EmailChangeRequiresPassword(t *testing.T) {
 
 	cookie, _ := loginHelper(t, e, "admin", "password123")
 
-	newEmail := "new-admin@cubycloud.local"
+	newEmail := "new-admin@cubycrate.local"
 
 	// 1. Missing current_password -> 400 Bad Request
 	bodyNoPass, _ := json.Marshal(auth.UpdateProfileRequest{
@@ -789,7 +789,7 @@ func TestUpdateProfile_EmailDuplicateCaseInsensitive(t *testing.T) {
 	user2 := &database.User{
 		ID:           ulid.Make().String(),
 		Username:     "user2",
-		Email:        "user2@cubycloud.local",
+		Email:        "user2@cubycrate.local",
 		PasswordHash: string(passHash),
 		Role:         "REGULAR",
 		CreatedAt:    time.Now(),
@@ -808,14 +808,14 @@ func TestUpdateProfile_EmailDuplicateCaseInsensitive(t *testing.T) {
 	}
 	_, err = db.ExecContext(context.Background(), `
 INSERT INTO users(id, username, email, password_hash, role, quota_bytes)
-VALUES('duplicate-email-user', 'duplicate', 'USER2@CUBYCLOUD.LOCAL', 'hash', 'REGULAR', -1)`)
+VALUES('duplicate-email-user', 'duplicate', 'USER2@CUBYCRATE.LOCAL', 'hash', 'REGULAR', -1)`)
 	if err == nil {
 		t.Fatal("expected database to reject a case-insensitive duplicate email")
 	}
 	cookie, _ := loginHelper(t, e, "admin", "password123")
 
 	// Attempt to set email to existing email in different case
-	dupEmail := "USER2@CUBYCLOUD.LOCAL"
+	dupEmail := "USER2@CUBYCRATE.LOCAL"
 	body, _ := json.Marshal(auth.UpdateProfileRequest{
 		Email:           &dupEmail,
 		CurrentPassword: "password123",
@@ -847,7 +847,7 @@ func TestUpdateProfile_ConcurrentEmailUpdatesRemainUnique(t *testing.T) {
 	user := &database.User{
 		ID:           ulid.Make().String(),
 		Username:     "user2",
-		Email:        "user2@cubycloud.local",
+		Email:        "user2@cubycrate.local",
 		PasswordHash: string(passHash),
 		Role:         "REGULAR",
 		CreatedAt:    time.Now(),
@@ -858,7 +858,7 @@ func TestUpdateProfile_ConcurrentEmailUpdatesRemainUnique(t *testing.T) {
 	}
 	adminCookie, _ := loginHelper(t, e, "admin", "password123")
 	userCookie, _ := loginHelper(t, e, "user2", "password123")
-	email := "shared-update@cubycloud.local"
+	email := "shared-update@cubycrate.local"
 	start := make(chan struct{})
 	results := make(chan int, 2)
 
@@ -1066,7 +1066,7 @@ func TestGetProfile_RBAC(t *testing.T) {
 	regularUser := &database.User{
 		ID:           ulid.Make().String(),
 		Username:     "regularuser",
-		Email:        "regular@cubycloud.local",
+		Email:        "regular@cubycrate.local",
 		DisplayName:  "Regular User",
 		PasswordHash: string(passHash),
 		Role:         "REGULAR",

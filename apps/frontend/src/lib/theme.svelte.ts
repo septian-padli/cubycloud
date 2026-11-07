@@ -1,6 +1,6 @@
 export type ThemeMode = 'light' | 'dark' | 'system';
 
-const STORAGE_KEY = 'cubycloud-theme';
+const STORAGE_KEY = 'cubycrate-theme';
 
 function getSystemDark(): boolean {
 	if (typeof window === 'undefined') return false;

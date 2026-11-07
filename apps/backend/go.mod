@@ -1,4 +1,4 @@
-module github.com/cubycloud/backend
+module github.com/septian-padli/cubycrate/apps/backend
 
 go 1.25.0
 

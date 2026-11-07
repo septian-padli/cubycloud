@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cubycloud/backend/internal/database"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/database"
 	"github.com/labstack/echo/v4"
 	"github.com/uptrace/bun"
 )
@@ -55,7 +55,7 @@ func setupTestAdmin(t *testing.T) (*bun.DB, *Handler, string) {
 	if err := os.MkdirAll(dbDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	dbPath := filepath.Join(dbDir, "cubycloud.db")
+	dbPath := filepath.Join(dbDir, "cubycrate.db")
 
 	db, err := database.Connect(dataDir)
 	if err != nil {
@@ -175,7 +175,7 @@ func TestDownloadBackupHandler(t *testing.T) {
 		t.Errorf("expected status 200, got %d", rec.Code)
 	}
 	disposition := rec.Header().Get("Content-Disposition")
-	if !strings.Contains(disposition, "attachment; filename=cubycloud.db") {
+	if !strings.Contains(disposition, "attachment; filename=cubycrate.db") {
 		t.Errorf("expected attachment disposition, got %s", disposition)
 	}
 	contentType := rec.Header().Get("Content-Type")

@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cubycloud/backend/internal/httputil"
-	"github.com/cubycloud/backend/internal/middleware"
-	"github.com/cubycloud/backend/internal/storage"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/httputil"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/middleware"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/storage"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/uptrace/bun"
@@ -42,7 +42,7 @@ func (h *Handler) CompleteSetup(c echo.Context) error {
 
 	// Set HTTP-only cookie
 	cookie := &http.Cookie{
-		Name:     "cuby_token",
+		Name:     "cubycrate_token",
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,

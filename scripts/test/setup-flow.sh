@@ -2,7 +2,7 @@
 set -e
 
 echo "=========================================="
-echo "CubyCloud Setup Flow - Quick Test"
+echo "CubyCrate Setup Flow - Quick Test"
 echo "=========================================="
 
 # Kill existing
@@ -53,13 +53,13 @@ if [[ "$KEY" =~ ^[A-Z0-9]{5}(-[A-Z0-9]{5}){5}$ ]]; then
   echo "✅ Setup completed successfully!"
   echo ""
   echo "Recovery Key: $KEY"
-  echo "Database: $TEST_DIR/db/cubycloud.db"
+  echo "Database: $TEST_DIR/db/cubycrate.db"
   echo ""
   echo "User:"
-  sqlite3 "$TEST_DIR/db/cubycloud.db" "SELECT '  ' || username || ' (' || role || ')' FROM users;"
+  sqlite3 "$TEST_DIR/db/cubycrate.db" "SELECT '  ' || username || ' (' || role || ')' FROM users;"
   echo ""
   echo "Storage:"
-  sqlite3 "$TEST_DIR/db/cubycloud.db" "SELECT '  ' || type || ' @ ' || path FROM storage_nodes;"
+  sqlite3 "$TEST_DIR/db/cubycrate.db" "SELECT '  ' || type || ' @ ' || path FROM storage_nodes;"
 else
   echo "❌ Setup failed"
   echo "$RESULT" | jq .

@@ -13,9 +13,9 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/cubycloud/backend/internal/database"
-	"github.com/cubycloud/backend/internal/middleware"
-	"github.com/cubycloud/backend/internal/storage"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/database"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/middleware"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/storage"
 	"github.com/labstack/echo/v4"
 	"github.com/oklog/ulid/v2"
 	"github.com/uptrace/bun"
@@ -156,7 +156,7 @@ func (s *Service) CompleteSetup(ctx context.Context, req *CompleteSetupRequest) 
 		if key, err := storage.GetMasterKey(); err == nil {
 			keyMaterial = key
 		} else {
-			keyMaterial, err = storage.InitMasterKey(s.dataDirPath, os.Getenv("CUBYCLOUD_MASTER_KEY"), os.Getenv("CUBYCLOUD_MASTER_KEY_FILE"), s.db)
+			keyMaterial, err = storage.InitMasterKey(s.dataDirPath, os.Getenv("CUBYCRATE_MASTER_KEY"), os.Getenv("CUBYCRATE_MASTER_KEY_FILE"), s.db)
 			if err != nil {
 				return nil, fmt.Errorf("initialize credential encryption: %w", err)
 			}

@@ -17,37 +17,37 @@ api_call() {
     if [ -n "$data" ]; then
         curl -s -X "$method" \
             -H "Content-Type: application/json" \
-            -H "Cookie: cuby_token=$ADMIN_TOKEN" \
+            -H "Cookie: cubycrate_token=$ADMIN_TOKEN" \
             -d "$data" \
             "$API$endpoint"
     else
         curl -s -X "$method" \
-            -H "Cookie: cuby_token=$ADMIN_TOKEN" \
+            -H "Cookie: cubycrate_token=$ADMIN_TOKEN" \
             "$API$endpoint"
     fi
 }
 
 echo "1️⃣  Setup: Creating test database..."
-rm -rf /tmp/cubycloud-test
-mkdir -p /tmp/cubycloud-test/db /tmp/cubycloud-test/storage/default
+rm -rf /tmp/cubycrate-test
+mkdir -p /tmp/cubycrate-test/db /tmp/cubycrate-test/storage/default
 
-export DATA_DIR_PATH=/tmp/cubycloud-test
+export DATA_DIR_PATH=/tmp/cubycrate-test
 export PORT=8080
 export JWT_SECRET=test-secret-key-for-admin-testing
 
 echo ""
 echo "2️⃣  Starting backend server..."
 cd "$(dirname "$0")/apps/backend"
-go build -o /tmp/cubycloud-server ./cmd/server
-/tmp/cubycloud-server &
+go build -o /tmp/cubycrate-server ./cmd/server
+/tmp/cubycrate-server &
 SERVER_PID=$!
 
 cleanup() {
     echo ""
     echo "🧹 Cleaning up..."
     kill $SERVER_PID 2>/dev/null || true
-    rm -rf /tmp/cubycloud-test
-    rm -f /tmp/cubycloud-server
+    rm -rf /tmp/cubycrate-test
+    rm -f /tmp/cubycrate-server
 }
 trap cleanup EXIT
 
@@ -65,7 +65,7 @@ SETUP_RESP=$(curl -si -X POST "$API/setup/complete" \
             "recovery_key": "ABCDE-FGHJK-LMNPQ-RSTUV-WXYZ2-34567"
         },
         "storage_nodes": [{
-            "path": "/tmp/cubycloud-test/storage/default",
+            "path": "/tmp/cubycrate-test/storage/default",
             "capacity_bytes": 107374182400,
             "enabled": true
         }],
@@ -76,7 +76,7 @@ SETUP_RESP=$(curl -si -X POST "$API/setup/complete" \
     }')
 
 # Extract token from Set-Cookie header
-ADMIN_TOKEN=$(echo "$SETUP_RESP" | grep -i 'set-cookie: cuby_token=' | sed 's/.*token=\([^;]*\).*/\1/')
+ADMIN_TOKEN=$(echo "$SETUP_RESP" | grep -i 'set-cookie: cubycrate_token=' | sed 's/.*token=\([^;]*\).*/\1/')
 
 if [ -z "$ADMIN_TOKEN" ]; then
     echo "❌ Failed to get admin token from setup"
@@ -182,22 +182,22 @@ echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "💾 Test 7: GET /admin/backup"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-curl -s -o /tmp/cubycloud-backup-test.db \
-    -H "Cookie: cuby_token=$ADMIN_TOKEN" \
+curl -s -o /tmp/cubycrate-backup-test.db \
+    -H "Cookie: cubycrate_token=$ADMIN_TOKEN" \
     "$API/admin/backup"
 
-if [ ! -f /tmp/cubycloud-backup-test.db ]; then
+if [ ! -f /tmp/cubycrate-backup-test.db ]; then
     echo "❌ Backup not downloaded"
     exit 1
 fi
 
-BACKUP_SIZE=$(stat -f%z /tmp/cubycloud-backup-test.db 2>/dev/null || stat -c%s /tmp/cubycloud-backup-test.db)
+BACKUP_SIZE=$(stat -f%z /tmp/cubycrate-backup-test.db 2>/dev/null || stat -c%s /tmp/cubycrate-backup-test.db)
 if [ "$BACKUP_SIZE" -lt 1000 ]; then
     echo "❌ Backup too small"
     exit 1
 fi
 echo "✅ Backup OK ($BACKUP_SIZE bytes)"
-rm -f /tmp/cubycloud-backup-test.db
+rm -f /tmp/cubycrate-backup-test.db
 echo ""
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

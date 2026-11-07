@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cubycloud/backend/internal/httputil"
-	"github.com/cubycloud/backend/internal/middleware"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/httputil"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/middleware"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/uptrace/bun"
@@ -71,7 +71,7 @@ func (h *Handler) Login(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, map[string]string{"error": "failed to fetch user usage"})
 	}
 	cookie := &http.Cookie{
-		Name:     "cuby_token",
+		Name:     "cubycrate_token",
 		Value:    tokenString,
 		Path:     "/",
 		HttpOnly: true,
@@ -101,7 +101,7 @@ func (h *Handler) Login(c echo.Context) error {
 // Logout handles POST /api/v1/auth/logout
 func (h *Handler) Logout(c echo.Context) error {
 	cookie := &http.Cookie{
-		Name:     "cuby_token",
+		Name:     "cubycrate_token",
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,

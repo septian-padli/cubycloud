@@ -25,7 +25,7 @@ COPY apps/backend ./
 RUN rm -rf ./web/dist
 COPY --from=frontend-builder /app/frontend/build ./web/dist
 # Build statically linked binary (CGO-free)
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -ldflags="-s -w" -o /cubycloud ./cmd/server/main.go
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -ldflags="-s -w" -o /cubycrate ./cmd/server/main.go
 
 # Stage 3: Final Minimal Runtime Image (< 150MB target)
 FROM alpine:3.21.3
@@ -39,7 +39,7 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates tzdata wget \
     && mkdir -p /app/data/db /app/data/storage /app/data/temp/tus
 
-COPY --from=backend-builder /cubycloud /app/cubycloud
+COPY --from=backend-builder /cubycrate /app/cubycrate
 
 ENV PORT=8383
 ENV DATA_DIR_PATH=/app/data
@@ -51,4 +51,4 @@ EXPOSE 8383
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:${PORT:-8383}/health || exit 1
 
-ENTRYPOINT ["/app/cubycloud"]
+ENTRYPOINT ["/app/cubycrate"]

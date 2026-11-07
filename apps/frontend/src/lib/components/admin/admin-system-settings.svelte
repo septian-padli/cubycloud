@@ -277,8 +277,8 @@
 				</p>
 				<p class="text-xs text-muted">
 					{locale.language === 'id'
-						? 'Unduh file cubycloud.db untuk backup manual.'
-						: 'Download cubycloud.db for a manual backup.'}
+						? 'Unduh file cubycrate.db untuk backup manual.'
+						: 'Download cubycrate.db for a manual backup.'}
 				</p>
 			</div>
 			<Button

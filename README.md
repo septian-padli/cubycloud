@@ -56,51 +56,48 @@ The screenshots were captured from the running application using synthetic local
 
 ### Docker Compose (recommended)
 
-CubyCrate runs as a single self-contained container with embedded frontend and backend. The Compose file pulls the image from GHCR; it does not build from source. No manual `.env` or secret generation is needed for a standard installation. The image must be publicly available on GHCR before this download-only path works.
+CubyCrate runs as one container with the frontend embedded in the Go backend. Until T7 publishes the GHCR package, build the image locally. Compose does not build or publish an image.
 
-1. Download `compose.yaml`:
+1. Download `compose.yaml` from the current repository:
    ```bash
    curl -O https://raw.githubusercontent.com/septian-padli/cubycloud/main/compose.yaml
    ```
-2. Start the container:
+2. Build CubyCrate from source at the repository root:
+   ```bash
+   docker build -t cubycrate:local .
+   ```
+3. Start the container:
    ```bash
    docker compose up -d
    ```
-3. Open `http://<IP-server>:8383/setup` from another device on the same LAN, or [http://localhost:8383/setup](http://localhost:8383/setup) on the Docker host. Complete the setup wizard and save your recovery key.
+4. Open `http://<IP-server>:8383/setup` from another device on the same LAN, or [http://localhost:8383/setup](http://localhost:8383/setup) on the Docker host. Complete the setup wizard and save your recovery key.
 
-Compose publishes port **8383** on all host interfaces by default, so devices on the LAN can connect. To use another host port, run `CUBYCLOUD_PORT=9000 docker compose up -d` and open `http://<IP-server>:9000/setup`. The container still listens on port 8383. You can also set `CUBYCLOUD_PORT=9000` in a `.env` file beside `compose.yaml`; this file configures Compose, not the application. Do not forward this HTTP port directly to the internet; restrict access with your firewall.
+Compose publishes port **8383** on all host interfaces by default. Set `CUBYCRATE_PORT=9000` to publish another host port; the container still listens on `8383`. Restrict direct HTTP access with your firewall and do not expose it directly to the internet.
 
 #### Updating CubyCrate
 
-To update an existing installation to the latest published release:
-
-```bash
-docker compose pull
-docker compose up -d
-```
-
-Compose pulls the newer image from GHCR and restarts the container. All SQLite database records, encryption keys, and uploaded files persist safely inside the `cubycloud_data` volume.
+The CubyCrate GHCR package is not available before T7. Until then, rebuild the local image from updated source with `docker build -t cubycrate:local .`, then recreate the container with `docker compose up -d`. This preserves data in the `cubycrate_data` volume.
 
 #### Docker Volume & Storage Configuration
 
-- **Named volume (default):** `cubycloud_data:/app/data` stores the SQLite database (`db/cubycloud.db`), auto-generated secrets (`secrets/jwt.key`, `secrets/master.key`), and local file storage (`storage/default`).
-- **Host bind mount:** To store data directly in a host directory, replace `cubycloud_data:/app/data` with `./data:/app/data` in `compose.yaml`. Ensure the host directory is writable.
+- **Named volume (default):** `cubycrate_data:/app/data` stores the SQLite database (`db/cubycrate.db`), auto-generated secrets (`secrets/jwt.key`, `secrets/master.key`), and local file storage (`storage/default`).
+- **Host bind mount:** To store data directly in a host directory, replace `cubycrate_data:/app/data` with `./data:/app/data` in `compose.yaml`. Ensure the host directory is writable.
 - **Secondary storage disks:** To add another local disk, mount it inside the storage directory, e.g. `- /mnt/storage-hdd:/app/data/storage/hdd`. The setup wizard and admin storage scanner will automatically detect it.
 
 #### Reverse Proxy & HTTPS
 
-The Compose file does not include a reverse proxy. To use an existing HTTPS reverse proxy, point its upstream to the Docker host's IP address and published port (8383 by default, or your `CUBYCLOUD_PORT`). Configure the public domain and TLS certificate in the proxy. Restrict access to the direct HTTP port to the proxy and trusted LAN clients with a firewall. A proxy on the same Docker network may instead reach `cubycloud:8383`; joining that network requires configuration outside this Compose file.
+The Compose file does not include a reverse proxy. To use an existing HTTPS reverse proxy, point its upstream to the Docker host's IP address and published port (8383 by default, or your `CUBYCRATE_PORT`). Configure the public domain and TLS certificate in the proxy. Restrict access to the direct HTTP port to the proxy and trusted LAN clients with a firewall. A proxy on the same Docker network may instead reach `cubycrate:8383`; joining that network requires configuration outside this Compose file.
 
 For HTTPS-only login, enable `COOKIE_SECURE=true` in the Compose environment. This prevents login over direct HTTP on the LAN. With the current application code, allowing authenticated HTTP LAN and HTTPS proxy access at the same time cannot provide `Secure` cookies on HTTPS without trusting a client-supplied `X-Forwarded-Proto` header on the published LAN port. Do not enable `TRUST_PROXY=true` on that exposed port as a workaround. The embedded frontend uses same-origin API requests, so `ALLOWED_ORIGINS` is not needed for a normal same-domain proxy setup. Use `GET /api/health` for readiness checks; see the [Reverse Proxy Guide](docs/reverse-proxy.md) for proxy examples.
 #### Backup and Restore
 
-All state is contained within `/app/data`. To back up CubyCrate, copy or snapshot the entire `/app/data` volume or directory while the service is stopped or using SQLite WAL-safe backup:
-- `db/cubycloud.db`: database tables and metadata
+All state is contained within `/app/data`. Note: The admin UI database download is only a copy of the SQLite database; it is NOT a full backup because it excludes encryption keys and storage blobs. To create a full backup, copy or snapshot the entire `/app/data` volume or directory while the service is stopped or using SQLite WAL-safe backup:
+- `db/cubycrate.db`: database tables and metadata
 - `secrets/jwt.key`: session authentication key
-- `secrets/master.key`: master encryption key for encrypted cloud storage credentials
+- `secrets/master.key`: master encryption key (`/app/data/secrets/master.key`) for encrypted cloud storage credentials
 - `storage/`: all locally stored files
 
-To restore, place these files back into `/app/data` before starting the container.
+To restore, place these files back into `/app/data` before starting the container. When restoring for verification or troubleshooting, always test on a disposable isolated copy rather than live production.
 
 Detailed backup, upgrade, and rollback instructions are documented in the [Release & Deployment Guide](docs/release-guide.md).
 
@@ -113,7 +110,7 @@ Requirements: **Go 1.25 or newer**, **Bun 1.x**, and OpenSSL to generate a rando
 ```bash
 cd apps/backend
 PORT=8383 \
-DATA_DIR_PATH="$HOME/cubycloud-data" \
+DATA_DIR_PATH="$HOME/cubycrate-data" \
 go run ./cmd/server/main.go
 ```
 

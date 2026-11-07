@@ -37,12 +37,12 @@ func InstanceID(ctx context.Context, db *bun.DB) (string, error) {
 }
 
 func BuildBlobKey(instanceID, nodeID, blobID string) string {
-	return "cubycloud/" + instanceID + "/" + nodeID + "/blobs/" + blobID
+	return "cubycrate/" + instanceID + "/" + nodeID + "/blobs/" + blobID
 }
 
 func ParseBlobKey(key string) (instanceID, nodeID, blobID string, ok bool) {
 	parts := strings.Split(key, "/")
-	if len(parts) != 5 || parts[0] != "cubycloud" || parts[1] == "" || parts[2] == "" || parts[3] != "blobs" || parts[4] == "" {
+	if len(parts) != 5 || parts[0] != "cubycrate" || parts[1] == "" || parts[2] == "" || parts[3] != "blobs" || parts[4] == "" {
 		return "", "", "", false
 	}
 	if parts[4] == "." || parts[4] == ".." || filepath.IsAbs(parts[4]) {

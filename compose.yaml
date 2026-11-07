@@ -1,16 +1,16 @@
 services:
-  cubycloud:
-    # Set explicit version tag (e.g. v0.0.1-alpha.1) via CUBYCLOUD_VERSION or .env
-    image: ${CUBYCLOUD_IMAGE:-ghcr.io/septian-padli/cubycloud}:${CUBYCLOUD_VERSION:-latest}
-    container_name: cubycloud
+  cubycrate:
+    # Until T7 publishes GHCR, set CUBYCRATE_IMAGE to a locally built image.
+    image: ${CUBYCRATE_IMAGE:-cubycrate}:${CUBYCRATE_VERSION:-local}
+    container_name: cubycrate
     restart: unless-stopped
     ports:
-      - "${CUBYCLOUD_PORT:-8383}:8383"
+      - "${CUBYCRATE_PORT:-8383}:8383"
     volumes:
-      - cubycloud_data:/app/data
+      - cubycrate_data:/app/data
     environment:
       - ENV=production
-      - PORT=${CUBYCLOUD_PORT:-8383}
+      - PORT=8383
       # Set COOKIE_SECURE=true when running behind an HTTPS reverse proxy
       # - COOKIE_SECURE=true
     healthcheck:
@@ -21,5 +21,5 @@ services:
       retries: 3
 
 volumes:
-  cubycloud_data:
-    name: ${CUBYCLOUD_VOLUME_NAME:-cubycloud_data}
+  cubycrate_data:
+    name: ${CUBYCRATE_VOLUME_NAME:-cubycrate_data}

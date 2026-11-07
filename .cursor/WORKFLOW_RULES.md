@@ -1,4 +1,4 @@
-# CubyCloud — Development Workflow Rules
+# CubyCrate — Development Workflow Rules
 
 > Scope: Git authorization, implementation handoff, and documentation placement. This is a **reference document**, not a mandatory full read for every task. Root `AGENTS.md` carries the universal restrictions.
 

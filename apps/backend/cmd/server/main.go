@@ -13,22 +13,22 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cubycloud/backend/internal/config"
-	"github.com/cubycloud/backend/internal/database"
-	"github.com/cubycloud/backend/internal/jobs"
-	"github.com/cubycloud/backend/internal/middleware"
-	"github.com/cubycloud/backend/internal/modules/admin"
-	"github.com/cubycloud/backend/internal/modules/auth"
-	"github.com/cubycloud/backend/internal/modules/docs"
-	jobsmod "github.com/cubycloud/backend/internal/modules/jobs"
-	"github.com/cubycloud/backend/internal/modules/mystorage"
-	"github.com/cubycloud/backend/internal/modules/organization"
-	"github.com/cubycloud/backend/internal/modules/search"
-	"github.com/cubycloud/backend/internal/modules/setup"
-	"github.com/cubycloud/backend/internal/modules/share"
-	"github.com/cubycloud/backend/internal/sse"
-	"github.com/cubycloud/backend/internal/storage"
-	"github.com/cubycloud/backend/web"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/config"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/database"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/jobs"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/middleware"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/modules/admin"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/modules/auth"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/modules/docs"
+	jobsmod "github.com/septian-padli/cubycrate/apps/backend/internal/modules/jobs"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/modules/mystorage"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/modules/organization"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/modules/search"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/modules/setup"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/modules/share"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/sse"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/storage"
+	"github.com/septian-padli/cubycrate/apps/backend/web"
 	"github.com/labstack/echo/v4"
 	echomw "github.com/labstack/echo/v4/middleware"
 	"github.com/uptrace/bun"
@@ -205,7 +205,7 @@ func buildEchoRouter(cfg *config.Config, db *bun.DB, driver storage.StorageDrive
 	setup.RegisterRoutes(e, db, driver, setupGuard, cfg.DataDirPath, cfg.JWTSecret)
 
 	// Admin routes (JWT auth + Super Admin guard, bypasses setup guard)
-	dbPath := cfg.DataDirPath + "/db/cubycloud.db"
+	dbPath := cfg.DBPath
 	jwtAuth := middleware.JWTAuth(cfg.JWTSecret, db)
 	adminGuard := middleware.SuperAdminGuard(db)
 

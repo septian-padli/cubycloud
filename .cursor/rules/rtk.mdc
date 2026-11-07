@@ -25,7 +25,7 @@ rtk git diff
 rtk git log -5
 ```
 
-## CubyCloud commands (via RTK)
+## CubyCrate commands (via RTK)
 
 ```bash
 cd apps/frontend && rtk bun run check

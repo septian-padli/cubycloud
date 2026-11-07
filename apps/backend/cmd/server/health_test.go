@@ -10,12 +10,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/cubycloud/backend/internal/config"
-	"github.com/cubycloud/backend/internal/database"
-	"github.com/cubycloud/backend/internal/middleware"
-	jobsmod "github.com/cubycloud/backend/internal/modules/jobs"
-	"github.com/cubycloud/backend/internal/sse"
-	"github.com/cubycloud/backend/internal/storage"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/config"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/database"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/middleware"
+	jobsmod "github.com/septian-padli/cubycrate/apps/backend/internal/modules/jobs"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/sse"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/storage"
 	"github.com/stretchr/testify/require"
 )
 
@@ -47,7 +47,7 @@ func TestHealthEndpoint(t *testing.T) {
 	cfg := &config.Config{
 		Port:           "8383",
 		DataDirPath:    tempDir,
-		DBPath:         filepath.Join(tempDir, "db", "cubycloud.db"),
+		DBPath:         filepath.Join(tempDir, "db", "cubycrate.db"),
 		StoragePath:    filepath.Join(tempDir, "storage"),
 		JWTSecret:      "test-secret-at-least-32-bytes-long-super-secret",
 		AllowedOrigins: []string{"*"},

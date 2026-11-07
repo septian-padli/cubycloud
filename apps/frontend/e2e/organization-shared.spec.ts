@@ -103,7 +103,7 @@ test('Organization shared drive provides multi-user collaboration and isolates p
 	await fileInput.setInputFiles({
 		name: 'shared-spec.txt',
 		mimeType: 'text/plain',
-		buffer: Buffer.from('Spesifikasi bersama tim CubyCloud dibuat oleh Alice.')
+		buffer: Buffer.from('Spesifikasi bersama tim CubyCrate dibuat oleh Alice.')
 	});
 	await expect(page.getByText('shared-spec.txt', { exact: true })).toBeVisible();
 	const uploadQueue = page.getByTestId('upload-queue');

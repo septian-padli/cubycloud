@@ -126,10 +126,10 @@ if (age > 24 * 60 * 60 * 1000) {
 ## 🔑 Storage Key
 
 ```typescript
-const STORAGE_KEY = 'cubycloud_setup_draft';
+const STORAGE_KEY = 'cubycrate_setup_draft';
 ```
 
-Data disimpan di `localStorage['cubycloud_setup_draft']` sebagai JSON string.
+Data disimpan di `localStorage['cubycrate_setup_draft']` sebagai JSON string.
 
 ---
 
@@ -180,9 +180,9 @@ interface SetupDraft {
 
 ```javascript
 // Open browser console at http://localhost:5173/setup
-const draft = JSON.parse(localStorage.getItem('cubycloud_setup_draft'));
+const draft = JSON.parse(localStorage.getItem('cubycrate_setup_draft'));
 draft.timestamp = Date.now() - 25 * 60 * 60 * 1000; // 25 hours ago
-localStorage.setItem('cubycloud_setup_draft', JSON.stringify(draft));
+localStorage.setItem('cubycrate_setup_draft', JSON.stringify(draft));
 location.reload(); // Draft should expire and be removed
 ```
 
@@ -192,7 +192,7 @@ location.reload(); // Draft should expire and be removed
 2. ✅ localStorage harus dihapus setelah setup berhasil
 3. Check di browser console:
    ```javascript
-   localStorage.getItem('cubycloud_setup_draft'); // Should return null
+   localStorage.getItem('cubycrate_setup_draft'); // Should return null
    ```
 
 ---

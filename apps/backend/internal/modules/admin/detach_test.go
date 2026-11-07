@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cubycloud/backend/internal/database"
-	"github.com/cubycloud/backend/internal/modules/admin"
-	"github.com/cubycloud/backend/internal/modules/jobs"
-	"github.com/cubycloud/backend/internal/storage"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/database"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/modules/admin"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/modules/jobs"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/storage"
 	"github.com/labstack/echo/v4"
 	"github.com/oklog/ulid/v2"
 	"github.com/stretchr/testify/require"
@@ -112,7 +112,7 @@ func TestDetachStorageNodeLifecycle(t *testing.T) {
 
 	// Test HTTP endpoint via Echo handler
 	e := echo.New()
-	handler := admin.NewHandler(db, driver, tempDir, filepath.Join(tempDir, "db", "cubycloud.db"), queue)
+	handler := admin.NewHandler(db, driver, tempDir, filepath.Join(tempDir, "db", "cubycrate.db"), queue)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/storage-nodes/"+node1.ID+"/detach", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)

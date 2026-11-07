@@ -1,7 +1,7 @@
 # CubyCloud — Product Requirements Document (PRD)
 
 > **Product:** CubyCloud, self-hosted modular cloud storage · **Scope:** v1.0 product contract  
-> **Status:** Draft / In Review · **Original author:** Septian Padli · **Created:** 7 August 2026  
+> **Status:** Draft / In Review · **Original author:** Septian Padli · **Created:** 7 August 2026
 > **Historical target launch:** 1 October 2026 (a planning date, **not** proof of release)  
 > **Audience:** Core engineering, design, QA, contributors
 
@@ -140,7 +140,7 @@ Single image/binary; Go serves embedded static SvelteKit SPA, HTTP API, and back
 - **Audit-log retention:** default **90 days**, selectable **7/14/30/60/90** days, cleaned with `AUDIT_CLEANUP_JOB`. The backend logs all state-mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`) including failures, with sensitive secret redaction (`password`, `recovery_key`, `secret_key`, tokens), without auditing read-only `GET` requests. Logs are viewable by admins via `GET /api/v1/admin/audit-logs`.
 - **Background worker concurrency:** configurable, default **2**. Queued heavy operations remain `PENDING` until worker capacity is available.
 - `/admin/storage` shows node count/cumulative declared capacity, used physical space and available capacity (calculated from configured node capacity limit minus usage, with physical free disk acting as a safety tripwire), and users ranked by logical usage with pagination. All capacity and size inputs and displays across the system use binary GiB/KiB/MiB/TiB (1024^n). The backend is authoritative for all numbers.
-- Provide **Download DB Backup** action for a consistent `cubycloud.db` SQLite snapshot. This is **database-only**, not a verified full-file backup; full disaster recovery also requires storage blobs and relevant secure configuration/credentials. Do not label DB backup as complete system backup.
+- Provide **Download DB Backup** action for a consistent `cubycrate.db` SQLite snapshot. This is **database-only**, not a verified full-file backup; full disaster recovery also requires storage blobs and relevant secure configuration/credentials. Do not label DB backup as complete system backup.
 
 ### 4.3 Drive Home (`/drive/home`)
 
@@ -259,7 +259,7 @@ Target responsive compatibility: current Chrome/Firefox/Edge on Windows, Linux, 
 ### 5.2 Authentication, secrets, and authorization
 
 - JWT tokens signed with **HS256** in **HttpOnly cookie** (`SameSite=Lax`; `Secure` whenever deployed through HTTPS, including TLS-terminating proxies). No separate refresh-token service is required in v1.0.
-- JWT lifetime is **24 hours** (aligned with the PRD specification). Session cookies use 24-hour MaxAge (`cuby_token`). All password changes must still revoke existing sessions regardless of token expiry.
+- JWT lifetime is **24 hours** (aligned with the PRD specification). Session cookies use 24-hour MaxAge (`cubycrate_token`). All password changes must still revoke existing sessions regardless of token expiry.
 - Passwords for users and protected share links use **bcrypt (cost 10)** per original requirement; ensure safe verification, throttling, and error handling.
 - Emergency 6×5 Recovery Key uses **SHA-256 of canonical value**, single-use rotation; legacy bcrypt-hashed 64-hex key compatibility is backend migration-only, never UI-generated.
 - No automatic application-level encryption of physical uploaded file contents; rely on OS/container volume permissions and operator controls. Storage credentials and other application secrets require secure handling and must not be exposed via API, log, or public health response.

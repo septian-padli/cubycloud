@@ -55,7 +55,7 @@ type nodeDriver struct {
 
 func newNodeDriver(db *bun.DB, path string) StorageDriver {
 	dataDir := filepath.Dir(path)
-	key, err := InitMasterKey(dataDir, os.Getenv("CUBYCLOUD_MASTER_KEY"), os.Getenv("CUBYCLOUD_MASTER_KEY_FILE"), db)
+	key, err := InitMasterKey(dataDir, os.Getenv("CUBYCRATE_MASTER_KEY"), os.Getenv("CUBYCRATE_MASTER_KEY_FILE"), db)
 	return &nodeDriver{LocalDriver: NewLocalDriver(path), db: db, keyMaterial: key, keyErr: err}
 }
 

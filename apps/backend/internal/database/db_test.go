@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/cubycloud/backend/internal/database"
+	"github.com/septian-padli/cubycrate/apps/backend/internal/database"
 )
 
 func TestMigrationsCreateSchema(t *testing.T) {
@@ -51,7 +51,7 @@ func TestMigrationsCreateSchema(t *testing.T) {
 
 func TestSuperAdminQuotaMigrationRestoresUnlimited(t *testing.T) {
 	ctx := context.Background()
-	dbPath := t.TempDir() + "/cubycloud.db"
+	dbPath := t.TempDir() + "/cubycrate.db"
 	db, err := database.Open(ctx, dbPath)
 	if err != nil {
 		t.Fatalf("Open failed: %v", err)
