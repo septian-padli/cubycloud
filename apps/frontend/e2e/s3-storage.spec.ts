@@ -81,7 +81,9 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 	// 3. Fill MinIO credentials from development compose
 	const nodeName = `MinIO Dev ${Date.now()}`;
 	await dialog.getByTestId('input-cloud-node-name').fill(nodeName);
-	await dialog.locator('#cloud-endpoint').fill('http://127.0.0.1:19000');
+	await dialog
+		.locator('#cloud-endpoint')
+		.fill(`http://127.0.0.1:${process.env.CUBYCRATE_MINIO_PORT ?? '19000'}`);
 	await dialog.locator('#cloud-bucket').fill('cubycrate-dev');
 	await dialog.locator('#cloud-region').fill('us-east-1');
 	await dialog.locator('#cloud-access-key').fill('cubycrate-app');
@@ -142,8 +144,11 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 	);
 	const s3PutResponsePromise = page.waitForResponse(
 		(response) =>
-			response.url().startsWith('http://127.0.0.1:19000/cubycrate-dev/') &&
-			response.request().method() === 'PUT',
+			response
+				.url()
+				.startsWith(
+					`http://127.0.0.1:${process.env.CUBYCRATE_MINIO_PORT ?? '19000'}/cubycrate-dev/`
+				) && response.request().method() === 'PUT',
 		{ timeout: 15_000 }
 	);
 	const syncResponsePromise = page.waitForResponse(
@@ -169,7 +174,9 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 	};
 	expect(intent.placement).toBe('s3');
 	expect(intent.mode).toBe('single_put');
-	expect(intent.url).toContain('127.0.0.1:19000/cubycrate-dev');
+	expect(intent.url).toContain(
+		`127.0.0.1:${process.env.CUBYCRATE_MINIO_PORT ?? '19000'}/cubycrate-dev`
+	);
 	expect(intent.upload_id).toBeTruthy();
 
 	const s3PutRes = await s3PutResponsePromise;
@@ -195,7 +202,7 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 			const url = new URL(response.url());
 			return (
 				response.request().method() === 'PUT' &&
-				url.origin === 'http://127.0.0.1:19000' &&
+				url.origin === `http://127.0.0.1:${process.env.CUBYCRATE_MINIO_PORT ?? '19000'}` &&
 				url.searchParams.has('partNumber') &&
 				url.searchParams.has('uploadId')
 			);
@@ -247,7 +254,7 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 			const url = new URL(response.url());
 			return (
 				response.request().method() === 'PUT' &&
-				url.origin === 'http://127.0.0.1:19000' &&
+				url.origin === `http://127.0.0.1:${process.env.CUBYCRATE_MINIO_PORT ?? '19000'}` &&
 				url.searchParams.has('partNumber') &&
 				url.searchParams.has('uploadId')
 			);
@@ -369,7 +376,9 @@ test('Super Admin configures MinIO S3 node via UI, uploads/downloads directly, p
 	);
 	expect(downloadUrlRes.ok()).toBeTruthy();
 	const downloadData = (await downloadUrlRes.json()) as { url: string; filename: string };
-	expect(downloadData.url).toContain('127.0.0.1:19000/cubycrate-dev');
+	expect(downloadData.url).toContain(
+		`127.0.0.1:${process.env.CUBYCRATE_MINIO_PORT ?? '19000'}/cubycrate-dev`
+	);
 
 	const downloadedContentRes = await page.request.get(downloadData.url);
 	expect(downloadedContentRes.ok()).toBeTruthy();
