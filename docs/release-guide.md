@@ -13,12 +13,13 @@ CubyCrate strictly adheres to [Semantic Versioning 2.0.0](https://semver.org/):
 
 | Channel | Format Example | Prerelease? | Docker Tags Updated | Stability Target |
 | :--- | :--- | :--- | :--- | :--- |
-| **Alpha** | `v0.0.1-alpha.1` | Yes | `:v0.0.1-alpha.1`, `:alpha` | Historical CubyCloud alpha; direct upgrade to CubyCrate is unsupported |
+| **Alpha (Historical)** | `v0.0.1-alpha.1` | Yes | `:v0.0.1-alpha.1`, `:alpha` | Historical CubyCloud alpha; direct upgrade to CubyCrate is unsupported |
+| **Alpha (Current)** | `v0.0.1-alpha.2` | Yes | `:v0.0.1-alpha.2`, `:alpha` | First CubyCrate technical release; Clean Break fresh start |
 | **Beta** | `v0.1.0-beta.1` | Yes | `:v0.1.0-beta.1`, `:beta` | Feature-complete slice, stabilization testing |
 | **Release Candidate** | `v1.0.0-rc.1` | Yes | `:v1.0.0-rc.1`, `:rc` | Production candidate validation |
 | **Stable** | `v1.0.0` | No | `:v1.0.0`, `:1.0.0`, `:1.0`, `:latest` | General availability; only stable releases update `:latest` |
 
-> **Critical Safety Rule:** Only official stable releases update the `:latest` Docker tag on GHCR. Routine pushes to `dev` or `main` trigger validation only. The CubyCrate GHCR path is not published before T7.
+> **Critical Safety Rule:** Only official stable releases update the `:latest` Docker tag on GHCR. Routine pushes to `dev` or `main` trigger validation only. The official image `ghcr.io/septian-padli/cubycrate:v0.0.1-alpha.2` is staged for T8 and **is not yet published to GHCR**.
 
 ---
 
@@ -28,7 +29,7 @@ CubyCrate strictly adheres to [Semantic Versioning 2.0.0](https://semver.org/):
 
 1. Download or copy `compose.yaml`:
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/septian-padli/cubycloud/main/compose.yaml -o compose.yaml
+   curl -fsSL https://raw.githubusercontent.com/septian-padli/cubycrate/main/compose.yaml -o compose.yaml
    ```
 
 2. Build the image locally until the CubyCrate GHCR package is published after T7:
