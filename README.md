@@ -4,9 +4,9 @@
 
 CubyCrate is a self-hosted file drive for people who want a familiar way to organize and share files while choosing where those files live. It combines a Go API, a SvelteKit web app, SQLite, local storage, and optional S3-compatible storage.
 
-[![CI Quality Gates](https://github.com/septian-padli/cubycloud/actions/workflows/ci.yml/badge.svg)](https://github.com/septian-padli/cubycloud/actions/workflows/ci.yml)
-[![Release Automation](https://github.com/septian-padli/cubycloud/actions/workflows/release.yml/badge.svg)](https://github.com/septian-padli/cubycloud/actions/workflows/release.yml)
-[![GHCR Package](https://img.shields.io/badge/container-ghcr.io-24292e?logo=docker&logoColor=white)](https://github.com/septian-padli/cubycloud/pkgs/container/cubycloud)
+[![CI Quality Gates](https://github.com/septian-padli/cubycrate/actions/workflows/ci.yml/badge.svg)](https://github.com/septian-padli/cubycrate/actions/workflows/ci.yml)
+[![Release Automation](https://github.com/septian-padli/cubycrate/actions/workflows/release.yml/badge.svg)](https://github.com/septian-padli/cubycrate/actions/workflows/release.yml)
+[![GHCR Package](https://img.shields.io/badge/container-ghcr.io-24292e?logo=docker&logoColor=white)](https://github.com/septian-padli/cubycrate/pkgs/container/cubycrate)
 ![Multi-Arch](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-blue)
 [![Go 1.25](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![Svelte 5](https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white)](https://svelte.dev/)
@@ -56,11 +56,13 @@ The screenshots were captured from the running application using synthetic local
 
 ### Docker Compose (recommended)
 
-CubyCrate runs as one container with the frontend embedded in the Go backend. Until T7 publishes the GHCR package, build the image locally. Compose does not build or publish an image.
+CubyCrate runs as one container with the frontend embedded in the Go backend.
 
-1. Download `compose.yaml` from the current repository:
+> **Note on image availability:** The official container image `ghcr.io/septian-padli/cubycrate:v0.0.1-alpha.2` is staged for the upcoming release and **is not yet published to GHCR**. Until the release workflow publishes the package, build the image locally.
+
+1. Download `compose.yaml` from the repository:
    ```bash
-   curl -O https://raw.githubusercontent.com/septian-padli/cubycloud/main/compose.yaml
+   curl -O https://raw.githubusercontent.com/septian-padli/cubycrate/main/compose.yaml
    ```
 2. Build CubyCrate from source at the repository root:
    ```bash
@@ -76,7 +78,7 @@ Compose publishes port **8383** on all host interfaces by default. Set `CUBYCRAT
 
 #### Updating CubyCrate
 
-The CubyCrate GHCR package is not available before T7. Until then, rebuild the local image from updated source with `docker build -t cubycrate:local .`, then recreate the container with `docker compose up -d`. This preserves data in the `cubycrate_data` volume.
+The official `ghcr.io/septian-padli/cubycrate:v0.0.1-alpha.2` image will be published via GitHub Release in T8. Until then, rebuild the local image from updated source with `docker build -t cubycrate:local .`, then recreate the container with `docker compose up -d`. This preserves data in the `cubycrate_data` volume.
 
 #### Docker Volume & Storage Configuration
 
@@ -178,4 +180,4 @@ Bug reports, reproducible examples, and focused pull requests are welcome. Read 
 
 Copyright (C) 2026 CubyCrate contributors. CubyCrate is licensed under the GNU Affero General Public License, version 3 or (at your option) any later version. See [LICENSE](LICENSE).
 
-Modified versions used over a network must offer their users access to the corresponding source code under AGPL-3.0 section 13. The source repository is available at [github.com/septian-padli/cubycloud](https://github.com/septian-padli/cubycloud).
+Modified versions used over a network must offer their users access to the corresponding source code under AGPL-3.0 section 13. The source repository is available at [github.com/septian-padli/cubycrate](https://github.com/septian-padli/cubycrate).

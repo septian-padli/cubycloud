@@ -94,6 +94,7 @@ docker run --rm \
 docker run --rm \
   -v cubycrate_data:/data \
   alpine ls -la /data /data/db /data/secrets
+```
 
 ### Step 4: Launch Container and Check Health
 ```bash

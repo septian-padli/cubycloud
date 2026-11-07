@@ -97,14 +97,14 @@
 						<p>You may convey this work under AGPL-3.0-or-later. No warranty.</p>
 						<a
 							class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-							href="https://github.com/septian-padli/cubycloud/blob/main/LICENSE"
+							href="https://github.com/septian-padli/cubycrate/blob/main/LICENSE"
 							target="_blank"
 							rel="noreferrer">License</a
 						>
 						<span aria-hidden="true"> · </span>
 						<a
 							class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-							href="https://github.com/septian-padli/cubycloud"
+							href="https://github.com/septian-padli/cubycrate"
 							target="_blank"
 							rel="noreferrer">Source</a
 						>

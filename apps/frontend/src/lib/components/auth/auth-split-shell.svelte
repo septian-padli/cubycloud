@@ -51,14 +51,14 @@
 			No warranty.
 			<a
 				class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-				href="https://github.com/septian-padli/cubycloud/blob/main/LICENSE"
+				href="https://github.com/septian-padli/cubycrate/blob/main/LICENSE"
 				target="_blank"
 				rel="noreferrer">License</a
 			>
 			·
 			<a
 				class="underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-				href="https://github.com/septian-padli/cubycloud"
+				href="https://github.com/septian-padli/cubycrate"
 				target="_blank"
 				rel="noreferrer">Source</a
 			>
