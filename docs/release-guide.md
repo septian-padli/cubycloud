@@ -107,9 +107,10 @@ All persistent application data resides in `/app/data`:
 
 ```bash
 # 1. Archive the persistent data directory
-docker compose exec cubycrate tar -czf /app/data/backup.tar.gz -C /app data
-docker cp cubycrate:/app/data/backup.tar.gz ./cubycrate-backup.tar.gz
-docker compose exec cubycrate rm /app/data/backup.tar.gz
+docker compose exec cubycrate tar -czf /tmp/cubycrate-backup.tar.gz -C /app/data .
+docker cp cubycrate:/tmp/cubycrate-backup.tar.gz ./cubycrate-backup.tar.gz
+docker compose exec cubycrate rm /tmp/cubycrate-backup.tar.gz
+```
 
 ### Restore Routine
 
@@ -128,7 +129,6 @@ docker run --rm \
 # 3. Restart CubyCrate
 docker compose up -d
 ```
-
 ---
 
 ## 6. How Releases Are Published
@@ -138,8 +138,8 @@ Releases are fully automated via `.github/workflows/release.yml`.
 1. Ensure the `main` branch passes all checks in `.github/workflows/ci.yml`.
 2. Push a SemVer Git tag matching the target channel:
    ```bash
-   git tag v0.0.1-alpha.1
-   git push origin v0.0.1-alpha.1
+   git tag v0.0.1-alpha.2
+   git push origin v0.0.1-alpha.2
    ```
 3. The workflow executes:
    - Validates the tag against strict SemVer syntax.

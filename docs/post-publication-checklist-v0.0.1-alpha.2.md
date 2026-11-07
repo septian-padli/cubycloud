@@ -30,14 +30,14 @@ This checklist is to be executed by the repository owner immediately following t
   ```bash
   docker pull ghcr.io/septian-padli/cubycrate:v0.0.1-alpha.2
   ```
-- [ ] **Start Fresh Container via Compose:**
+- [ ] **Start Fresh Container via Compose using Published GHCR Image:**
   ```bash
-  docker compose up -d
+  CUBYCRATE_IMAGE=ghcr.io/septian-padli/cubycrate CUBYCRATE_VERSION=v0.0.1-alpha.2 docker compose up -d
   ```
 - [ ] **Health Probe:**
   ```bash
   curl -fsS http://127.0.0.1:8383/health
-  # Expected: {"status":"healthy",...} with HTTP 200
+  # Expected: {"status":"ok"} with HTTP 200
   ```
 - [ ] **Setup Wizard:**
   - Open `http://localhost:8383/setup`
